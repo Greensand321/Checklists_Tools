@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>⚡ FlowBoard</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
 :root{
   --bg:#060d18;--topbar:rgba(6,13,24,.88);--bd:rgba(255,255,255,.07);
@@ -235,6 +237,17 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .tag-chip:hover{background:var(--bd-i)}
 .tag-chip .x{cursor:pointer;color:var(--txt-d);font-size:13px;line-height:1;transition:color .12s,transform .12s}
 .tag-chip .x:hover{color:#e11d48;transform:scale(1.2)}
+.sync-pill{font-size:11px;font-weight:700;color:var(--txt-dd);white-space:nowrap;padding:4px 8px;border-radius:20px;background:var(--surf2);border:1px solid var(--bd);transition:color .3s}
+.inp{background:var(--inp);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 11px;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.15)}
+.key-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s,border-color .15s}
+.key-item:hover{background:var(--surf3)}
+.key-item.active-key{border-color:#60a5fa;background:rgba(96,165,250,.07)}
+.key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+.key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.key-actions{display:flex;gap:5px;flex-shrink:0}
+.key-actions button{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .12s}
+.key-actions button:hover{opacity:.82}
 #notif{position:fixed;bottom:22px;right:22px;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;padding:11px 17px;font-size:13px;font-weight:600;color:var(--txt);z-index:999;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.34,1.3,.64,1);transform:translateY(12px)}
 #notif.show{opacity:1;transform:translateY(0)}
 .col-move-btns{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}
@@ -251,6 +264,8 @@ input[type="date"]{color-scheme:dark}
   <div id="stats" class="topbar-stats"></div>
   <div style="flex:1"></div>
   <input id="search" placeholder="🔍 Search…" oninput="render()">
+  <span id="sync-status" class="sync-pill">💾 Local</span>
+  <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
   <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">🎨 Theme</button>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
@@ -262,6 +277,26 @@ input[type="date"]{color-scheme:dark}
 <div id="notif"></div>
 
 <script>
+// ── FIREBASE CONFIG ── Paste your project values here to enable cross-device sync
+var FIREBASE_CONFIG={
+  apiKey:"AIzaSyDxFtwYCuV3rk3vgvM2_Mt_nwNkmadoh-s",
+  authDomain:"flowboard-53248.firebaseapp.com",
+  databaseURL:"https://flowboard-53248-default-rtdb.firebaseio.com",
+  projectId:"flowboard-53248",
+  storageBucket:"flowboard-53248.firebasestorage.app",
+  messagingSenderId:"512324170630",
+  appId:"1:512324170630:web:d80bb3a74cf2194af5f207"
+};
+var FIREBASE_ENABLED=FIREBASE_CONFIG.databaseURL!=="";
+
+// ── SYNC STATE ──
+var _db=null,_syncRef=null,_syncListener=null;
+var _pendingWrites=0;   // counter (not bool) — safe with concurrent writes
+var _skipFbWrite=false; // set true during remote-triggered render to prevent echo
+var _syncTimer=null;    // debounce handle
+var _connectTimeout=null; // 10s connection watchdog
+var _activeKey=null;
+
 var THEMES=[
   {id:'midnight',name:'Midnight',emoji:'🌑',dark:true, bg:'#060d18',bar:'#0a1628'},
   {id:'obsidian',name:'Obsidian',emoji:'⬛',dark:true, bg:'#000000',bar:'#111111'},
@@ -284,11 +319,11 @@ function isLight(){return!THEMES.find(function(t){return t.id===curTheme;})?.dar
 
 function applyTheme(id,permanent){
   if(permanent===undefined)permanent=true;
-  if(permanent){curTheme=id;_previewTheme=null;localStorage.setItem('fb4_theme',id);render();}
+  if(permanent){curTheme=id;_previewTheme=null;if(S.prefs)S.prefs.theme=id;save();render();}
   document.documentElement.setAttribute('data-theme',id);
   document.querySelectorAll('#theme-grid .tswatch').forEach(function(el){el.classList.toggle('active',el.dataset.tid===id);});
 }
-function loadTheme(){var s=localStorage.getItem('fb4_theme')||'midnight';curTheme=s;document.documentElement.setAttribute('data-theme',s);}
+function loadTheme(){var s=(S.prefs&&S.prefs.theme)||localStorage.getItem('fb4_theme')||'midnight';curTheme=s;document.documentElement.setAttribute('data-theme',s);}
 
 function renderThemeGrid(){
   var g=document.getElementById('theme-grid');if(!g)return;
@@ -384,6 +419,8 @@ var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false;
 var _chkSorted=false,_chkOrigItems=null;
 
 function defaultState(){return{
+  prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board'},
+  lastModified:0,
   groups:[
     {id:'g1',title:'🚀 Work',pi:0,col:false,limit:0},
     {id:'g2',title:'🏠 Personal',pi:3,col:false,limit:0},
@@ -414,16 +451,279 @@ function defaultState(){return{
   ]
 };}
 
+// ── SYNC HELPERS ──
+function getKeys(){try{return JSON.parse(localStorage.getItem('fb4_keys')||'[]');}catch(e){return[];}}
+function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
+function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
+
+function updateSyncStatus(state){
+  var el=document.getElementById('sync-status');if(!el)return;
+  if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
+  var map={
+    local:  {t:'💾 Local',   c:'var(--txt-dd)', bg:'var(--surf2)',       bd:'var(--bd)'},
+    syncing:{t:'🔄 Syncing', c:'#f59e0b',       bg:'rgba(245,158,11,.1)',bd:'rgba(245,158,11,.3)'},
+    synced: {t:'☁ Synced',  c:'#10b981',       bg:'rgba(16,185,129,.1)',bd:'rgba(16,185,129,.3)'},
+    error:  {t:'⚠ No Sync', c:'#f43f5e',       bg:'rgba(244,63,94,.15)',bd:'rgba(244,63,94,.4)'},
+    offline:{t:'📴 Offline', c:'#94a3b8',       bg:'rgba(148,163,184,.1)',bd:'rgba(148,163,184,.3)'},
+  };
+  var s=map[state]||map.local;
+  el.textContent=s.t;el.style.color=s.c;el.style.background=s.bg;el.style.borderColor=s.bd;
+}
+
+function migrateRemote(remote){
+  if(!remote.prefs)remote.prefs={theme:'midnight',modalW:510,modalH:null};
+  if(remote.prefs.theme===undefined)remote.prefs.theme='midnight';
+  if(remote.prefs.modalW===undefined)remote.prefs.modalW=510;
+  if(remote.prefs.modalH===undefined)remote.prefs.modalH=null;
+  if(!remote.prefs.boardName)remote.prefs.boardName='My Board';
+  if(!remote.lastModified)remote.lastModified=0;
+  if(!remote.groups)remote.groups=[];
+  if(!remote.cols)remote.cols=[];
+  remote.groups.forEach(function(g){if(g.limit===undefined)g.limit=0;});
+  remote.cols.forEach(function(c){
+    if(c.wip===undefined)c.wip=0;if(c.collapsed===undefined)c.collapsed=false;if(c.sort===undefined)c.sort=false;
+    if(!c.cards)c.cards=[];
+    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];});
+  });
+  return remote;
+}
+
+function connectToKey(key){
+  // flush any debounced write before switching so local changes aren't lost
+  if(_syncTimer&&_syncRef&&_activeKey){
+    clearTimeout(_syncTimer);_syncTimer=null;
+    _pendingWrites++;
+    _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);});
+  }
+  if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
+  if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
+  _activeKey=key;localStorage.setItem('fb4_active_key',key);
+  updateSyncStatus('syncing');
+  clearTimeout(_connectTimeout);
+  _connectTimeout=setTimeout(function(){if(_activeKey)updateSyncStatus('error');},10000);
+  _syncRef=_db.ref('boards/'+key+'/state');
+  _syncListener=_syncRef.on('value',function(snap){
+    if(_pendingWrites>0)return; // our own write in-flight — ignore echo
+    var remote=snap.val();
+    if(remote===null){
+      // new board — push local up
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+      return;
+    }
+    migrateRemote(remote);
+    // timestamp comparison — whichever side is newer wins
+    if((S.lastModified||0)>(remote.lastModified||0)){
+      // local is newer — push local up, don't overwrite
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+      return;
+    }
+    // remote is newer or equal — apply it
+    S=remote;
+    curTheme=S.prefs.theme;
+    document.documentElement.setAttribute('data-theme',S.prefs.theme);
+    if(S.prefs.modalW>=320)_modalW=S.prefs.modalW;
+    _modalH=(S.prefs.modalH>=200?S.prefs.modalH:null);
+    var _nameChanged=false;
+    if(S.prefs.boardName&&_activeKey){
+      var lk=getKeys();var lke=lk.find(function(k){return k.key===_activeKey;});
+      if(lke&&lke.label!==S.prefs.boardName){lke.label=S.prefs.boardName;setKeys(lk);_nameChanged=true;}
+    }
+    if(_nameChanged)window._keysModalRender&&window._keysModalRender();
+    _skipFbWrite=true;render();_skipFbWrite=false;
+    updateSyncStatus('synced');
+  },function(){updateSyncStatus('error');});
+}
+
+function disconnectSync(){
+  if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
+  clearTimeout(_syncTimer);clearTimeout(_connectTimeout);_connectTimeout=null;
+  _pendingWrites=0;_skipFbWrite=false;
+  _activeKey=null;localStorage.removeItem('fb4_active_key');updateSyncStatus('local');
+}
+
+function initSync(){
+  if(!FIREBASE_ENABLED)return;
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _db=firebase.database();
+    _db.setPersistenceEnabled(true);
+    _db.ref('.info/connected').on('value',function(snap){
+      if(!_activeKey)return;
+      if(!snap.val()){
+        // Gone offline — clear stuck pending writes so remote updates aren't blocked on reconnect
+        clearTimeout(_syncTimer);_pendingWrites=0;
+        updateSyncStatus('offline');
+        // restart watchdog — if we don't reconnect within 10s, show error
+        clearTimeout(_connectTimeout);
+        _connectTimeout=setTimeout(function(){if(_activeKey)updateSyncStatus('error');},10000);
+      }else if(_pendingWrites===0){
+        updateSyncStatus('synced');
+      }
+    });
+  }catch(e){console.warn('Firebase init failed:',e);return;}
+  var savedKey=localStorage.getItem('fb4_active_key');
+  if(savedKey)connectToKey(savedKey);
+}
+
 function save(){
+  if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   try{
     var data=JSON.stringify(S);localStorage.setItem('fb4',data);
     var used=new Blob([data]).size+new Blob([localStorage.getItem('fb4_baks')||'']).size;
     if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full — export a backup soon!');}
     else if(used<=4*1024*1024){save._warned=false;}
   }catch(e){notify('❌ Save failed — storage may be full!');}
+  if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite){
+    clearTimeout(_syncTimer);
+    _syncTimer=setTimeout(function(){
+      _pendingWrites++;
+      updateSyncStatus('syncing');
+      _syncRef.set(S).then(function(){
+        _pendingWrites=Math.max(0,_pendingWrites-1);
+        if(_pendingWrites===0)updateSyncStatus('synced');
+      }).catch(function(err){
+        _pendingWrites=Math.max(0,_pendingWrites-1);
+        updateSyncStatus('error');
+        console.error('Firebase write failed:',err);
+      });
+    },600);
+  }
+}
+function showKeysModal(){
+  if(!FIREBASE_ENABLED){
+    var cfg='\n\nTo enable sync, open flowboard.html and fill in your FIREBASE_CONFIG values at the top of the &lt;script&gt; block.';
+    var h='<h2 style="margin-bottom:12px">☁ Cloud Sync</h2>'
+      +'<p style="color:var(--txt-m);font-size:13px;line-height:1.6">Firebase is not configured.'+cfg+'</p>'
+      +'<div style="margin-top:20px;display:flex;justify-content:flex-end"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>';
+    setModal(h);return;
+  }
+  function renderKeysModal(){
+    var keys=getKeys();
+    var rows=keys.length?keys.map(function(k){
+      var isActive=k.key===_activeKey;
+      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
+        +'<div class="key-val">'+esc(k.key)+'</div>'
+        +'</div>'
+        +'<div class="key-actions">'
+        +(isActive?'':'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="switchKey(\''+k.key+'\')">Switch</button>')
+        +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyKey(\''+k.key+'\')">Copy</button>'
+        +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="emailKey(\''+k.key+'\')">Email</button>'
+        +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="renameKey(\''+k.key+'\')">Rename</button>'
+        +'<button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="removeKey(\''+k.key+'\')">Remove</button>'
+        +'</div>'
+        +'</div>';
+    }).join(''):'<p style="color:var(--txt-d);font-size:13px;padding:10px 0">No boards yet — create one below.</p>';
+    var statusBlock=_activeKey
+      ?'<div style="margin-bottom:14px;padding:10px 14px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:10px;font-size:12px;color:#10b981">Syncing to board: <strong>'+esc(_activeKey)+'</strong></div>'
+      :'<div style="margin-bottom:14px;padding:10px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;font-size:12px;color:var(--txt-m)">Running in local-only mode — no sync active.</div>';
+    var h='<h2 style="margin-bottom:14px">☁ Cloud Sync — Board Keys</h2>'
+      +statusBlock
+      +'<div style="max-height:240px;overflow-y:auto;margin-bottom:16px">'+rows+'</div>'
+      +'<hr style="border:none;border-top:1px solid var(--bd);margin-bottom:16px">'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
+      +'<div style="flex:1;min-width:160px">'
+      +'<label style="font-size:11px;color:var(--txt-m);font-weight:700;display:block;margin-bottom:5px">Join existing board</label>'
+      +'<input id="key-input" class="inp" placeholder="Paste board key…" style="width:100%" onkeydown="if(event.key===\'Enter\')joinKeyBtn()">'
+      +'</div>'
+      +'<button class="btn btn-primary" style="flex-shrink:0" onclick="joinKeyBtn()">Join</button>'
+      +'<button class="btn btn-green" style="flex-shrink:0" onclick="newKeyBtn()">+ New Board</button>'
+      +'</div>'
+      +'<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">'
+      +(_activeKey?'<button class="btn btn-danger" style="font-size:12px" onclick="disconnectBtn()">Disconnect</button>':'<span></span>')
+      +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
+      +'</div>';
+    setModal(h);
+  }
+  window._keysModalRender=renderKeysModal;
+  renderKeysModal();
+}
+function newKeyBtn(){
+  var key=generateKey();
+  var keys=getKeys();
+  var label='Board '+(keys.length+1);
+  keys.push({key:key,label:label,lastUsed:Date.now()});
+  setKeys(keys);
+  if(S.prefs)S.prefs.boardName=label;
+  connectToKey(key);
+  window._keysModalRender&&window._keysModalRender();
+  notify('✅ New board created and connected!');
+}
+function joinKeyBtn(){
+  var input=document.getElementById('key-input');
+  if(!input)return;
+  var key=input.value.trim();
+  if(!key){notify('⚠️ Paste a board key first.');return;}
+  var keys=getKeys();
+  if(!keys.find(function(k){return k.key===key;})){
+    // use a placeholder label — Firebase value listener will overwrite it with the real name
+    keys.push({key:key,label:'Connecting…',lastUsed:Date.now()});
+    setKeys(keys);
+  }
+  connectToKey(key);
+  // don't re-render modal here — wait for Firebase to reply with the real label
+  window._keysModalRender&&window._keysModalRender();
+}
+function switchKey(key){
+  connectToKey(key);
+  window._keysModalRender&&window._keysModalRender();
+}
+function copyKey(key){
+  navigator.clipboard.writeText(key).then(function(){notify('📋 Key copied to clipboard!');}).catch(function(){notify('⚠️ Copy failed — try manually selecting the key.');});
+}
+function emailKey(key){
+  var sub=encodeURIComponent('FlowBoard Sync Key');
+  var body=encodeURIComponent('Here is your FlowBoard board key:\n\n'+key+'\n\nTo join on another device:\n1. Open FlowBoard\n2. Click ☁ Sync\n3. Paste the key and click Join');
+  window.location.href='mailto:?subject='+sub+'&body='+body;
+  navigator.clipboard.writeText(key).catch(function(){});
+  notify('📧 Email app opened — key also copied to clipboard!');
+}
+function renameKey(key){
+  var keys=getKeys();
+  var entry=keys.find(function(k){return k.key===key;});
+  if(!entry)return;
+  var name=prompt('Rename board:',entry.label||'Board');
+  if(name===null)return;
+  var label=name.trim()||entry.label;
+  entry.label=label;
+  setKeys(keys);
+  if(S.prefs&&key===_activeKey){S.prefs.boardName=label;save();}
+  window._keysModalRender&&window._keysModalRender();
+}
+function disconnectBtn(){
+  if(!confirm('Disconnect from sync? Your local data stays intact and you can reconnect anytime.'))return;
+  disconnectSync();
+  window._keysModalRender&&window._keysModalRender();
+}
+function removeKey(key){
+  if(!confirm('Remove this board key from this device? (The board data in Firebase is not deleted.)'))return;
+  var keys=getKeys().filter(function(k){return k.key!==key;});
+  setKeys(keys);
+  if(_activeKey===key)disconnectSync();
+  window._keysModalRender&&window._keysModalRender();
 }
 function load(){
   try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
+    // migrate prefs from old localStorage keys if not yet in S
+    if(!S.prefs){
+      var _lsm={};try{_lsm=JSON.parse(localStorage.getItem('fb4_modal_size')||'{}');}catch(e){}
+      S.prefs={theme:localStorage.getItem('fb4_theme')||'midnight',modalW:(_lsm.w>=320?_lsm.w:510),modalH:(_lsm.h>=200?_lsm.h:null)};
+    }
+    if(S.prefs.theme===undefined)S.prefs.theme='midnight';
+    if(S.prefs.modalW===undefined)S.prefs.modalW=510;
+    if(S.prefs.modalH===undefined)S.prefs.modalH=null;
+    if(!S.prefs.boardName)S.prefs.boardName='My Board';
+    if(!S.lastModified)S.lastModified=0;
+    // reconcile boardName into fb4_keys immediately so the modal never shows a stale label
+    var _sk=localStorage.getItem('fb4_active_key');
+    if(_sk&&S.prefs.boardName){
+      var _lk=getKeys();
+      var _lke=_lk.find(function(k){return k.key===_sk;});
+      if(_lke&&_lke.label!==S.prefs.boardName){_lke.label=S.prefs.boardName;setKeys(_lk);}
+    }
     S.groups.forEach(function(g){if(g.limit===undefined)g.limit=0;});
     S.cols.forEach(function(c){
       if(c.wip===undefined)c.wip=0;
@@ -1307,8 +1607,8 @@ function showBackupModal(){
 }
 
 var _modalW=510,_modalH=null;
-function loadModalSize(){try{var s=JSON.parse(localStorage.getItem('fb4_modal_size')||'{}');if(s.w&&s.w>=320)_modalW=s.w;if(s.h&&s.h>=200)_modalH=s.h;}catch(e){}}
-function saveModalSize(){try{localStorage.setItem('fb4_modal_size',JSON.stringify({w:_modalW,h:_modalH}));}catch(e){}}
+function loadModalSize(){if(S.prefs){if(S.prefs.modalW>=320)_modalW=S.prefs.modalW;if(S.prefs.modalH>=200)_modalH=S.prefs.modalH;}}
+function saveModalSize(){if(S.prefs){S.prefs.modalW=_modalW;S.prefs.modalH=_modalH;}save();}
 function initModalResize(handle,modal){
   handle.addEventListener('mousedown',function(e){
     e.preventDefault();e.stopPropagation();
@@ -1353,7 +1653,7 @@ document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();createBak('Quick Save '+new Date().toLocaleTimeString());}
 });
 
-loadTheme();loadModalSize();load();render();initPointerDrag();
+load();loadTheme();loadModalSize();render();initPointerDrag();initSync();
 </script>
 </body>
 </html>
