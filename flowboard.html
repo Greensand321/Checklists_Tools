@@ -512,14 +512,6 @@ function connectToKey(key){
       return;
     }
     migrateRemote(remote);
-    // timestamp comparison — whichever side is newer wins
-    if((S.lastModified||0)>(remote.lastModified||0)){
-      // local is newer — push local up, don't overwrite
-      _pendingWrites++;
-      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
-      return;
-    }
-    // remote is newer or equal — apply it
     S=remote;
     curTheme=S.prefs.theme;
     document.documentElement.setAttribute('data-theme',S.prefs.theme);
