@@ -296,6 +296,38 @@ var _skipFbWrite=false; // set true during remote-triggered render to prevent ec
 var _syncTimer=null;    // debounce handle
 var _connectTimeout=null; // 10s connection watchdog
 var _activeKey=null;
+var _remoteBaseline=null; // snapshot of last confirmed Firebase state for write safety checks
+
+function _syncCardCount(state){return(state.cols||[]).reduce(function(n,c){return n+(c.cards?c.cards.length:0);},0);}
+function _syncColIds(state){return(state.cols||[]).map(function(c){return c.id;});}
+
+function _isSafeWrite(state){
+  if(!_remoteBaseline)return true; // no baseline yet (new board) — allow
+  var cards=_syncCardCount(state);
+  var colIds=_syncColIds(state);
+  var baseCards=_remoteBaseline.cards;
+  var baseColIds=_remoteBaseline.colIds;
+  var baseGroups=_remoteBaseline.groups;
+  // block: complete group wipe when board had groups
+  if(baseGroups>0&&(state.groups||[]).length===0)return false;
+  // block: complete column wipe when board had columns
+  if(baseColIds.length>0&&colIds.length===0)return false;
+  // block: card count drops to 0 from a board with meaningful data
+  if(baseCards>3&&cards===0)return false;
+  // block: >75% card loss in one write AND more than 5 cards would vanish
+  var dropped=baseCards-cards;
+  if(baseCards>0&&dropped/baseCards>0.75&&dropped>5)return false;
+  // block: column IDs are completely foreign (< 20% match) — almost certainly wrong board's data
+  if(baseColIds.length>2&&colIds.length>0){
+    var matches=colIds.filter(function(id){return baseColIds.indexOf(id)!==-1;}).length;
+    if(matches/baseColIds.length<0.2)return false;
+  }
+  return true;
+}
+
+function _setRemoteBaseline(state){
+  _remoteBaseline={cards:_syncCardCount(state),colIds:_syncColIds(state),groups:(state.groups||[]).length};
+}
 
 var THEMES=[
   {id:'midnight',name:'Midnight',emoji:'🌑',dark:true, bg:'#060d18',bar:'#0a1628'},
@@ -492,9 +524,14 @@ function connectToKey(key){
   // flush any debounced write before switching so local changes aren't lost
   if(_syncTimer&&_syncRef&&_activeKey){
     clearTimeout(_syncTimer);_syncTimer=null;
-    _pendingWrites++;
-    _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);});
+    if(_isSafeWrite(S)){
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);});
+    }else{
+      console.warn('Flush blocked by safety gate — local S looks like wrong board data.');
+    }
   }
+  _remoteBaseline=null; // clear baseline when switching — new board has different structure
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
   _activeKey=key;localStorage.setItem('fb4_active_key',key);
@@ -506,12 +543,13 @@ function connectToKey(key){
     if(_pendingWrites>0)return; // our own write in-flight — ignore echo
     var remote=snap.val();
     if(remote===null){
-      // new board — push local up
+      // new board — push local up and establish baseline
       _pendingWrites++;
-      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
       return;
     }
     migrateRemote(remote);
+    _setRemoteBaseline(remote); // lock in what Firebase currently has
     S=remote;
     curTheme=S.prefs.theme;
     document.documentElement.setAttribute('data-theme',S.prefs.theme);
@@ -531,7 +569,7 @@ function connectToKey(key){
 function disconnectSync(){
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
   clearTimeout(_syncTimer);clearTimeout(_connectTimeout);_connectTimeout=null;
-  _pendingWrites=0;_skipFbWrite=false;
+  _pendingWrites=0;_skipFbWrite=false;_remoteBaseline=null;
   _activeKey=null;localStorage.removeItem('fb4_active_key');updateSyncStatus('local');
 }
 
@@ -570,10 +608,17 @@ function save(){
   if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite){
     clearTimeout(_syncTimer);
     _syncTimer=setTimeout(function(){
+      if(!_isSafeWrite(S)){
+        updateSyncStatus('error');
+        notify('🛑 Sync blocked — this write would delete most of your board data. Switch boards or reload to resync.');
+        console.error('Firebase write blocked by safety gate. Baseline:',_remoteBaseline,'Attempted:',{cards:_syncCardCount(S),cols:S.cols&&S.cols.length,groups:S.groups&&S.groups.length});
+        return;
+      }
       _pendingWrites++;
       updateSyncStatus('syncing');
       _syncRef.set(S).then(function(){
         _pendingWrites=Math.max(0,_pendingWrites-1);
+        _setRemoteBaseline(S); // update baseline to confirmed state
         if(_pendingWrites===0)updateSyncStatus('synced');
       }).catch(function(err){
         _pendingWrites=Math.max(0,_pendingWrites-1);
