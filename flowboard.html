@@ -256,6 +256,10 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .col-move-btn.active{color:inherit}
 input[type="date"]{color-scheme:dark}
 [data-theme="pearl"] input[type="date"],[data-theme="azure"] input[type="date"],[data-theme="blossom"] input[type="date"],[data-theme="meadow"] input[type="date"],[data-theme="lavender"] input[type="date"],[data-theme="sunset"] input[type="date"]{color-scheme:light}
+.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.auto-bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
+.auto-bak-item:hover{background:var(--surf3)}
+.auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -267,6 +271,8 @@ input[type="date"]{color-scheme:dark}
   <span id="sync-status" class="sync-pill">💾 Local</span>
   <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
   <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">🎨 Theme</button>
+  <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
+  <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
   <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
@@ -297,6 +303,23 @@ var _syncTimer=null;    // debounce handle
 var _connectTimeout=null; // 10s connection watchdog
 var _activeKey=null;
 var _remoteBaseline=null; // snapshot of last confirmed Firebase state for write safety checks
+var _retryTimer=null;     // auto-reconnect backoff handle
+var _retryStep=0;         // index into _RETRY_DELAYS — escalates with each failed attempt
+var _reconnecting=false;  // true while a connectToKey attempt is in-flight (prevents stacked calls)
+var _userDisconnected=false; // true when user explicitly disconnected — suppresses auto-retry
+var _syncStatus='local';  // current sync state string — mirrors updateSyncStatus for programmatic checks
+var _RETRY_DELAYS=[5000,15000,30000,60000,300000]; // 5s → 15s → 30s → 1m → 5m
+var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
+var _autoSnapsListener=null;   // detachable listener handle
+var _autoSnapsPending=0;       // in-flight write counter (echo guard — mirrors _pendingWrites pattern)
+var _autoSnapsWriteTimer=null; // debounce handle for cloud writes
+
+// ── UNDO / REDO STATE ──
+var _undoStack=[];        // array of JSON strings (full S snapshots), max 50 entries
+var _redoStack=[];        // array of JSON strings, max 50 entries
+var _undoInProgress=false;// prevents re-entrant push during doUndo/doRedo applies
+var _idleSnapTimer=null;  // fires after 20min inactivity to create an auto-snapshot
+var _savesSinceAutoSnap=0;// counts real saves since last auto-snap (ensures we only snap when work exists)
 
 function _syncCardCount(state){return(state.cols||[]).reduce(function(n,c){return n+(c.cards?c.cards.length:0);},0);}
 function _syncColIds(state){return(state.cols||[]).map(function(c){return c.id;});}
@@ -327,6 +350,21 @@ function _isSafeWrite(state){
 
 function _setRemoteBaseline(state){
   _remoteBaseline={cards:_syncCardCount(state),colIds:_syncColIds(state),groups:(state.groups||[]).length};
+}
+
+// ── AUTO-RECONNECT ──
+function _scheduleRetry(){
+  if(!FIREBASE_ENABLED||!_activeKey||_userDisconnected)return;
+  if(_retryTimer)return; // already pending — don't stack
+  var delay=_RETRY_DELAYS[Math.min(_retryStep,_RETRY_DELAYS.length-1)];
+  _retryStep=Math.min(_retryStep+1,_RETRY_DELAYS.length-1);
+  console.log('[Sync] Auto-reconnect in',delay,'ms (step '+_retryStep+')');
+  _retryTimer=setTimeout(function(){
+    _retryTimer=null;
+    if(!_activeKey||_userDisconnected||_syncStatus==='synced')return;
+    _reconnecting=true;
+    connectToKey(_activeKey);
+  },delay);
 }
 
 var THEMES=[
@@ -489,6 +527,7 @@ function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
 function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
 
 function updateSyncStatus(state){
+  _syncStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
   var map={
@@ -521,7 +560,11 @@ function migrateRemote(remote){
 }
 
 function connectToKey(key){
-  // flush any debounced write before switching so local changes aren't lost
+  // ── reset auto-reconnect state for this new attempt ──
+  clearTimeout(_retryTimer);_retryTimer=null;
+  _userDisconnected=false;
+  _reconnecting=true;
+  // flush any debounced board-state write before switching so local changes aren't lost
   if(_syncTimer&&_syncRef&&_activeKey){
     clearTimeout(_syncTimer);_syncTimer=null;
     if(_isSafeWrite(S)){
@@ -531,13 +574,18 @@ function connectToKey(key){
       console.warn('Flush blocked by safety gate — local S looks like wrong board data.');
     }
   }
+  // tear down any in-flight auto-snap write timer before switching boards
+  clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
   _remoteBaseline=null; // clear baseline when switching — new board has different structure
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
+  if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
   _activeKey=key;localStorage.setItem('fb4_active_key',key);
   updateSyncStatus('syncing');
   clearTimeout(_connectTimeout);
-  _connectTimeout=setTimeout(function(){if(_activeKey)updateSyncStatus('error');},10000);
+  _connectTimeout=setTimeout(function(){
+    if(_activeKey){updateSyncStatus('error');_reconnecting=false;_scheduleRetry();}
+  },10000);
   _syncRef=_db.ref('boards/'+key+'/state');
   _syncListener=_syncRef.on('value',function(snap){
     if(_pendingWrites>0)return; // our own write in-flight — ignore echo
@@ -545,66 +593,185 @@ function connectToKey(key){
     if(remote===null){
       // new board — push local up and establish baseline
       _pendingWrites++;
-      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
       return;
     }
     migrateRemote(remote);
-    _setRemoteBaseline(remote); // lock in what Firebase currently has
-    S=remote;
-    curTheme=S.prefs.theme;
-    document.documentElement.setAttribute('data-theme',S.prefs.theme);
-    if(S.prefs.modalW>=320)_modalW=S.prefs.modalW;
-    _modalH=(S.prefs.modalH>=200?S.prefs.modalH:null);
-    var _nameChanged=false;
-    if(S.prefs.boardName&&_activeKey){
-      var lk=getKeys();var lke=lk.find(function(k){return k.key===_activeKey;});
-      if(lke&&lke.label!==S.prefs.boardName){lke.label=S.prefs.boardName;setKeys(lk);_nameChanged=true;}
+    // ── Conflict resolution: last-write-wins via lastModified timestamp ──
+    // Set remote as the safety-gate baseline first so _isSafeWrite can compare
+    // local S against the known cloud structure before any push.
+    _setRemoteBaseline(remote);
+    var localTs=S.lastModified||0;
+    var remoteTs=remote.lastModified||0;
+    if(localTs>remoteTs&&_isSafeWrite(S)){
+      // Local is newer AND structurally consistent with cloud — push local up.
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){
+        _pendingWrites=Math.max(0,_pendingWrites-1);
+        _setRemoteBaseline(S);
+        _reconnecting=false;_retryStep=0;
+        updateSyncStatus('synced');
+        notify('☁ Local changes were newer — synced to cloud.');
+      }).catch(function(err){
+        // Push failed — safe fallback: adopt cloud state so nothing is left inconsistent.
+        _pendingWrites=Math.max(0,_pendingWrites-1);
+        console.warn('[Sync] Push-local failed, reverting to cloud state:',err);
+        _applyRemote(remote);
+        _reconnecting=false;_retryStep=0;
+        updateSyncStatus('synced');
+      });
+      return;
     }
-    if(_nameChanged)window._keysModalRender&&window._keysModalRender();
-    _skipFbWrite=true;render();_skipFbWrite=false;
+    // Remote is newer, tied, or safety gate blocked the local push — apply cloud state.
+    _applyRemote(remote);
+    _reconnecting=false;_retryStep=0;
     updateSyncStatus('synced');
-  },function(){updateSyncStatus('error');});
+  },function(err){console.warn('[Sync] Firebase listener error:',err);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
+
+  // ── Auto-snapshots cloud sync ──
+  // Separate Firebase path — independent of the main board-state listener.
+  // Bidirectional merge: remote-only snaps come down, local-only snaps (created offline) go up.
+  _autoSnapsRef=_db.ref('boards/'+key+'/autoSnaps');
+  _autoSnapsListener=_autoSnapsRef.on('value',function(snap){
+    if(_autoSnapsPending>0)return; // our own write in-flight — ignore echo
+    var remote=snap.val();
+    // Firebase may return a sparse-key object instead of an array for edge cases — normalise.
+    if(remote&&!Array.isArray(remote))remote=Object.values(remote).filter(Boolean);
+    var local=getAutoBaks();
+    if(!remote||remote.length===0){
+      // No cloud snaps yet — push local ones up (e.g. first time connecting from this device)
+      if(local.length>0)_pushAutoSnapsToCloud(local);
+      return;
+    }
+    // Compute what's in remote but not local, and vice-versa
+    var localIds=local.map(function(x){return x.id;});
+    var remoteIds=remote.map(function(x){return x.id;});
+    var remoteOnly=remote.filter(function(x){return localIds.indexOf(x.id)===-1;});
+    var localOnly=local.filter(function(x){return remoteIds.indexOf(x.id)===-1;});
+    if(remoteOnly.length===0&&localOnly.length===0)return; // fully in sync — nothing to do
+    // Merge: take everything from both sides, sort newest-first, cap at 15
+    var merged=remote.concat(localOnly);
+    merged.sort(function(a,b){return b.ts-a.ts;});
+    if(merged.length>15)merged.splice(15);
+    setAutoBaks(merged);
+    if(localOnly.length>0){
+      // Push merged set back so local-only snaps (created offline) reach the cloud
+      _pushAutoSnapsToCloud(merged);
+    }
+  },function(err){
+    console.warn('[AutoSnap] Cloud read failed — using local cache:',err);
+  });
 }
 
 function disconnectSync(){
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
+  if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
   clearTimeout(_syncTimer);clearTimeout(_connectTimeout);_connectTimeout=null;
-  _pendingWrites=0;_skipFbWrite=false;_remoteBaseline=null;
+  clearTimeout(_retryTimer);_retryTimer=null;
+  clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
+  _pendingWrites=0;_autoSnapsPending=0;_skipFbWrite=false;_remoteBaseline=null;
+  _userDisconnected=true;_reconnecting=false;_retryStep=0;
   _activeKey=null;localStorage.removeItem('fb4_active_key');updateSyncStatus('local');
+}
+
+// Apply a validated remote snapshot to local state and re-render.
+// Always call _setRemoteBaseline before this so the safety gate has the right context.
+function _applyRemote(remote){
+  _setRemoteBaseline(remote);
+  S=remote;
+  // Remote state replaces local — the existing undo stack belongs to the old S and
+  // would produce incorrect results if applied to the new remote state. Clear it.
+  _undoStack=[];_redoStack=[];
+  try{sessionStorage.removeItem('fb4_undo');}catch(e){}
+  _updateUndoUI();
+  curTheme=S.prefs.theme;
+  document.documentElement.setAttribute('data-theme',S.prefs.theme);
+  if(S.prefs.modalW>=320)_modalW=S.prefs.modalW;
+  _modalH=(S.prefs.modalH>=200?S.prefs.modalH:null);
+  if(S.prefs.boardName&&_activeKey){
+    var lk=getKeys();var lke=lk.find(function(k){return k.key===_activeKey;});
+    if(lke&&lke.label!==S.prefs.boardName){lke.label=S.prefs.boardName;setKeys(lk);window._keysModalRender&&window._keysModalRender();}
+  }
+  _skipFbWrite=true;render();_skipFbWrite=false;
 }
 
 function initSync(){
   if(!FIREBASE_ENABLED)return;
+  // Only wrap the SDK init — a throw here means Firebase is unavailable and we should bail.
+  // Everything after (listeners, connectToKey, event hooks) runs outside the catch so that
+  // a future error there never silently kills the startup sequence.
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     _db=firebase.database();
-    _db.setPersistenceEnabled(true);
-    _db.ref('.info/connected').on('value',function(snap){
-      if(!_activeKey)return;
-      if(!snap.val()){
-        // Gone offline — clear stuck pending writes so remote updates aren't blocked on reconnect
-        clearTimeout(_syncTimer);_pendingWrites=0;
-        updateSyncStatus('offline');
-        // restart watchdog — if we don't reconnect within 10s, show error
-        clearTimeout(_connectTimeout);
-        _connectTimeout=setTimeout(function(){if(_activeKey)updateSyncStatus('error');},10000);
+    // NOTE: setPersistenceEnabled is a Firestore-only API. Firebase RTDB web SDK does NOT
+    // support disk persistence (mobile SDKs only). In-memory caching + auto-reconnect are
+    // handled automatically by the RTDB SDK — no explicit call needed.
+  }catch(e){console.warn('[Sync] Firebase init failed:',e);return;}
+
+  _db.ref('.info/connected').on('value',function(snap){
+    if(!_activeKey)return;
+    if(!snap.val()){
+      // Gone offline — clear stuck pending writes so remote updates aren't blocked on reconnect
+      clearTimeout(_syncTimer);_pendingWrites=0;
+      updateSyncStatus('offline');
+      // restart watchdog — if we don't come back within 10s, show error and schedule retry
+      clearTimeout(_connectTimeout);
+      _connectTimeout=setTimeout(function(){
+        if(_activeKey){updateSyncStatus('error');_reconnecting=false;_scheduleRetry();}
+      },10000);
+    }else{
+      // Back online — verify the Firebase listener is still wired up
+      if(!_syncRef||!_syncListener){
+        // Listener was lost (e.g. long suspension, SDK re-init) — re-establish cleanly
+        _reconnecting=false;
+        _retryStep=0;
+        connectToKey(_activeKey);
       }else if(_pendingWrites===0){
         updateSyncStatus('synced');
       }
-    });
-  }catch(e){console.warn('Firebase init failed:',e);return;}
+    }
+  });
   var savedKey=localStorage.getItem('fb4_active_key');
   if(savedKey)connectToKey(savedKey);
+
+  // ── Background reconnect triggers ──
+  // Fires when device regains network (e.g. wifi reconnected, browser reopen after sleep)
+  window.addEventListener('online',function(){
+    if(!FIREBASE_ENABLED||!_activeKey||_userDisconnected||_reconnecting)return;
+    clearTimeout(_retryTimer);_retryTimer=null;_retryStep=0;
+    connectToKey(_activeKey);
+  });
+  // Fires when the user returns to a backgrounded/hidden tab
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState!=='visible')return;
+    if(!FIREBASE_ENABLED||!_activeKey||_userDisconnected||_reconnecting)return;
+    if(_syncStatus==='error'||_syncStatus==='offline'){
+      clearTimeout(_retryTimer);_retryTimer=null;_retryStep=0;
+      connectToKey(_activeKey);
+    }
+  });
 }
 
 function save(){
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   try{
     var data=JSON.stringify(S);localStorage.setItem('fb4',data);
-    var used=new Blob([data]).size+new Blob([localStorage.getItem('fb4_baks')||'']).size;
+    var used=new Blob([data]).size
+      +new Blob([localStorage.getItem('fb4_baks')||'']).size
+      +new Blob([localStorage.getItem('fb4_auto')||'']).size;
     if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full — export a backup soon!');}
     else if(used<=4*1024*1024){save._warned=false;}
   }catch(e){notify('❌ Save failed — storage may be full!');}
+  // ── Idle auto-snapshot: fires 20min after the last real user action ──
+  if(!_skipFbWrite&&!_undoInProgress){
+    _savesSinceAutoSnap++;
+    clearTimeout(_idleSnapTimer);
+    _idleSnapTimer=setTimeout(function(){
+      if(_savesSinceAutoSnap>0){
+        _createAutoSnap('Idle checkpoint \u2013 '+new Date().toLocaleTimeString(),'idle');
+      }
+    },20*60*1000);
+  }
   if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite){
     clearTimeout(_syncTimer);
     _syncTimer=setTimeout(function(){
@@ -806,6 +973,8 @@ function renameBak(id){
 function restoreBak(id){
   var b=getBaks().find(function(x){return x.id===id;});
   if(!b||!confirm('Restore snapshot? Current board will be replaced.'))return;
+  _autoSnapBefore('Before: Restore snapshot \u2013 '+new Date().toLocaleTimeString());
+  _undoStack=[];_redoStack=[];_persistUndoSession();_updateUndoUI();
   S=JSON.parse(b.data);save();render();closeModal();notify('✅ Board restored!');
 }
 function deleteBak(id){setBaks(getBaks().filter(function(x){return x.id!==id;}));showBackupModal();}
@@ -821,31 +990,180 @@ function importBak(){
   var inp=document.createElement('input');inp.type='file';inp.accept='.json';
   inp.onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
     r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d.cols)throw 0;
-      if(!confirm('Import? Current board will be replaced.'))return;S=d;save();render();closeModal();notify('✅ Imported!');}
+      if(!confirm('Import? Current board will be replaced.'))return;
+      _autoSnapBefore('Before: Import board \u2013 '+new Date().toLocaleTimeString());
+      _undoStack=[];_redoStack=[];_persistUndoSession();_updateUndoUI();
+      S=d;save();render();closeModal();notify('✅ Imported!');}
     catch(e2){alert('Invalid FlowBoard file.');}};r.readAsText(f);};inp.click();
 }
 
-function addGroup(t){var g={id:uid(),title:t||'New Group',pi:0,col:false};S.groups.push(g);newGroupId=g.id;save();render();newGroupId=null;}
-function renameGroup(id,t){var g=S.groups.find(function(x){return x.id===id;});if(g){g.title=t;save();render();}}
-function setGroupPi(id,pi){var g=S.groups.find(function(x){return x.id===id;});if(g){g.pi=pi;save();render();}}
-function toggleGroupCol(id){var g=S.groups.find(function(x){return x.id===id;});if(g){g.col=!g.col;save();render();}}
+// ── AUTO-SNAPSHOT STORE ──
+function getAutoBaks(){try{return JSON.parse(localStorage.getItem('fb4_auto')||'[]');}catch(e){return[];}}
+function setAutoBaks(a){try{localStorage.setItem('fb4_auto',JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+
+function _createAutoSnap(name,trigger){
+  var tc=_syncCardCount(S);
+  var autos=getAutoBaks();
+  autos.unshift({id:uid(),name:name,ts:Date.now(),trigger:trigger||'auto',cards:tc,data:JSON.stringify(S)});
+  if(autos.length>15)autos.splice(15);
+  setAutoBaks(autos);
+  _savesSinceAutoSnap=0;
+  // Push to cloud immediately (debounced 2s — rapid snaps batch into one write)
+  _pushAutoSnapsToCloud(autos);
+}
+
+// Called once at startup — snapshots the board as it was when the session began.
+// Only fires if the board has been modified since the last auto-snapshot.
+function _sessionStartSnap(){
+  var boardTs=S.lastModified||0;
+  if(boardTs===0)return; // never been saved — default demo state, skip
+  var autos=getAutoBaks();
+  var lastAutoTs=autos.length>0?autos[0].ts:0;
+  if(boardTs<=lastAutoTs)return; // no changes since last auto-snap
+  _createAutoSnap('Opened \u2013 '+new Date().toLocaleString(),'session');
+}
+
+// Called before destructive actions (delCol, delGroup, restore, import).
+function _autoSnapBefore(label){
+  _createAutoSnap(label,'destructive');
+}
+
+function restoreAutoBak(id){
+  var b=getAutoBaks().find(function(x){return x.id===id;});
+  if(!b||!confirm('Restore this auto-snapshot? Current board will be replaced.'))return;
+  _autoSnapBefore('Before: Restore auto-snapshot \u2013 '+new Date().toLocaleTimeString());
+  _undoStack=[];_redoStack=[];_persistUndoSession();_updateUndoUI();
+  S=JSON.parse(b.data);save();render();closeModal();notify('✅ Board restored from auto-snapshot!');
+}
+function deleteAutoBak(id){
+  var remaining=getAutoBaks().filter(function(x){return x.id!==id;});
+  setAutoBaks(remaining);
+  _pushAutoSnapsToCloud(remaining);
+  showBackupModal();
+}
+
+// Write the full auto-snaps array to Firebase. Debounced 2s so rapid snap creation
+// (e.g. session-start + before-destructive firing in quick succession) sends one write.
+// Uses the same in-flight counter pattern as the main board-state sync.
+function _pushAutoSnapsToCloud(autos){
+  if(!FIREBASE_ENABLED||!_autoSnapsRef)return;
+  clearTimeout(_autoSnapsWriteTimer);
+  _autoSnapsWriteTimer=setTimeout(function(){
+    _autoSnapsWriteTimer=null;
+    var payload=autos||getAutoBaks();
+    if(!payload.length)return; // nothing to push
+    _autoSnapsPending++;
+    _autoSnapsRef.set(payload).then(function(){
+      _autoSnapsPending=Math.max(0,_autoSnapsPending-1);
+    }).catch(function(err){
+      _autoSnapsPending=Math.max(0,_autoSnapsPending-1);
+      console.warn('[AutoSnap] Cloud write failed (snap still saved locally):',err);
+    });
+  },2000);
+}
+
+// ── UNDO / REDO ──
+function _updateUndoUI(){
+  var ub=document.getElementById('undo-btn');
+  var rb=document.getElementById('redo-btn');
+  if(ub){
+    var ul=_undoStack.length;
+    ub.disabled=ul===0;
+    ub.title=ul===0?'Nothing to undo':'Undo ('+ul+' step'+(ul!==1?'s':'')+') \u2014 Ctrl+Z';
+  }
+  if(rb){
+    var rl=_redoStack.length;
+    rb.disabled=rl===0;
+    rb.title=rl===0?'Nothing to redo':'Redo ('+rl+' step'+(rl!==1?'s':'')+') \u2014 Ctrl+Y';
+  }
+}
+function _persistUndoSession(){
+  try{
+    // Mirror last 10 undo entries to sessionStorage for crash/F5 recovery within the same browser session.
+    // sessionStorage clears automatically on browser/tab close — no stale data bleeds across sessions.
+    var slice=_undoStack.slice(-10);
+    sessionStorage.setItem('fb4_undo',JSON.stringify(slice));
+  }catch(e){}
+}
+function _restoreUndoSession(){
+  try{
+    var stored=sessionStorage.getItem('fb4_undo');
+    if(!stored)return;
+    var arr=JSON.parse(stored);
+    if(!Array.isArray(arr)||arr.length===0)return;
+    _undoStack=arr;
+    _updateUndoUI();
+    notify('↩ Undo history restored from last session ('+arr.length+' step'+(arr.length!==1?'s':'')+')');
+  }catch(e){}
+}
+
+// Push current S to undo stack BEFORE a mutation. Call at the start of every action
+// function, after any guard/early-return checks but before mutating S.
+function _pushUndo(){
+  if(_skipFbWrite||_undoInProgress)return; // skip remote renders and undo/redo applies
+  _undoStack.push(JSON.stringify(S));
+  if(_undoStack.length>50)_undoStack.shift();
+  _redoStack=[]; // a new action invalidates any forward redo history
+  _persistUndoSession();
+  _updateUndoUI();
+}
+
+function doUndo(){
+  if(_undoStack.length===0)return;
+  _redoStack.push(JSON.stringify(S));
+  if(_redoStack.length>50)_redoStack.shift();
+  _undoInProgress=true;
+  S=JSON.parse(_undoStack.pop());
+  save();render();
+  _undoInProgress=false;
+  _persistUndoSession();
+  _updateUndoUI();
+  notify('↩ Undone'+((_undoStack.length>0)?' ('+_undoStack.length+' more)':''));
+}
+
+function doRedo(){
+  if(_redoStack.length===0)return;
+  _undoStack.push(JSON.stringify(S));
+  if(_undoStack.length>50)_undoStack.shift();
+  _undoInProgress=true;
+  S=JSON.parse(_redoStack.pop());
+  save();render();
+  _undoInProgress=false;
+  _persistUndoSession();
+  _updateUndoUI();
+  notify('↪ Redone'+((_redoStack.length>0)?' ('+_redoStack.length+' more)':''));
+}
+
+function addGroup(t){_pushUndo();var g={id:uid(),title:t||'New Group',pi:0,col:false};S.groups.push(g);newGroupId=g.id;save();render();newGroupId=null;}
+function renameGroup(id,t){var g=S.groups.find(function(x){return x.id===id;});if(!g)return;_pushUndo();g.title=t;save();render();}
+function setGroupPi(id,pi){var g=S.groups.find(function(x){return x.id===id;});if(!g)return;_pushUndo();g.pi=pi;save();render();}
+function toggleGroupCol(id){var g=S.groups.find(function(x){return x.id===id;});if(!g)return;_pushUndo();g.col=!g.col;save();render();}
 function delGroup(id){
   if(!confirm('Delete group? Columns become ungrouped.'))return;
+  _autoSnapBefore('Before: Delete group \u2013 '+new Date().toLocaleTimeString());
+  _pushUndo();
   S.groups=S.groups.filter(function(x){return x.id!==id;});
   S.cols.forEach(function(c){if(c.gid===id)c.gid=null;});save();render();
 }
-function addCol(gid,t,pi){var col={id:uid(),gid:gid||null,title:t||'New Column',pi:pi||0,wip:0,collapsed:false,cards:[]};S.cols.push(col);newColId=col.id;save();render();newColId=null;}
-function renameCol(id,t){var c=S.cols.find(function(x){return x.id===id;});if(c){c.title=t;save();render();}}
-function setColPi(id,pi){var c=S.cols.find(function(x){return x.id===id;});if(c){c.pi=pi;save();render();}}
+function addCol(gid,t,pi){_pushUndo();var col={id:uid(),gid:gid||null,title:t||'New Column',pi:pi||0,wip:0,collapsed:false,cards:[]};S.cols.push(col);newColId=col.id;save();render();newColId=null;}
+function renameCol(id,t){var c=S.cols.find(function(x){return x.id===id;});if(!c)return;_pushUndo();c.title=t;save();render();}
+function setColPi(id,pi){var c=S.cols.find(function(x){return x.id===id;});if(!c)return;_pushUndo();c.pi=pi;save();render();}
 function setColCollapsed(id,v){var c=S.cols.find(function(x){return x.id===id;});if(c){c.collapsed=v;save();render();}}
 function toggleColSort(id){var c=S.cols.find(function(x){return x.id===id;});if(c){c.sort=!c.sort;save();render();}}
-function delCol(id){if(!confirm('Delete column and all its cards?'))return;S.cols=S.cols.filter(function(x){return x.id!==id;});save();render();}
+function delCol(id){
+  if(!confirm('Delete column and all its cards?'))return;
+  _autoSnapBefore('Before: Delete column \u2013 '+new Date().toLocaleTimeString());
+  _pushUndo();
+  S.cols=S.cols.filter(function(x){return x.id!==id;});save();render();
+}
 function addCard(colId,t,color){
   var c=S.cols.find(function(x){return x.id===colId;});if(!c||!t.trim())return;
+  _pushUndo();
   var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:''};
   c.cards.push(card);newCardId=card.id;save();render();newCardId=null;
 }
 function saveCard(card){
+  _pushUndo();
   for(var i=0;i<S.cols.length;i++){
     var idx=S.cols[i].cards.findIndex(function(x){return x.id===card.id;});
     if(idx>=0){S.cols[i].cards[idx]=card;break;}
@@ -853,6 +1171,7 @@ function saveCard(card){
   save();render();
 }
 function deleteCard(cid){
+  _pushUndo();
   for(var i=0;i<S.cols.length;i++){
     var idx=S.cols[i].cards.findIndex(function(x){return x.id===cid;});
     if(idx>=0){S.cols[i].cards.splice(idx,1);break;}
@@ -862,6 +1181,7 @@ function deleteCard(cid){
 function duplicateCard(cid,colId){
   var col=S.cols.find(function(x){return x.id===colId;});if(!col)return;
   var idx=col.cards.findIndex(function(x){return x.id===cid;});if(idx<0)return;
+  _pushUndo();
   var copy=JSON.parse(JSON.stringify(col.cards[idx]));
   copy.id=uid();copy.title='Copy of '+col.cards[idx].title;
   col.cards.splice(idx+1,0,copy);
@@ -872,6 +1192,7 @@ function moveCard(cid,fromId,toId,beforeId){
   var fc=S.cols.find(function(x){return x.id===fromId;}),tc=S.cols.find(function(x){return x.id===toId;});
   if(!fc||!tc)return;
   var idx=fc.cards.findIndex(function(x){return x.id===cid;});if(idx<0)return;
+  _pushUndo();
   var card=fc.cards.splice(idx,1)[0];
   if(beforeId){var bi=tc.cards.findIndex(function(x){return x.id===beforeId;});tc.cards.splice(bi<0?tc.cards.length:bi,0,card);}
   else tc.cards.push(card);
@@ -879,7 +1200,7 @@ function moveCard(cid,fromId,toId,beforeId){
 }
 
 function getGroupForCol(colId){var col=S.cols.find(function(x){return x.id===colId;});if(!col||!col.gid)return null;return S.groups.find(function(x){return x.id===col.gid;})||null;}
-function setGroupLimit(gid,n){var g=S.groups.find(function(x){return x.id===gid;});if(g){g.limit=Math.max(0,parseInt(n)||0);save();render();}}
+function setGroupLimit(gid,n){var g=S.groups.find(function(x){return x.id===gid;});if(!g)return;_pushUndo();g.limit=Math.max(0,parseInt(n)||0);save();render();}
 function toggleLimitPop(gid){closeAllPops();if(openLimitGid===gid){openLimitGid=null;return;}openLimitGid=gid;var el=document.getElementById('limitpop_'+gid);if(el)el.style.display='block';}
 function saveLimitPop(gid){var inp=document.getElementById('limitinp_'+gid);if(inp)setGroupLimit(gid,inp.value);openLimitGid=null;}
 function clearGroupLimit(gid){setGroupLimit(gid,0);openLimitGid=null;}
@@ -1603,6 +1924,34 @@ function moveCMCard(cid,from,to){if(from===to)return;saveCard(EC);moveCard(cid,f
 
 function showBackupModal(){
   var baks=getBaks();
+  var autos=getAutoBaks();
+
+  // ── trigger badge helper ──
+  function triggerBadge(trigger){
+    var map={
+      session:{label:'Session start', bg:'rgba(96,165,250,.15)',  color:'#60a5fa'},
+      idle:   {label:'Idle checkpoint',bg:'rgba(168,85,247,.15)', color:'#a855f7'},
+      destructive:{label:'Before delete',bg:'rgba(244,63,94,.12)',color:'#f43f5e'},
+      auto:   {label:'Auto',           bg:'rgba(148,163,184,.1)', color:'#94a3b8'},
+    };
+    var t=map[trigger]||map.auto;
+    return '<span class="auto-trigger-badge" style="background:'+t.bg+';color:'+t.color+'">'+t.label+'</span>';
+  }
+
+  var autoHtml=autos.length===0
+    ?'<div style="color:var(--txt-dd);font-size:13px;padding:12px 0 4px">No auto-snapshots yet — they appear after your first session.</div>'
+    :autos.map(function(b){
+      return '<div class="auto-bak-item">'+
+        '<div style="flex:1">'+
+          '<div class="bak-name" style="cursor:default">'+esc(b.name)+'</div>'+
+          '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' · '+b.cards+' card'+(b.cards!==1?'s':'')+' · '+triggerBadge(b.trigger)+'</div>'+
+        '</div>'+
+        '<div class="bak-actions">'+
+          '<button onclick="restoreAutoBak(\''+b.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
+          '<button onclick="deleteAutoBak(\''+b.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
+        '</div></div>';
+    }).join('');
+
   var bakHtml=baks.length===0
     ?'<div style="color:var(--txt-dd);font-size:13px;padding:16px 0 8px">No snapshots yet.</div>'
     :baks.map(function(b){
@@ -1615,15 +1964,25 @@ function showBackupModal(){
           '<button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
         '</div></div>';
     }).join('');
+
+  var ul=_undoStack.length,rl=_redoStack.length;
+  var undoBar='<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:18px;font-size:12px;color:var(--txt-m)">'+
+    '<span style="flex:1">↩ <strong style="color:var(--txt)">'+ul+'</strong> undo step'+(ul!==1?'s':'')+' in memory'+
+    (rl>0?' &nbsp;·&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
+    (ul>0?'<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="doUndo();showBackupModal()">↩ Undo</button>':'')+'</div>';
+
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup & Restore</div>'+
       '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
     '</div>'+
+    undoBar+
     '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:13px;color:#10b981">'+
-      '✅ <strong>Auto-save is ON</strong> — every change saves instantly.'+
+      '✅ <strong>Auto-save is ON</strong> — every change saves instantly to local storage'+(_activeKey?' and cloud':'.')+
     '</div>'+
-    '<label class="lbl">Save Snapshot</label>'+
+    '<label class="lbl">Auto Snapshots ('+autos.length+'/15)</label>'+
+    '<div style="max-height:180px;overflow-y:auto;padding-right:2px;margin-bottom:20px">'+autoHtml+'</div>'+
+    '<label class="lbl">Save Manual Snapshot</label>'+
     '<div style="display:flex;gap:9px;margin-bottom:18px">'+
       '<input id="bak-n" class="finput" placeholder="Snapshot name…" style="flex:1" onkeydown="if(event.key===\'Enter\')createBak(document.getElementById(\'bak-n\').value)">'+
       '<button class="btn btn-green" onclick="createBak(document.getElementById(\'bak-n\').value)">📌 Save</button>'+
@@ -1633,14 +1992,14 @@ function showBackupModal(){
       '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="exportBak(null)">⬇ Export .json</button>'+
       '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="importBak()">⬆ Import .json</button>'+
     '</div>'+
-    '<label class="lbl">Snapshots ('+baks.length+'/25)</label>'+
-    '<div style="max-height:280px;overflow-y:auto;padding-right:2px">'+bakHtml+'</div>'+
+    '<label class="lbl">Manual Snapshots ('+baks.length+'/25)</label>'+
+    '<div style="max-height:240px;overflow-y:auto;padding-right:2px">'+bakHtml+'</div>'+
     '<div style="margin-top:14px;padding:11px 13px;background:var(--surf2);border-radius:10px;font-size:12px;color:var(--txt-d);line-height:1.8">'+
       '<strong style="color:var(--txt-m)">💡 Transfer your board:</strong><br>'+
       '1. Export as .json → save to USB or email<br>'+
       '2. On another device: open FlowBoard → Import .json'+
     '</div>',
-  '560px',function(){var i=document.getElementById('bak-n');if(i)i.focus();});
+  '580px',function(){var i=document.getElementById('bak-n');if(i)i.focus();});
 }
 
 var _modalW=510,_modalH=null;
@@ -1688,9 +2047,21 @@ document.addEventListener('keydown',function(e){
     closeModal();
   }
   if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();createBak('Quick Save '+new Date().toLocaleTimeString());}
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){
+    // Don't intercept Ctrl+Z inside text inputs / textareas — let the browser handle it
+    if(document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'))return;
+    e.preventDefault();doUndo();
+  }
+  if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){
+    if(document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'))return;
+    e.preventDefault();doRedo();
+  }
 });
 
-load();loadTheme();loadModalSize();render();initPointerDrag();initSync();
+load();loadTheme();loadModalSize();render();initPointerDrag();
+_sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
+_restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
+initSync();
 </script>
 </body>
 </html>
