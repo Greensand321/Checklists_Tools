@@ -692,7 +692,7 @@ function _applyRemote(remote){
     var lk=getKeys();var lke=lk.find(function(k){return k.key===_activeKey;});
     if(lke&&lke.label!==S.prefs.boardName){lke.label=S.prefs.boardName;setKeys(lk);window._keysModalRender&&window._keysModalRender();}
   }
-  _skipFbWrite=true;render();_skipFbWrite=false;
+  _skipFbWrite=true;save();render();_skipFbWrite=false;
 }
 
 function initSync(){
@@ -1415,7 +1415,6 @@ function initPointerDrag(){
   });
 }
 function render(){
-  save();
   var q=document.getElementById('search').value.toLowerCase().trim();
   var board=document.getElementById('board'),st=board.scrollTop;
   S.cols.forEach(function(c){var el=document.getElementById('cb_'+c.id);if(el)_colHeights[c.id]=el.getBoundingClientRect().height;});
