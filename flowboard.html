@@ -1810,7 +1810,7 @@ function renderCM(colId){
       '</div>'+
       '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
     '</div>'+
-    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px" oninput="EC.desc=this.value" onblur="saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
+    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px">'+
       '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Priority</span>'+
       PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('')+
@@ -2029,8 +2029,8 @@ function setModal(html,w,cb,resizable){
   var ov=document.createElement('div');ov.className='overlay';ov.onclick=closeModal;
   var m=document.createElement('div');m.className='modal';
   if(resizable){
-    m.style.width=_modalW+'px';
-    if(_modalH){m.style.height=_modalH+'px';m.style.maxHeight='none';}
+    m.style.width=Math.min(_modalW, window.innerWidth * 0.95)+'px';
+    if(_modalH){m.style.height=Math.min(_modalH, window.innerHeight * 0.95)+'px';m.style.maxHeight='none';}
   }else if(w){m.style.width=w;}
   m.onclick=function(e){e.stopPropagation();};m.innerHTML=html;
   if(resizable){var rh=document.createElement('div');rh.className='modal-resize-handle';m.appendChild(rh);initModalResize(rh,m);}
