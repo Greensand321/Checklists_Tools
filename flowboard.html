@@ -169,9 +169,29 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .cm-tags-drop{position:absolute;top:calc(100% + 6px);left:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:200;box-shadow:0 8px 28px rgba(0,0,0,.45);max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;min-width:220px;padding:0}
 .cm-tags-drop.open{max-height:80px;opacity:1;pointer-events:auto;padding:10px 10px 8px}
 
-/* ── DATE BUTTON ── */
+/* ── DATE / CALENDAR ── */
+.cm-cal{position:relative;display:inline-flex;align-items:center;flex-shrink:0}
 .cm-date-btn{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none;font-family:inherit;position:relative}
 .cm-date-btn:hover{border-color:#60a5fa;color:var(--txt)}
+.cm-cal-drop{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:14px;z-index:200;box-shadow:0 12px 40px rgba(0,0,0,.5);width:280px;max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;padding:0}
+.cm-cal-drop.open{max-height:360px;opacity:1;pointer-events:auto;padding:14px}
+.cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-hdr-title{font-size:14px;font-weight:800;color:var(--txt-b)}
+.cal-nav{background:none;border:1px solid var(--bd-i);border-radius:8px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--txt-m);font-size:14px;transition:background .15s,border-color .15s,color .15s}
+.cal-nav:hover{background:var(--surf3);border-color:#60a5fa;color:#60a5fa}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cal-dow{font-size:10px;font-weight:700;color:var(--txt-dd);text-transform:uppercase;padding:4px 0 8px}
+.cal-day{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:background .15s,color .12s,transform .12s;border:2px solid transparent;margin:0 auto}
+.cal-day:hover{background:var(--surf3);color:var(--txt);transform:scale(1.1)}
+.cal-day.today{border-color:rgba(96,165,250,.4);color:#60a5fa}
+.cal-day.selected{background:#3b82f6;color:#fff;border-color:#3b82f6;font-weight:800}
+.cal-day.selected:hover{background:#2563eb;border-color:#2563eb}
+.cal-day.other{color:var(--txt-dd);opacity:.4}
+.cal-day.past{opacity:.5}
+.cal-foot{display:flex;gap:6px;margin-top:10px;justify-content:flex-end}
+.cal-foot button{border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:opacity .12s,transform .12s;font-family:inherit}
+.cal-foot button:hover{opacity:.85}
+.cal-foot button:active{transform:scale(.95)}
 
 .add-card-btn{background:none;border:1px dashed var(--bd-i);border-radius:9px;color:var(--txt-d);padding:7px;cursor:pointer;font-size:12px;width:100%;transition:all .2s}
 .add-card-btn:hover{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.04)}
@@ -243,9 +263,9 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .bak-actions button{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .12s,transform .12s}
 .bak-actions button:hover{opacity:.82}
 .bak-actions button:active{transform:scale(.93)}
-.tag-chip{background:var(--surf3);color:var(--txt-m);border-radius:20px;padding:3px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;margin:0 3px 3px 0;transition:background .15s;animation:cardNew .15s cubic-bezier(.34,1.4,.64,1) both}
-.tag-chip:hover{background:var(--bd-i)}
-.tag-chip .x{cursor:pointer;color:var(--txt-d);font-size:13px;line-height:1;transition:color .12s,transform .12s}
+.tag-chip{background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;margin:0 5px 5px 0;transition:background .18s,border-color .18s,transform .12s;animation:cardNew .15s cubic-bezier(.34,1.4,.64,1) both}
+.tag-chip:hover{background:rgba(96,165,250,.2);border-color:rgba(96,165,250,.4);transform:translateY(-1px)}
+.tag-chip .x{cursor:pointer;color:rgba(96,165,250,.5);font-size:14px;line-height:1;transition:color .12s,transform .12s}
 .tag-chip .x:hover{color:#e11d48;transform:scale(1.2)}
 .sync-pill{font-size:11px;font-weight:700;color:var(--txt-dd);white-space:nowrap;padding:4px 8px;border-radius:20px;background:var(--surf2);border:1px solid var(--bd);transition:color .3s}
 .inp{background:var(--inp);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 11px;font-size:13px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
@@ -1251,6 +1271,64 @@ function setCMColor(color){
   document.getElementById('cm-color-drop')?.classList.remove('open');
 }
 
+// ── CUSTOM CALENDAR ──
+var _calMonth=null,_calYear=null,_calColId=null;
+function openCMCal(e,colId){
+  e.stopPropagation();
+  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  _calColId=colId;
+  var d=EC.due?new Date(EC.due+'T00:00:00'):new Date();
+  _calMonth=d.getMonth();_calYear=d.getFullYear();
+  drop.classList.add('open');
+  renderCal();
+}
+function renderCal(){
+  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  var today=new Date();today.setHours(0,0,0,0);
+  var selStr=EC.due||'';
+  var first=new Date(_calYear,_calMonth,1);
+  var startDay=first.getDay();
+  var daysInMonth=new Date(_calYear,_calMonth+1,0).getDate();
+  var prevDays=new Date(_calYear,_calMonth,0).getDate();
+  var h='<div class="cal-hdr">'+
+    '<button class="cal-nav" onclick="calNav(-1)">◂</button>'+
+    '<span class="cal-hdr-title">'+MONTHS[_calMonth]+' '+_calYear+'</span>'+
+    '<button class="cal-nav" onclick="calNav(1)">▸</button>'+
+  '</div><div class="cal-grid">';
+  DAYS.forEach(function(d){h+='<div class="cal-dow">'+d+'</div>';});
+  for(var i=0;i<startDay;i++){
+    var pd=prevDays-startDay+1+i;
+    h+='<div class="cal-day other">'+pd+'</div>';
+  }
+  for(var d=1;d<=daysInMonth;d++){
+    var dt=new Date(_calYear,_calMonth,d);
+    var iso=_calYear+'-'+String(_calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var cls='cal-day';
+    if(dt.getTime()===today.getTime())cls+=' today';
+    if(iso===selStr)cls+=' selected';
+    if(dt<today&&dt.getTime()!==today.getTime())cls+=' past';
+    h+='<div class="'+cls+'" onclick="pickCalDay(\''+iso+'\')">'+d+'</div>';
+  }
+  var totalCells=startDay+daysInMonth;
+  var rem=totalCells%7?7-totalCells%7:0;
+  for(var i=1;i<=rem;i++){h+='<div class="cal-day other">'+i+'</div>';}
+  h+='</div>';
+  h+='<div class="cal-foot">'+
+    '<button style="background:var(--surf3);color:var(--txt-m)" onclick="pickCalDay(\'\')">Clear</button>'+
+    '<button style="background:rgba(96,165,250,.15);color:#60a5fa" onclick="pickCalToday()">Today</button>'+
+  '</div>';
+  drop.innerHTML=h;
+}
+function calNav(dir){_calMonth+=dir;if(_calMonth>11){_calMonth=0;_calYear++;}if(_calMonth<0){_calMonth=11;_calYear--;}renderCal();}
+function pickCalDay(iso){
+  EC.due=iso;saveCard(EC);
+  var drop=document.getElementById('cm-cal-drop');if(drop)drop.classList.remove('open');
+  renderCM(_calColId);
+}
+function pickCalToday(){var t=new Date();pickCalDay(t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));}
+
 // ── TAGS DROPDOWN ──
 function toggleCMTags(e){
   e.stopPropagation();
@@ -1749,7 +1827,8 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('.cm-color-wrap')){_cmColorOpen=false;var cd=document.getElementById('cm-color-drop');if(cd)cd.classList.remove('open');}
   if(!e.target.closest('.cm-col-wrap')){_cmColOpen=false;var cc=document.getElementById('cm-col-drop');if(cc)cc.classList.remove('open');}
   if(!e.target.closest('.cm-tags-wrap')){_cmTagsOpen=false;var ct=document.getElementById('cm-tags-drop');if(ct)ct.classList.remove('open');}
-});
+  if(!e.target.closest('.cm-cal')){var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');}
+},true);
 
 // ── MODALS ──
 function closeModal(){
@@ -1906,7 +1985,7 @@ function renderCM(colId){
       dueLabelHtml+
     '</div>'+
     '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
       '<div class="cm-tags-wrap">'+
         '<div class="cm-tags-trigger" onclick="toggleCMTags(event)">'+
           '🏷 Tags'+tagsBadge+
@@ -1920,6 +1999,7 @@ function renderCM(colId){
       '</div>'+
       '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Priority</span>'+
       PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('')+
+      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Column</span>'+
       '<div class="cm-col-wrap">'+
         '<div class="cm-col-trigger" onclick="toggleCMCol(event)">'+
           '<span style="overflow:hidden;text-overflow:ellipsis">'+currentColTitle+'</span>'+
@@ -1927,11 +2007,12 @@ function renderCM(colId){
         '</div>'+
         '<div id="cm-col-drop" class="cm-col-drop'+(_cmColOpen?' open':'')+'">'+colDropHtml+'</div>'+
       '</div>'+
-      '<div style="position:relative;display:inline-flex;align-items:center">'+
-        '<button class="cm-date-btn" onclick="document.getElementById(\'cm-due\').showPicker&&document.getElementById(\'cm-due\').showPicker()">'+
+      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Deadline</span>'+
+      '<div class="cm-cal">'+
+        '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
           (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
         '</button>'+
-        '<input id="cm-due" type="date" style="position:absolute;inset:0;opacity:0;pointer-events:auto;width:100%;height:100%;cursor:pointer" value="'+esc(c.due||'')+'" onchange="EC.due=this.value;saveCard(EC);renderCM(\''+colId+'\')">'+
+        '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
       '</div>'+
       (c.due?'<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';saveCard(EC);renderCM(\''+colId+'\')">✕</button>':'')+
     '</div>'+
