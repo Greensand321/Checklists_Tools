@@ -162,6 +162,13 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .cm-col-item:hover{background:var(--surf3)}
 .cm-col-item.active{color:#60a5fa}
 
+/* ── TAGS DROPDOWN ── */
+.cm-tags-wrap{position:relative;display:inline-flex;align-items:center;flex-shrink:0}
+.cm-tags-trigger{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none}
+.cm-tags-trigger:hover{border-color:#60a5fa;color:var(--txt)}
+.cm-tags-drop{position:absolute;top:calc(100% + 6px);left:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:200;box-shadow:0 8px 28px rgba(0,0,0,.45);max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;min-width:220px;padding:0}
+.cm-tags-drop.open{max-height:80px;opacity:1;pointer-events:auto;padding:10px 10px 8px}
+
 /* ── DATE BUTTON ── */
 .cm-date-btn{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none;font-family:inherit;position:relative}
 .cm-date-btn:hover{border-color:#60a5fa;color:var(--txt)}
@@ -488,7 +495,7 @@ var newCardId=null,newColId=null,newGroupId=null,settleCardId=null;
 var S={groups:[],cols:[]};
 var drag=null,addTo=null,EC=null,openLimitGid=null,_pd=null;
 var addCardColor=null;
-var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false;
+var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false,_cmTagsOpen=false;
 var _chkSorted=false,_chkOrigItems=null;
 
 function defaultState(){return{
@@ -1244,6 +1251,14 @@ function setCMColor(color){
   document.getElementById('cm-color-drop')?.classList.remove('open');
 }
 
+// ── TAGS DROPDOWN ──
+function toggleCMTags(e){
+  e.stopPropagation();
+  _cmTagsOpen=!_cmTagsOpen;
+  document.getElementById('cm-tags-drop')?.classList.toggle('open',_cmTagsOpen);
+  if(_cmTagsOpen)setTimeout(function(){var i=document.getElementById('cm-nt');if(i)i.focus();},50);
+}
+
 // ── COLUMN DROPDOWN ──
 function toggleCMCol(e){
   e.stopPropagation();
@@ -1733,6 +1748,7 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('.wip-pop')&&!e.target.closest('.limit-btn'))closeAllPops();
   if(!e.target.closest('.cm-color-wrap')){_cmColorOpen=false;var cd=document.getElementById('cm-color-drop');if(cd)cd.classList.remove('open');}
   if(!e.target.closest('.cm-col-wrap')){_cmColOpen=false;var cc=document.getElementById('cm-col-drop');if(cc)cc.classList.remove('open');}
+  if(!e.target.closest('.cm-tags-wrap')){_cmTagsOpen=false;var ct=document.getElementById('cm-tags-drop');if(ct)ct.classList.remove('open');}
 });
 
 // ── MODALS ──
@@ -1842,7 +1858,7 @@ function showAddColModal(gid){
 function showCardModal(cardId,colId){
   var card=S.cols.reduce(function(a,c){return a.concat(c.cards);},[]).find(function(x){return x.id===cardId;});
   if(!card)return;
-  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_chkSorted=false;_chkOrigItems=null;
+  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;
   EC=JSON.parse(JSON.stringify(card));renderCM(colId);
 }
 function renderCM(colId){
@@ -1859,12 +1875,6 @@ function renderCM(colId){
   }).join('');
 
   var circleStyle=c.color?'background:'+c.color+';border-color:transparent':'background:var(--surf3);border-color:var(--bd-i)';
-
-  var colBtns=S.cols.map(function(col){
-    var P=PAL[col.pi%PAL.length],act=col.id===colId;
-    var bg=act?(light?hexToRgba(P.a,.18):P.h):'';
-    return '<button class="col-move-btn '+(act?'active':'')+'" style="'+(act?'border-color:'+P.a+';background:'+bg+';color:'+P.a:'')+'" onclick="moveCMCard(\''+c.id+'\',\''+colId+'\',\''+col.id+'\')">'+esc(col.title)+'</button>';
-  }).join('');
 
   var currentColTitle=esc((S.cols.find(function(x){return x.id===colId;})||{title:'Column'}).title);
 
@@ -1883,6 +1893,8 @@ function renderCM(colId){
     dueLabelHtml='<span style="font-size:11px;font-weight:700;flex-shrink:0;'+cls2+'">'+icon2+'</span>';
   }
 
+  var tagsBadge=c.tags.length?'<span id="cm-tags-badge" style="background:rgba(96,165,250,.2);color:#60a5fa;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:2px">'+c.tags.length+'</span>':'';
+
   var html=
     '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
       '<div id="cm-bar" style="width:5px;border-radius:99px;background:'+borderColor+';flex-shrink:0;align-self:stretch;min-height:36px;transition:background .2s"></div>'+
@@ -1891,12 +1903,23 @@ function renderCM(colId){
         '<div id="cm-color-drop" class="cm-color-drop'+(_cmColorOpen?' open':'')+'">'+colorDropHtml+'</div>'+
       '</div>'+
       '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
+      dueLabelHtml+
     '</div>'+
     '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+      '<div class="cm-tags-wrap">'+
+        '<div class="cm-tags-trigger" onclick="toggleCMTags(event)">'+
+          '🏷 Tags'+tagsBadge+
+        '</div>'+
+        '<div id="cm-tags-drop" class="cm-tags-drop'+(_cmTagsOpen?' open':'')+'">'+
+          '<div style="display:flex;gap:6px">'+
+            '<input id="cm-nt" class="finput" placeholder="Add tag…" style="flex:1;padding:5px 9px;font-size:12px" onkeydown="if(event.key===\'Enter\')addCMTag(\''+colId+'\');if(event.key===\'Escape\'){_cmTagsOpen=false;document.getElementById(\'cm-tags-drop\').classList.remove(\'open\')}">'+
+            '<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="addCMTag(\''+colId+'\')">+</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
       '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Priority</span>'+
       PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('')+
-      '<div style="flex:1"></div>'+
       '<div class="cm-col-wrap">'+
         '<div class="cm-col-trigger" onclick="toggleCMCol(event)">'+
           '<span style="overflow:hidden;text-overflow:ellipsis">'+currentColTitle+'</span>'+
@@ -1904,9 +1927,6 @@ function renderCM(colId){
         '</div>'+
         '<div id="cm-col-drop" class="cm-col-drop'+(_cmColOpen?' open':'')+'">'+colDropHtml+'</div>'+
       '</div>'+
-    '</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">'+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px;white-space:nowrap">Due</span>'+
       '<div style="position:relative;display:inline-flex;align-items:center">'+
         '<button class="cm-date-btn" onclick="document.getElementById(\'cm-due\').showPicker&&document.getElementById(\'cm-due\').showPicker()">'+
           (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
@@ -1914,14 +1934,8 @@ function renderCM(colId){
         '<input id="cm-due" type="date" style="position:absolute;inset:0;opacity:0;pointer-events:auto;width:100%;height:100%;cursor:pointer" value="'+esc(c.due||'')+'" onchange="EC.due=this.value;saveCard(EC);renderCM(\''+colId+'\')">'+
       '</div>'+
       (c.due?'<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';saveCard(EC);renderCM(\''+colId+'\')">✕</button>':'')+
-      dueLabelHtml+
     '</div>'+
-    '<label class="lbl">Tags</label>'+
-    '<div id="cm-tags" style="margin-bottom:7px;min-height:22px">'+tagHtml+'</div>'+
-    '<div style="display:flex;gap:8px;margin-bottom:20px">'+
-      '<input id="cm-nt" class="finput" placeholder="Add tag…" style="flex:1" onkeydown="if(event.key===\'Enter\')addCMTag(\''+colId+'\')">'+
-      '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMTag(\''+colId+'\')">+</button>'+
-    '</div>'+
+    (c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>')+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
       '<label class="lbl" style="margin-bottom:0">Checklist</label>'+
       (pct!==null?'<span class="prog-label" style="font-size:12px;font-weight:700;color:'+(pct===100?'#10b981':'var(--txt-d)')+'">'+pct+'% done</span>':'')+
@@ -1956,8 +1970,30 @@ function renderCM(colId){
 }
 
 function setCMPri(p,cid){EC.pri=p;saveCard(EC);renderCM(cid);}
-function addCMTag(cid){var i=document.getElementById('cm-nt'),t=i.value.trim();if(!t||EC.tags.includes(t))return;EC.tags.push(t);i.value='';saveCard(EC);renderCM(cid);}
-function removeCMTag(t,cid){EC.tags=EC.tags.filter(function(x){return x!==t;});saveCard(EC);renderCM(cid);}
+function addCMTag(cid){
+  var i=document.getElementById('cm-nt'),t=i.value.trim();if(!t||EC.tags.includes(t))return;
+  EC.tags.push(t);i.value='';saveCard(EC);
+  var container=document.getElementById('cm-tags');
+  if(container){
+    var chip=document.createElement('span');chip.className='tag-chip';
+    chip.innerHTML=esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+cid+'\')">×</span>';
+    container.appendChild(chip);
+    var badge=document.getElementById('cm-tags-badge');
+    if(badge)badge.textContent=EC.tags.length;
+  }else{renderCM(cid);}
+  setTimeout(function(){var ni=document.getElementById('cm-nt');if(ni)ni.focus();},0);
+}
+function removeCMTag(t,cid){
+  EC.tags=EC.tags.filter(function(x){return x!==t;});saveCard(EC);
+  var container=document.getElementById('cm-tags');
+  if(container){
+    container.querySelectorAll('.tag-chip').forEach(function(chip){
+      var txt=chip.childNodes[0];if(txt&&txt.textContent===t)chip.remove();
+    });
+    var badge=document.getElementById('cm-tags-badge');
+    if(badge)badge.textContent=EC.tags.length||'';
+  }else{renderCM(cid);}
+}
 
 function addCMItem(colId){
   var i=document.getElementById('cm-ni'),t=i.value.trim();if(!t)return;
