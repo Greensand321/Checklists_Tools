@@ -305,6 +305,7 @@ input[type="date"]{color-scheme:dark}
   <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
   <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
+  <button class="btn btn-ghost" onclick="showArchiveModal()">📦 Archive</button>
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
   <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
 </div>
@@ -1219,6 +1220,114 @@ function duplicateCard(cid,colId){
   newCardId=copy.id;save();render();newCardId=null;
   forceCloseModal();notify('📋 Card duplicated!');
 }
+function archiveCard(cid){
+  _pushUndo();
+  for(var i=0;i<S.cols.length;i++){
+    var idx=S.cols[i].cards.findIndex(function(x){return x.id===cid;});
+    if(idx>=0){
+      var card=S.cols[i].cards[idx];
+      card.archived=true;card.archivedAt=Date.now();card.archivedFromCol=S.cols[i].id;
+      break;
+    }
+  }
+  save();render();notify('📦 Card archived!');
+}
+function archiveCol(cid){
+  var col=S.cols.find(function(x){return x.id===cid;});if(!col)return;
+  _pushUndo();
+  col.archived=true;col.archivedAt=Date.now();
+  save();render();notify('📦 Column archived!');
+}
+function restoreCard(cid){
+  _pushUndo();
+  for(var i=0;i<S.cols.length;i++){
+    var idx=S.cols[i].cards.findIndex(function(x){return x.id===cid;});
+    if(idx>=0){
+      var card=S.cols[i].cards[idx];
+      delete card.archived;delete card.archivedAt;delete card.archivedFromCol;
+      break;
+    }
+  }
+  save();render();showArchiveModal();notify('✅ Card restored!');
+}
+function restoreCol(cid){
+  var col=S.cols.find(function(x){return x.id===cid;});if(!col)return;
+  _pushUndo();
+  delete col.archived;delete col.archivedAt;
+  col.cards.forEach(function(card){delete card.archived;delete card.archivedAt;delete card.archivedFromCol;});
+  save();render();showArchiveModal();notify('✅ Column restored!');
+}
+function deleteArchivedCard(cid){
+  if(!confirm('Permanently delete this card?'))return;
+  _pushUndo();
+  for(var i=0;i<S.cols.length;i++){
+    var idx=S.cols[i].cards.findIndex(function(x){return x.id===cid;});
+    if(idx>=0){S.cols[i].cards.splice(idx,1);break;}
+  }
+  save();render();showArchiveModal();
+}
+function deleteArchivedCol(cid){
+  if(!confirm('Permanently delete this column and all its cards?'))return;
+  _pushUndo();
+  S.cols=S.cols.filter(function(x){return x.id!==cid;});
+  save();render();showArchiveModal();
+}
+function showArchiveModal(){
+  var archivedCols=S.cols.filter(function(c){return c.archived;});
+  var archivedCards=[];
+  S.cols.forEach(function(col){
+    if(!col.archived){
+      col.cards.forEach(function(card){
+        if(card.archived)archivedCards.push({card:card,colTitle:col.title});
+      });
+    }
+  });
+  var total=archivedCols.length+archivedCards.length;
+  function fmtDate(ts){return ts?new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):''}
+  var colHtml=archivedCols.length===0
+    ?'<p style="color:var(--txt-d);font-size:13px;padding:8px 0">No archived columns.</p>'
+    :archivedCols.map(function(col){
+      var n=col.cards.length,d=fmtDate(col.archivedAt);
+      return '<div class="bak-item">'+
+        '<div style="flex:1"><div class="bak-name">'+esc(col.title)+'</div>'+
+        '<div class="bak-date">'+n+' card'+(n!==1?'s':'')+(d?' · Archived '+d:'')+'</div></div>'+
+        '<div class="bak-actions">'+
+        '<button onclick="restoreCol(\''+col.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
+        '<button onclick="deleteArchivedCol(\''+col.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
+        '</div></div>';
+    }).join('');
+  var cardHtml=archivedCards.length===0
+    ?'<p style="color:var(--txt-d);font-size:13px;padding:8px 0">No archived cards.</p>'
+    :archivedCards.map(function(item){
+      var card=item.card,d=fmtDate(card.archivedAt);
+      return '<div class="bak-item">'+
+        '<div style="flex:1"><div class="bak-name">'+esc(card.title)+'</div>'+
+        '<div class="bak-date">from: '+esc(item.colTitle)+(d?' · Archived '+d:'')+'</div></div>'+
+        '<div class="bak-actions">'+
+        '<button onclick="restoreCard(\''+card.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
+        '<button onclick="deleteArchivedCard(\''+card.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
+        '</div></div>';
+    }).join('');
+  var body=total===0
+    ?'<div style="text-align:center;padding:40px 20px;color:var(--txt-d)">'+
+      '<div style="font-size:36px;margin-bottom:12px">📭</div>'+
+      '<div style="font-size:14px;font-weight:700;color:var(--txt-m);margin-bottom:6px">Archive is empty</div>'+
+      '<div style="font-size:12px;line-height:1.6">Archive columns or cards to reduce clutter.<br>They\'ll appear here and can be restored anytime.</div>'+
+      '</div>'
+    :'<label class="lbl">Archived Columns ('+archivedCols.length+')</label>'+
+      '<div style="max-height:200px;overflow-y:auto;padding-right:2px;margin-bottom:20px">'+colHtml+'</div>'+
+      '<label class="lbl">Archived Cards ('+archivedCards.length+')</label>'+
+      '<div style="max-height:240px;overflow-y:auto;padding-right:2px;margin-bottom:6px">'+cardHtml+'</div>';
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">📦 Archive</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
+    '</div>'+body+
+    '<div style="margin-top:14px;display:flex;justify-content:flex-end">'+
+      '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
+    '</div>',
+  '560px');
+}
 function moveCard(cid,fromId,toId,beforeId){
   var fc=S.cols.find(function(x){return x.id===fromId;}),tc=S.cols.find(function(x){return x.id===toId;});
   if(!fc||!tc)return;
@@ -1629,10 +1738,11 @@ function render(){
   var board=document.getElementById('board'),st=board.scrollTop;
   S.cols.forEach(function(c){var el=document.getElementById('cb_'+c.id);if(el)_colHeights[c.id]=el.getBoundingClientRect().height;});
   board.innerHTML='';
-  var tc=S.cols.reduce(function(n,c){return n+c.cards.length;},0);
-  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' · '+S.cols.length+' cols · '+tc+' cards';
-  S.groups.forEach(function(g){board.appendChild(mkGroup(g,S.cols.filter(function(c){return c.gid===g.id;}),q,false));});
-  var ug=S.cols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
+  var activeCols=S.cols.filter(function(c){return !c.archived;});
+  var tc=activeCols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
+  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' · '+activeCols.length+' cols · '+tc+' cards';
+  S.groups.forEach(function(g){board.appendChild(mkGroup(g,activeCols.filter(function(c){return c.gid===g.id;}),q,false));});
+  var ug=activeCols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
   if(ug.length)board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},ug,q,true));
   var r=document.createElement('div');r.style.cssText='padding:6px 0 20px';
   var b=document.createElement('button');b.className='btn btn-ghost';b.style.fontSize='12px';b.textContent='＋ Add Group';
@@ -1641,7 +1751,7 @@ function render(){
 }
 
 function mkGroup(g,gcols,q,fake){
-  var P=PAL[g.pi%PAL.length],tc=gcols.reduce(function(n,c){return n+c.cards.length;},0);
+  var P=PAL[g.pi%PAL.length],tc=gcols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
   var wrap=document.createElement('div');wrap.className='group';
   if(g.id===newGroupId)wrap.classList.add('anim-group-new');
   var hdr=document.createElement('div');hdr.className='group-hdr';hdr.style.borderBottomColor=P.a+'55';
@@ -1715,7 +1825,7 @@ function mkCol(col,q){
   var hdrBg=light?hexToRgba(P.a,.22):P.h,bodyBg=light?hexToRgba(P.a,.07):P.b;
   var hdrBd=light?hexToRgba(P.a,.35):'rgba(255,255,255,.08)',bodyBd=light?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
   var grp=getGroupForCol(col.id),limit=grp?grp.limit||0:0;
-  var fc=col.cards.filter(function(k){return !q||k.title.toLowerCase().includes(q)||k.tags.some(function(t){return t.toLowerCase().includes(q);});});
+  var fc=col.cards.filter(function(k){return !k.archived&&(!q||k.title.toLowerCase().includes(q)||k.tags.some(function(t){return t.toLowerCase().includes(q);}));});
   if(col.sort)fc=fc.slice().sort(function(a,b){return b.pri-a.pri;});
   var wrap=document.createElement('div');wrap.className='col';
   wrap.dataset.colid=col.id;
@@ -1745,7 +1855,7 @@ function mkCol(col,q){
   var nt=document.createElement('span');nt.className='col-name';nt.textContent=col.title;
   nt.style.color=light?P.a:'var(--txt-b)';nt.title='Double-click to rename';nt.ondblclick=function(){inlineRenameCol(col.id,nt);};hdr.appendChild(nt);
   var cnt=document.createElement('span');cnt.className='col-count';
-  cnt.textContent=String(col.cards.length);
+  cnt.textContent=String(col.cards.filter(function(k){return !k.archived;}).length);
   cnt.style.color=P.a;cnt.style.background=light?hexToRgba(P.a,.15):'rgba(0,0,0,.22)';
   hdr.appendChild(cnt);
   var sb=document.createElement('button');sb.className='icon-btn';sb.style.cssText='font-size:11px;opacity:'+(col.sort?'1':'0.4')+';color:'+(col.sort?P.a:'inherit');
@@ -1759,6 +1869,9 @@ function mkCol(col,q){
   var picker=document.createElement('div');picker.className='cpicker';picker.id='cp_'+col.id;picker.style.display='none';
   PAL.forEach(function(p,i){var d=document.createElement('div');d.className='cdot'+(col.pi===i?' on':'');d.style.background=p.a;d.title=p.n;d.onclick=function(){setColPi(col.id,i);};picker.appendChild(d);});
   pp.appendChild(picker);hdr.appendChild(pp);
+  var ab=document.createElement('button');ab.className='icon-btn';ab.title='Archive column';ab.textContent='⊡';
+  ab.style.cssText='font-size:13px;color:'+(light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)');
+  ab.onclick=function(e){e.stopPropagation();archiveCol(col.id);};hdr.appendChild(ab);
   var db=document.createElement('button');db.className='icon-btn';db.textContent='×';db.title='Delete column';
   db.style.color=light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)';db.onclick=function(){delCol(col.id);};hdr.appendChild(db);
   wrap.appendChild(hdr);
@@ -2024,7 +2137,7 @@ function renderCM(colId){
 
   var currentColTitle=esc((S.cols.find(function(x){return x.id===colId;})||{title:'Column'}).title);
 
-  var colDropHtml=S.cols.map(function(col){
+  var colDropHtml=S.cols.filter(function(col){return !col.archived;}).map(function(col){
     return '<button class="cm-col-item'+(col.id===colId?' active':'')+'" onclick="moveCMCard(\''+c.id+'\',\''+colId+'\',\''+col.id+'\')">'+esc(col.title)+'</button>';
   }).join('');
 
@@ -2100,6 +2213,7 @@ function renderCM(colId){
       '<div style="display:flex;gap:6px">'+
         '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
         '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
+        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
       '</div>'+
       '<div style="display:flex;gap:9px">'+
         '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
