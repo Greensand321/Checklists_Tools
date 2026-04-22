@@ -1272,61 +1272,137 @@ function deleteArchivedCol(cid){
   S.cols=S.cols.filter(function(x){return x.id!==cid;});
   save();render();showArchiveModal();
 }
+function mkArchiveCard(card,showRestore){
+  var pri=PRI[card.pri]||PRI[0];
+  var borderColor=card.color||pri.d;
+  var pct=card.items.length?Math.round(card.done.length/card.items.length*100):null;
+  var dc=dueClass(card.due);
+  var light=isLight();
+  var div=document.createElement('div');
+  div.className='card';
+  div.style.borderLeftColor=borderColor;
+  div.style.cursor='default';
+  if(card.color)div.style.background=hexToRgba(card.color,light?.09:.13);
+  var h='<div class="card-title">'+esc(card.title)+'</div>';
+  if(pct!==null){
+    h+='<div class="prog-row"><span>Progress</span><span style="color:'+(pct===100?'#10b981':'var(--txt-m)')+'">'+pct+'%</span></div>'+
+      '<div class="prog-track"><div class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+'"></div></div>';
+  }
+  h+='<div class="card-meta"><span class="pri-badge" style="background:'+pri.b+';color:'+pri.d+'">'+pri.l+'</span>'+
+    card.tags.map(function(t){return'<span class="tag">'+esc(t)+'</span>';}).join('');
+  if(dc){var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';}
+  h+='</div>';
+  h+='<div style="display:flex;gap:5px;margin-top:8px">';
+  if(showRestore)h+='<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;flex:1" onclick="restoreCard(\''+card.id+'\')">↩ Restore</button>';
+  h+='<button class="btn btn-danger" style="padding:3px 8px;font-size:11px'+(showRestore?'':';flex:1')+'" onclick="deleteArchivedCard(\''+card.id+'\')">🗑</button>';
+  h+='</div>';
+  div.innerHTML=h;
+  return div;
+}
+
+function mkArchivePanel(col,isFullyArchived){
+  var P=PAL[col.pi%PAL.length],light=isLight();
+  var hdrBg=light?hexToRgba(P.a,.22):P.h;
+  var bodyBg=light?hexToRgba(P.a,.07):P.b;
+  var hdrBd=light?hexToRgba(P.a,.35):'rgba(255,255,255,.08)';
+  var bodyBd=light?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
+  var cards=isFullyArchived?col.cards:col.cards.filter(function(k){return k.archived;});
+  var wrap=document.createElement('div');wrap.className='col';
+  var hdr=document.createElement('div');hdr.className='col-hdr';hdr.style.background=hdrBg;hdr.style.borderColor=hdrBd;
+  // color dot
+  var cd=document.createElement('div');
+  cd.style.cssText='width:11px;height:11px;border-radius:50%;background:'+P.a+';flex-shrink:0;box-shadow:0 0 5px '+P.a+'80';
+  hdr.appendChild(cd);
+  // title
+  var nt=document.createElement('span');nt.className='col-name';nt.textContent=col.title;nt.style.color=light?P.a:'var(--txt-b)';hdr.appendChild(nt);
+  if(isFullyArchived){
+    var badge=document.createElement('span');
+    badge.style.cssText='font-size:10px;font-weight:700;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:20px;padding:2px 7px;white-space:nowrap;flex-shrink:0';
+    badge.textContent='🗄 Archived';hdr.appendChild(badge);
+    var rb=document.createElement('button');rb.className='icon-btn';rb.title='Restore column';rb.textContent='↩';
+    rb.style.cssText='font-size:13px;color:#60a5fa';
+    rb.onclick=function(e){e.stopPropagation();restoreCol(col.id);};hdr.appendChild(rb);
+    var xb=document.createElement('button');xb.className='icon-btn';xb.title='Permanently delete column';xb.textContent='×';
+    xb.style.cssText='font-size:15px;color:rgba(244,63,94,.6)';
+    xb.onclick=function(e){e.stopPropagation();deleteArchivedCol(col.id);};hdr.appendChild(xb);
+  }else{
+    var cnt=document.createElement('span');cnt.className='col-count';
+    cnt.textContent=String(cards.length);cnt.style.color=P.a;cnt.style.background=light?hexToRgba(P.a,.15):'rgba(0,0,0,.22)';
+    hdr.appendChild(cnt);
+  }
+  wrap.appendChild(hdr);
+  var body=document.createElement('div');body.className='col-body';body.style.background=bodyBg;body.style.borderColor=bodyBd;
+  body.style.maxHeight='420px';body.style.overflowY='auto';body.style.userSelect='text';
+  if(cards.length===0){
+    var empty=document.createElement('div');
+    empty.style.cssText='text-align:center;padding:18px 8px 10px;font-size:11px;color:var(--txt-dd);pointer-events:none;user-select:none;line-height:1.6';
+    empty.innerHTML='<div style="font-size:20px;margin-bottom:5px;opacity:.4">📭</div>No cards';
+    body.appendChild(empty);
+  }else{
+    cards.forEach(function(card){body.appendChild(mkArchiveCard(card,!isFullyArchived));});
+  }
+  wrap.appendChild(body);return wrap;
+}
+
 function showArchiveModal(){
-  var archivedCols=S.cols.filter(function(c){return c.archived;});
-  var archivedCards=[];
-  S.cols.forEach(function(col){
-    if(!col.archived){
-      col.cards.forEach(function(card){
-        if(card.archived)archivedCards.push({card:card,colTitle:col.title});
-      });
+  // Build panels: fully archived columns + active columns that have individually archived cards
+  var panels=[];
+  S.cols.filter(function(c){return c.archived;}).forEach(function(col){
+    panels.push({col:col,isFullyArchived:true,ts:col.archivedAt||0});
+  });
+  S.cols.filter(function(c){return !c.archived;}).forEach(function(col){
+    var ac=col.cards.filter(function(k){return k.archived;});
+    if(ac.length>0){
+      var ts=ac.reduce(function(m,k){return Math.max(m,k.archivedAt||0);},0);
+      panels.push({col:col,isFullyArchived:false,ts:ts});
     }
   });
-  var total=archivedCols.length+archivedCards.length;
-  function fmtDate(ts){return ts?new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):''}
-  var colHtml=archivedCols.length===0
-    ?'<p style="color:var(--txt-d);font-size:13px;padding:8px 0">No archived columns.</p>'
-    :archivedCols.map(function(col){
-      var n=col.cards.length,d=fmtDate(col.archivedAt);
-      return '<div class="bak-item">'+
-        '<div style="flex:1"><div class="bak-name">'+esc(col.title)+'</div>'+
-        '<div class="bak-date">'+n+' card'+(n!==1?'s':'')+(d?' · Archived '+d:'')+'</div></div>'+
-        '<div class="bak-actions">'+
-        '<button onclick="restoreCol(\''+col.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
-        '<button onclick="deleteArchivedCol(\''+col.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
-        '</div></div>';
-    }).join('');
-  var cardHtml=archivedCards.length===0
-    ?'<p style="color:var(--txt-d);font-size:13px;padding:8px 0">No archived cards.</p>'
-    :archivedCards.map(function(item){
-      var card=item.card,d=fmtDate(card.archivedAt);
-      return '<div class="bak-item">'+
-        '<div style="flex:1"><div class="bak-name">'+esc(card.title)+'</div>'+
-        '<div class="bak-date">from: '+esc(item.colTitle)+(d?' · Archived '+d:'')+'</div></div>'+
-        '<div class="bak-actions">'+
-        '<button onclick="restoreCard(\''+card.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
-        '<button onclick="deleteArchivedCard(\''+card.id+'\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>'+
-        '</div></div>';
-    }).join('');
-  var body=total===0
-    ?'<div style="text-align:center;padding:40px 20px;color:var(--txt-d)">'+
-      '<div style="font-size:36px;margin-bottom:12px">📭</div>'+
+  panels.sort(function(a,b){return b.ts-a.ts;});
+
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';ov.onclick=closeModal;
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(window.innerWidth*0.92,960)+'px';
+  m.style.maxHeight='92vh';
+  m.onclick=function(e){e.stopPropagation();};
+
+  // Header
+  var hdrBar=document.createElement('div');
+  hdrBar.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+  var title=document.createElement('div');title.style.cssText='font-size:17px;font-weight:800;color:var(--txt-b)';title.textContent='📦 Archive';
+  var closeX=document.createElement('button');closeX.className='btn btn-ghost';closeX.style.cssText='padding:4px 10px;font-size:12px';closeX.textContent='✕';closeX.onclick=closeModal;
+  hdrBar.appendChild(title);hdrBar.appendChild(closeX);m.appendChild(hdrBar);
+
+  if(panels.length===0){
+    var empty=document.createElement('div');
+    empty.style.cssText='text-align:center;padding:48px 20px;color:var(--txt-d)';
+    empty.innerHTML='<div style="font-size:36px;margin-bottom:12px">📭</div>'+
       '<div style="font-size:14px;font-weight:700;color:var(--txt-m);margin-bottom:6px">Archive is empty</div>'+
-      '<div style="font-size:12px;line-height:1.6">Archive columns or cards to reduce clutter.<br>They\'ll appear here and can be restored anytime.</div>'+
-      '</div>'
-    :'<label class="lbl">Archived Columns ('+archivedCols.length+')</label>'+
-      '<div style="max-height:200px;overflow-y:auto;padding-right:2px;margin-bottom:20px">'+colHtml+'</div>'+
-      '<label class="lbl">Archived Cards ('+archivedCards.length+')</label>'+
-      '<div style="max-height:240px;overflow-y:auto;padding-right:2px;margin-bottom:6px">'+cardHtml+'</div>';
-  setModal(
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
-      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">📦 Archive</div>'+
-      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
-    '</div>'+body+
-    '<div style="margin-top:14px;display:flex;justify-content:flex-end">'+
-      '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
-    '</div>',
-  '560px');
+      '<div style="font-size:12px;line-height:1.7">Archive columns or cards to reduce clutter.<br>They\'ll appear here and can be restored anytime.</div>';
+    m.appendChild(empty);
+  }else{
+    // Legend
+    var legend=document.createElement('div');
+    legend.style.cssText='display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:11px;color:var(--txt-d);padding:8px 12px;background:var(--surf2);border-radius:9px;border:1px solid var(--bd)';
+    legend.innerHTML='<span><span style="display:inline-block;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700">🗄 Archived</span>&nbsp; entire column archived — restore or delete the whole column</span>'+
+      '<span style="color:var(--bd-i)">|</span>'+
+      '<span>Columns without badge — cards individually archived from an active column</span>';
+    m.appendChild(legend);
+    // Scrollable column row
+    var row=document.createElement('div');
+    row.className='group-cols';
+    row.style.cssText='padding-bottom:8px;align-items:stretch;min-height:180px';
+    panels.forEach(function(p){row.appendChild(mkArchivePanel(p.col,p.isFullyArchived));});
+    m.appendChild(row);
+  }
+
+  // Footer
+  var foot=document.createElement('div');
+  foot.style.cssText='display:flex;justify-content:flex-end;margin-top:18px';
+  var footClose=document.createElement('button');footClose.className='btn btn-ghost';footClose.textContent='Close';footClose.onclick=closeModal;
+  foot.appendChild(footClose);m.appendChild(foot);
+  ov.appendChild(m);root.appendChild(ov);
 }
 function moveCard(cid,fromId,toId,beforeId){
   var fc=S.cols.find(function(x){return x.id===fromId;}),tc=S.cols.find(function(x){return x.id===toId;});
