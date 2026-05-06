@@ -20,6 +20,10 @@ No install. No login. Open the file, get to work.
 
 A fast, focused Kanban board designed for managing the moving parts of GDOT project deliverables — submittals, reviews, revisions, coordination tasks, and everything in between.
 
+| Light theme | Dark theme |
+|---|---|
+| ![FlowBoard light theme](assets/screenshots/flowboard-demo-clear.png) | ![FlowBoard dark theme](assets/screenshots/flowboard-demo.png) |
+
 **Core features**
 
 - **Groups & columns** — Organize by project, phase, or discipline. Columns represent workflow stages (To Do → In Progress → Review → Done)
