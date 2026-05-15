@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Section 50 - Erosion, Sedimentation and Pollution Control Checklist</title>
+<title>Section 50 - Erosion, Sedimentation and Pollution Control - Cover Drawing Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
@@ -28,6 +28,7 @@
   .eyebrow { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:rgba(255,255,255,.5); margin-bottom:6px; }
   .title-row { display:flex; align-items:baseline; flex-wrap:nowrap; gap:0; }
 
+  /* contenteditable title — sizes itself naturally */
   #projectTitle {
     font-family:'IBM Plex Sans',sans-serif;
     font-size:19px; font-weight:600; letter-spacing:-.3px;
@@ -124,7 +125,7 @@
   .bak-name { font-weight:700; font-size:13px; color:var(--txt-b); margin-bottom:2px; }
   .bak-date { font-size:11px; color:var(--txt-d); }
   .bak-actions { display:flex; gap:5px; flex-shrink:0; }
-  .bak-actions button { border:none; border-radius:6px; padding:4px 9px; cursor:pointer; font-size:11px; font-weight:700; transition:opacity .12s,transform .12px; }
+  .bak-actions button { border:none; border-radius:6px; padding:4px 9px; cursor:pointer; font-size:11px; font-weight:700; transition:opacity .12s,transform .12s; }
   .bak-actions button:hover { opacity:.82; }
   .bak-actions button:active { transform:scale(.93); }
   .lbl { display:block; font-size:10px; color:var(--txt-d); font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:7px; }
@@ -179,7 +180,7 @@
         onpaste="event.preventDefault();document.execCommand('insertText',false,event.clipboardData.getData('text/plain'))"
       ></span>
       <span class="title-sep hidden" id="titleSep">/</span>
-      <span class="title-static">Erosion, Sedimentation and Pollution Control Checklist</span>
+      <span class="title-static">Erosion, Sedimentation and Pollution Control - Cover Drawing Checklist</span>
     </div>
     <div class="export-timestamp" id="exportTimestamp"></div>
   </div>
@@ -216,17 +217,17 @@
 
 <script>
 // =============================================================================
-// DATA — Section 50: Erosion, Sedimentation and Pollution Control - Cover Drawing
+// DATA START — Replace sections/items below with your checklist content
 // =============================================================================
 const sections = [
   {
-    title: "50.001 — General",
+    title: "50.001 General",
     items: [
       "The ESPCP cover drawing is required for projects that disturb 1 acre or more."
     ]
   },
   {
-    title: "50.002 — Required Information",
+    title: "50.002 Required Information",
     items: [
       "Project name",
       "Project number",
@@ -246,21 +247,30 @@ const sections = [
       "Graphic scale",
       "North arrow",
       "State lines, county lines, city limits, land lot lines where applicable",
-      "Revision block with five columns to provide the date, drawing number(s), signature, GSWCC level II certification number, and revision-requested-by information for each construction revision to the ESPCP",
+      "Revision block with five columns to provide: date, drawing number(s), signature, GSWCC Level II certification number, and revision-requested-by information for each construction revision to the ESPCP",
       "Plans completed date (the date submitted to the Contracts Office)",
-      "Designation for “Plans prepared by:” (Design Engineer, Name only or Consultant Name and Professional Engineer stamp/signature and GSWCC Level II certification number for Final Plans)",
-      "Designation for “Recommended for submission by:” (Design Engineer Group Manager or District Design Engineer (Design Engineer of Record) – Name only) OMIT FOR CONSULTANT DESIGN PLANS",
-      "Designation for “Recommended for acceptance by:” (State Roadway Design Engineer, District Engineer, State Program Delivery Engineer, State Innovative Delivery Engineer – Name only)",
+      "Designation for \"Plans prepared by:\" (Design Engineer, Name only or Consultant Name and Professional Engineer stamp/signature and GSWCC Level II certification number for Final Plans)",
+      "Designation for \"Recommended for submission by:\" (Design Engineer Group Manager or District Design Engineer (Design Engineer of Record) – Name only) — OMIT FOR CONSULTANT DESIGN PLANS",
+      "Designation for \"Recommended for acceptance by:\" (State Roadway Design Engineer, District Engineer, State Program Delivery Engineer, State Innovative Delivery Engineer – Name only)",
       "GDOT Chief Engineer’s signature, Professional Engineer stamp, and GSWCC Level II certification number",
-      "Design Professional’s signature, P.E. stamp (or R.L.S., P.G., R.L.A., R.A., R.F., C.P.E.S.C. stamp), and GSWCC Level II certification number in addition to the GDOT Chief Engineer’s signature, stamp, and GSWCC Level II number when the plans are prepared by a consultant",
+      "Design Professional’s signature, P.E. stamp (or R.L.S., P.G., R.L.A., R.A., R.F., C.P.E.S.C. stamp) and GSWCC Level II certification number in addition to the GDOT Chief Engineer’s signature, stamp, and GSWCC Level II number when the plans are prepared by a consultant",
       "All the certification statements required by the GAR 100002 Permit"
     ]
   },
   {
-    title: "50.002 — Additional Items",
+    title: "Additional Items (as applicable)",
     items: [
-      "Additional items may also be shown to delineate other important elements. These items may include, but are not limited to, limits of construction labels, existing property lines, parcel numbers, required right-of-way, median locations, and sidewalks."
+      "Limits of construction labels",
+      "Existing property lines",
+      "Parcel numbers",
+      "Required right-of-way",
+      "Median locations",
+      "Sidewalks"
     ]
+  },
+  {
+    title: "50.003 Drawing Layout",
+    items: []
   }
 ];
 // DATA END
@@ -586,7 +596,7 @@ function showBackupModal() {
   var bakHtml=baks.length===0
     ?'<div style="color:var(--txt-dd);font-size:13px;padding:16px 0 8px;font-style:italic">No snapshots yet.</div>'
     :baks.map(function(b){
-      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;&middot;&nbsp; '+b.checked+'/'+b.total+' items checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
+      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;·&nbsp; '+b.checked+'/'+b.total+' items checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
     }).join('');
 
   setModal(
@@ -645,7 +655,7 @@ async function exportPNG() {
         if(sep && pt && !pt.textContent.trim()) sep.style.display='none';
       }
     });
-    var link=document.createElement('a'); link.download='Section50-ESPCP-Checklist.png'; link.href=canvas.toDataURL('image/png'); link.click();
+    var link=document.createElement('a'); link.download='Section50-ESPCP-CoverDrawing-Checklist.png'; link.href=canvas.toDataURL('image/png'); link.click();
   } catch(e){ alert('PNG export failed.'); console.error(e); }
   finally { overlay.classList.remove('visible'); }
 }
