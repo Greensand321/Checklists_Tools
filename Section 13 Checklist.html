@@ -19,36 +19,26 @@
     --txt:var(--text); --txt-b:#0f2744; --txt-m:#555; --txt-d:var(--muted); --txt-dd:#bbb;
     --inp:#f9f7f4;
     --ghost-bg:#f5f3ef; --ghost-c:var(--muted); --ghost-bd:var(--border);
+    --child-bg:#fdfcfb; --tree-line:#d4cec6;
   }
 
   body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:0 0 80px; }
 
+  /* ── HEADER ── */
   header { background:var(--navy); color:#fff; padding:24px 40px 20px; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.25); display:flex; justify-content:space-between; align-items:center; gap:20px; }
   .eyebrow { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:rgba(255,255,255,.5); margin-bottom:6px; }
   .title-row { display:flex; align-items:baseline; flex-wrap:nowrap; gap:0; }
-
   #projectTitle {
-    font-family:'IBM Plex Sans',sans-serif;
-    font-size:19px; font-weight:600; letter-spacing:-.3px;
-    color:#fff; outline:none;
-    border-bottom:1px dashed rgba(255,255,255,.2);
-    display:inline-block; white-space:nowrap;
-    min-width:2px; max-width:320px;
-    cursor:text; transition:border-color .15s;
-    vertical-align:baseline; line-height:1.3;
+    font-family:'IBM Plex Sans',sans-serif; font-size:19px; font-weight:600; letter-spacing:-.3px;
+    color:#fff; outline:none; border-bottom:1px dashed rgba(255,255,255,.2);
+    display:inline-block; white-space:nowrap; min-width:2px; max-width:320px;
+    cursor:text; transition:border-color .15s; vertical-align:baseline; line-height:1.3;
   }
   #projectTitle:focus { border-bottom-color:rgba(255,255,255,.6); }
-  #projectTitle:empty::before {
-    content:attr(data-placeholder);
-    color:rgba(255,255,255,.28);
-    font-style:italic;
-    pointer-events:none;
-  }
-
+  #projectTitle:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,.28); font-style:italic; pointer-events:none; }
   .title-sep { font-size:19px; font-weight:400; color:rgba(255,255,255,.35); margin:0 7px; flex-shrink:0; line-height:1.3; }
   .title-sep.hidden { display:none; }
   .title-static { font-size:19px; font-weight:600; letter-spacing:-.3px; white-space:nowrap; flex-shrink:0; line-height:1.3; }
-
   .export-timestamp { display:none; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1.5px; color:rgba(255,255,255,.45); margin-top:5px; }
   .progress-block { text-align:right; flex-shrink:0; }
   .progress-count { font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:#fff; line-height:1; }
@@ -56,6 +46,7 @@
   .progress-bar-outer { background:rgba(255,255,255,.15); border-radius:99px; height:5px; width:140px; overflow:hidden; margin-left:auto; }
   .progress-bar-inner { background:var(--green); height:5px; border-radius:99px; width:0%; transition:width .4s ease; }
 
+  /* ── TOOLBAR ── */
   .toolbar { max-width:860px; margin:22px auto 0; padding:0 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
   .filter-group { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--card); }
   .filter-btn { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; background:none; border:none; border-right:1px solid var(--border); color:var(--muted); padding:7px 15px; cursor:pointer; transition:all .15s; }
@@ -69,14 +60,17 @@
   .action-btn.highlight { background:rgba(45,158,107,.1); color:var(--green); border-color:rgba(45,158,107,.3); }
   .action-btn.highlight:hover { background:rgba(45,158,107,.18); border-color:var(--green); }
 
+  /* ── SAVED ROW ── */
   .saved-row { max-width:860px; margin:7px auto 0; padding:0 24px; display:flex; justify-content:flex-end; }
   .saved-indicator { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.5px; min-height:14px; }
   .saved-indicator.flash { color:var(--green); }
 
+  /* ── MAIN ── */
   main { max-width:860px; margin:14px auto 0; padding:0 24px; }
   .complete-banner { display:none; background:var(--green); color:#fff; text-align:center; padding:15px; border-radius:8px; margin-bottom:18px; font-weight:600; font-size:14px; }
   .complete-banner.visible { display:block; }
 
+  /* ── SECTIONS ── */
   .section { background:var(--card); border-radius:8px; margin-bottom:18px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.04); }
   .section-header { background:var(--navy-light); color:#fff; padding:13px 20px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; transition:background .15s; }
   .section-header:hover { background:var(--navy-hover); }
@@ -86,29 +80,101 @@
   .section-title { font-size:13px; font-weight:600; }
   .section-badge { font-family:'IBM Plex Mono',monospace; font-size:11px; background:rgba(255,255,255,.18); padding:2px 10px; border-radius:99px; flex-shrink:0; transition:background .25s; }
   .section-badge.complete { background:var(--green); }
-  .section-items { max-height:9999px; overflow:hidden; transition:max-height .28s ease; }
+  .section-items { max-height:99999px; overflow:hidden; transition:max-height .3s ease; }
   .section.collapsed .section-items { max-height:0; }
 
-  .item { display:flex; align-items:flex-start; gap:14px; padding:11px 20px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; user-select:none; }
+  /* ── CHECKBOX ── */
+  .checkbox {
+    flex-shrink:0; margin-top:2px; width:17px; height:17px;
+    border:2px solid #c5bfb5; border-radius:3px; background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .15s; pointer-events:none;
+  }
+  .checkbox .check { display:none; }
+  .checkbox .dash { display:none; }
+
+  /* ── STANDALONE ITEMS ── */
+  .item {
+    display:flex; align-items:flex-start; gap:14px; padding:11px 20px;
+    border-bottom:1px solid var(--border); cursor:pointer;
+    transition:background .12s; user-select:none;
+  }
   .item:last-child { border-bottom:none; }
   .item:hover { background:#faf8f5; }
-  .item.checked { background:var(--green-light); }
-  .item.hidden { display:none; }
   .item:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
-  .checkbox { flex-shrink:0; margin-top:2px; width:17px; height:17px; border:2px solid #c5bfb5; border-radius:3px; background:#fff; display:flex; align-items:center; justify-content:center; transition:all .15s; pointer-events:none; }
-  .item.checked .checkbox { background:var(--green); border-color:var(--green); }
-  .checkbox svg { display:none; }
-  .item.checked .checkbox svg { display:block; }
   .item-text { font-size:13px; line-height:1.6; color:var(--text); transition:color .15s; }
+  .item.hidden { display:none; }
+
+  /* ── CHECKED STATE ── */
+  .item.checked .checkbox { background:var(--green); border-color:var(--green); }
+  .item.checked .checkbox .check { display:block; }
   .item.checked .item-text { color:var(--muted); text-decoration:line-through; text-decoration-color:#aaa; }
+
+  /* ── INDETERMINATE STATE (parent has some children checked) ── */
+  .item.indeterminate .checkbox { background:var(--navy-light); border-color:var(--navy-light); }
+  .item.indeterminate .checkbox .dash { display:block; }
+
+  /* ── PARENT-CHILD GROUP STRUCTURE ── */
+  .item-group { border-bottom:1px solid var(--border); }
+  .item-group:last-child { border-bottom:none; }
+  .item-group.hidden { display:none; }
+
+  /* parent row — no bottom border since children follow */
+  .item.item-parent { border-bottom:none; }
+  .item.item-parent:hover { background:#faf8f5; }
+  .item.item-parent.checked { background:var(--green-light); }
+  .item.item-parent.indeterminate { background:#f5f3ef; }
+
+  /* children container — draws the vertical tree line */
+  .item-children { position:relative; }
+  .item-children::before {
+    content:'';
+    position:absolute;
+    left:28px;
+    top:0;
+    bottom:18px;
+    width:1.5px;
+    background:var(--tree-line);
+    border-radius:2px;
+    pointer-events:none;
+  }
+
+  /* child items */
+  .item.item-child {
+    padding-left:58px;
+    background:var(--child-bg);
+    border-bottom:1px solid var(--border);
+    position:relative;
+    font-size:12.5px;
+  }
+  .item.item-child:last-child { border-bottom:none; }
+  .item.item-child:hover { background:#f7f5f1; }
+  .item.item-child.checked { background:var(--green-light); }
+
+  /* horizontal tick connecting tree line to child checkbox */
+  .item.item-child::before {
+    content:'';
+    position:absolute;
+    left:28px;
+    top:50%;
+    transform:translateY(-50%);
+    width:16px;
+    height:1.5px;
+    background:var(--tree-line);
+    pointer-events:none;
+  }
+
+  /* ── EMPTY STATE ── */
   .empty-state { display:none; text-align:center; padding:48px 20px; color:var(--muted); font-size:13px; font-style:italic; }
   .empty-state.visible { display:block; }
 
+  /* ── EXPORT OVERLAY ── */
   #exportOverlay { display:none; position:fixed; inset:0; background:rgba(15,39,68,.72); z-index:9999; justify-content:center; align-items:center; flex-direction:column; gap:14px; color:#fff; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; }
   #exportOverlay.visible { display:flex; }
   .spinner { width:30px; height:30px; border:3px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
+  /* ── BACKUP MODAL ── */
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; }
   .modal { background:var(--modal); border:1px solid var(--bd); border-radius:14px; padding:26px; width:560px; max-width:100%; max-height:92vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,.18); }
   .bak-item { background:var(--surf2); border:1px solid var(--bd); border-radius:10px; padding:11px 13px; display:flex; align-items:center; gap:9px; margin-bottom:7px; transition:background .15s; }
@@ -129,9 +195,11 @@
   .mbtn-ghost { background:var(--ghost-bg); color:var(--ghost-c); border:1px solid var(--ghost-bd); }
   .mbtn-green { background:rgba(45,158,107,.12); color:var(--green); border:1px solid rgba(45,158,107,.25); }
 
+  /* ── TOAST ── */
   #notif { position:fixed; bottom:22px; right:22px; background:var(--navy); border:1px solid var(--navy-light); border-radius:10px; padding:11px 17px; font-size:13px; font-weight:600; color:#fff; z-index:9998; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s cubic-bezier(.34,1.3,.64,1); transform:translateY(12px); font-family:'IBM Plex Sans',sans-serif; }
   #notif.show { opacity:1; transform:translateY(0); }
 
+  /* ── PRINT ── */
   @media print {
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { background:#fff; padding:0; margin:0; }
@@ -139,8 +207,9 @@
     main { max-width:100%; padding:0 30px; margin-top:16px; }
     .toolbar,.saved-row,#exportOverlay,.complete-banner,#modal-root,#notif { display:none !important; }
     .section { box-shadow:none; border:1px solid #ddd; break-inside:avoid; }
-    .section.collapsed .section-items { max-height:9999px !important; }
+    .section.collapsed .section-items { max-height:99999px !important; }
     .item,.item.hidden { display:flex !important; }
+    .item-group.hidden { display:block !important; }
     .collapse-icon { display:none; }
     .export-timestamp { display:block !important; }
     #projectTitle { border-bottom:none; }
@@ -208,142 +277,190 @@
 // =============================================================================
 // DATA — Section 13: Mainline Roadway, Crossroad, Side Street, Frontage Road
 //        and Ramp Plan Drawings (plan & profile may be on same drawings)
+//
+// Items with children[] are parent rows. Children are indented below with
+// tree-line connectors. Progress counts leaf nodes only (standalone items
+// and children); parent rows are visual grouping aids.
 // =============================================================================
-const sections = [
+var sections = [
   {
     title: "13.001 — General",
     items: [
-      "Roadway plan drawings depict all details of the project's features in a horizontal or plan view. The roadway plans shall show in detail <u>what</u> is to be constructed and <u>where</u> the project will be constructed.",
-      "The roadway plan drawings show what an area looks like before (existing) and after (proposed) construction of the project."
+      { text: "Roadway plan drawings depict all details of the project's features in a horizontal or plan view. The roadway plans shall show in detail <u>what</u> is to be constructed and <u>where</u> the project will be constructed.", children: [] },
+      { text: "The roadway plan drawings show what an area looks like before (existing) and after (proposed) construction of the project.", children: [] }
     ]
   },
   {
-    title: "13.002 — Required Information: Existing Features",
+    title: "13.002 — Existing Information",
     items: [
-      "Signs",
-      "Roadway items",
-      "Driveways (with existing material)",
-      "Buildings / Structures",
-      "Drainage (including streams, ponds, lakes, ditches, special ditches, and storm drain pipes all with size, material type, and flow arrows)",
-      "Above ground utility features including utility structure and appurtenance locations (i.e. poles, valves, manholes/vaults, telephone pedestals)",
-      "<strong>NOTE:</strong> Existing utility lines, mains, and pipes are not shown on the Roadway Plan Drawings",
-      "Retaining walls",
-      "Other paved areas",
-      "Gravel surfaces",
-      "Fences",
-      "Bridges",
-      "Wooded areas (including tree lines or obscured areas)",
-      "Trees (specific to parcel or design issues)",
-      "Underground storage tank caps within the limits of the topographic survey",
-      "Groundwater wells with indication to be plugged or remain in service",
-      "Existing right-of-way and easement lines with labels",
-      "Property lines with labels",
-      "Railroads — Right of way lines with labels",
-      "Railroads — Tracks",
-      "Railroads — Names",
-      "Railroads — Mileposts",
-      "Railroads — Warning devices",
-      "Railroads — Crossing ID numbers",
-      "Utility easement lines with labels",
-      "City, county, and state boundaries with labels",
-      "Existing L/A – Limit-of-Access lines with labels (Begin (B L/A) and End (E L/A) if applicable)",
-      "All environmentally sensitive areas (ESA) including, but not limited to, stream buffers, wetland boundaries, historical boundaries, T&amp;E habitats, archaeological resources, hazardous materials, and environmental justice areas",
-      "ESA — NOTE: For streams, show linework and labels for only the tops-of-banks and stream flow line (i.e., deepest part of channel). Do not show linework or labels indicating the location of water's edge itself at the time of survey (e.g. edge of water, edge of stream, etc.)",
-      "ESA lines labeled as \"ESA – See General Notes 'Environmental Resources Impact Table' for construction restrictions\" unless the standard legend, which shows the ESA linestyle and states, \"(SEE E.R.I.T.)\", is provided",
-      "All other pertinent physical features (i.e.: property owner entrance signs, business/residential signs, etc.)"
+      { text: "Signs", children: [] },
+      { text: "Roadway items", children: [] },
+      { text: "Driveways (with existing material)", children: [] },
+      { text: "Buildings / Structures", children: [] },
+      { text: "Drainage (including streams, ponds, lakes, ditches, special ditches, and storm drain pipes all with size, material type, and flow arrows)", children: [] },
+      { text: "Above ground utility features including utility structure and appurtenance locations (i.e. poles, valves, manholes/vaults, telephone pedestals)", children: [] },
+      { text: "<strong>NOTE:</strong> Existing utility lines, mains, and pipes are not shown on the Roadway Plan Drawings", children: [] },
+      { text: "Retaining walls", children: [] },
+      { text: "Other paved areas", children: [] },
+      { text: "Gravel surfaces", children: [] },
+      { text: "Fences", children: [] },
+      { text: "Bridges", children: [] },
+      { text: "Wooded areas (including tree lines or obscured areas)", children: [] },
+      { text: "Trees (specific to parcel or design issues)", children: [] },
+      { text: "Underground storage tank caps within the limits of the topographic survey", children: [] },
+      { text: "Groundwater wells with indication to be plugged or remain in service", children: [] },
+      { text: "Existing right-of-way and easement lines with labels", children: [] },
+      { text: "Property lines with labels", children: [] },
+      { text: "Railroads", children: [
+        "Right of way lines with labels",
+        "Tracks",
+        "Names",
+        "Mileposts",
+        "Warning devices",
+        "Crossing ID numbers"
+      ]},
+      { text: "Utility easement lines with labels", children: [] },
+      { text: "City, county, and state boundaries with labels", children: [] },
+      { text: "Existing L/A – Limit-of-Access lines with labels (Begin (B L/A) and End (E L/A) if applicable)", children: [] },
+      { text: "All environmentally sensitive areas (ESA) including, but not limited to, stream buffers, wetland boundaries, historical boundaries, T&amp;E habitats, archaeological resources, hazardous materials, and environmental justice areas", children: [
+        "NOTE: For streams, show linework and labels for only the tops-of-banks and stream flow line (i.e., deepest part of channel). Do not show linework or labels indicating the location of water's edge itself at the time of survey (e.g. edge of water, edge of stream, etc.)",
+        "ESA lines labeled as \"ESA – See General Notes 'Environmental Resources Impact Table' for construction restrictions\" unless the standard legend, which shows the ESA linestyle and states, \"(SEE E.R.I.T.)\", is provided"
+      ]},
+      { text: "All other pertinent physical features (i.e.: property owner entrance signs, business/residential signs, etc.)", children: [] }
     ]
   },
   {
-    title: "13.002 — Required Information: Proposed Design Features",
+    title: "13.002 — Proposed Design Features",
     items: [
-      "Begin/End Project Stations to the nearest 100th (i.e. 1010+26.25) (mainline). This station range should encompass all proposed work shown in the plans (permanent construction, temporary/staging construction, ditch grading, signing and pavement marking, etc.). No proposed work (other than temporary signs for traffic control) should be shown outside the Begin/End Project Stations in the plans.",
-      "Additional \"Begin/End ______\" Station callouts should be shown at the discretion of the Design Phase Leader to clearly describe the limits of project work. Examples may include: Begin/End Full Depth Construction, Begin/End Overlay, Begin/End Temporary Pavement, Begin/End Ditch Grading, etc.",
-      "Limit of Construction Station to the nearest 100th (i.e. 1010+26.25) (crossroad)",
-      "Alignments — Stations progressing from west to east and from south to north",
-      "Alignments — PC/PT Stations",
-      "Alignments — Bearings (flag points for deflection)",
-      "Alignments — Road names",
-      "Alignments — Stationing and primary tic marks every 500 feet and secondary tic marks every 100 feet (frequency can be increased) for 1\"=50' to the even station (i.e. 12+30)",
-      "Alignments — Stationing and primary tic marks every 100 feet and secondary tic marks every 50 feet for 1\"=20' to the even station (i.e. 12+30)",
-      "Alignments — Curve number",
-      "Alignments — Equalities with back and ahead stations",
-      "Curve Data Table (not required when Section 11 is included) — CURVE Number, P.I. Station, P.I. Coordinates, △ or \"DELTA\" (Deflection angle), D (Degree of Curve), T (Tangent Length), L (Length of Curve), R (Radius), E (External distance), e<sub>MAX</sub> (Maximum Superelevation rate in percent), e<sub>d</sub> (Design Superelevation rate in percent – Normal Crown and Reverse Crown to be shown as \"NC\" or \"RC\" respectively), Design Speed",
-      "Angle and station of intersection",
-      "Edges of pavement",
-      "Curb and Gutter",
-      "Sidewalk",
-      "ADA ramps — Label type",
-      "Paved Shoulder",
-      "Ditches and swales — Material must be labeled if other than grass",
-      "Ditches and swales — Begin/End labels for berm and special ditches",
-      "Guardrail/Barriers — Label guardrail type",
-      "Guardrail/Barriers — Label terminal/anchor type",
-      "Guardrail/Barriers — Label barrier type",
-      "Guardrail/Barriers — Begin and end stations for guardrail/barrier",
-      "Walls — Begin and end stations for retaining walls",
-      "Noise Barrier — Begin, end and end stations for noise barrier",
-      "Drainage — Structures (structure number)",
-      "Drainage — Storm Drains (size and direction)",
-      "Drainage — Side Drains (size and direction)",
-      "Drainage — Culverts (label as width (\"W\" - feet) X height (\"H\" - feet))",
-      "Drainage — Permanent erosion features (i.e. type of rip-rap, concrete aprons, concrete flumes, spillways)",
-      "Drainage — Inlet/Outlet Structures",
-      "Bridges — Begin/End Stations",
-      "Bridges — Alignment intersection stations and angles",
-      "Bridges — Bent Locations",
-      "Post-Construction Stormwater BMPs — Outline (BMP footprint)",
-      "Post-Construction Stormwater BMPs — Label BMP Type (i.e. bioretention, infiltration trench, etc.)",
-      "Post-Construction Stormwater BMPs — Begin/End Stations",
-      "Post-Construction Stormwater BMPs — Reference Special Detail Sheet(s)",
-      "Post-Construction Stormwater BMPs — Maintenance access features (i.e. access road, fence)",
-      "Approach slabs (stationing label not required)",
-      "Construction limits (cut/fill line with cut/fill designations)",
-      "Railroad — Alignment",
-      "Railroad — Railroad facility adjustments",
-      "Railroad — NOTE: If this work is not to be included in the roadway contract, then clearly indicate on the plans that this work is to be done \"By Others\".",
-      "Strain poles and overhead sign structures",
-      "Limits of pavement work (i.e. limits of resurfacing, pavement removal, widening, full-depth, overlay, milling, reconstruction, etc.)",
-      "Survey control points (not required when Section 11 is included)",
-      "All permanent detention/retention basins",
-      "Superelevation transition stationing — Both Percent SE and \"NC\" - Normal Crown (station plus)",
-      "Superelevation transition stationing — Both Percent SE and \"FLAT\" - Zero Crown (station plus)",
-      "Superelevation transition stationing — Both Percent SE and \"RC\" - Reverse Crown (station plus)",
-      "Superelevation transition stationing — Both Percent SE and \"BFS\" - Begin Full Superelevation (station plus)",
-      "Superelevation transition stationing — Both Percent SE and \"EFS\" - End Full Superelevation (station plus)",
-      "Dimensions to reflect the proposed construction — Roadway dimensions",
-      "Dimensions to reflect the proposed construction — Radii dimensions",
-      "Dimensions to reflect the proposed construction — Taper stations and dimensions from alignment",
-      "Dimensions to reflect the proposed construction — Pavement widths",
-      "Dimensions to reflect the proposed construction — Median widths",
-      "Dimensions to reflect the proposed construction — End of curb and gutter station",
-      "Driveways (including throat width dimension)",
-      "Matchlines (including station and drawing number)",
-      "Legend",
-      "Proposed Right-of-Way Features — Required right-of-way lines and labels",
-      "Proposed Right-of-Way Features — Easement lines and associated patterns",
-      "Proposed Right-of-Way Features — Property Owner name and parcel number of all affected parcels",
-      "Proposed Right-of-Way Features — If RW plans are not included, full station and offset of all required right-of-way, and easement (temporary, permanent and driveway) points or point numbers with station and offset information labeled elsewhere or preferably on the same drawing",
-      "Proposed Right-of-Way Features — Proposed right-of-way markers at locations where RW direction changes (including PC/PT locations)",
-      "Proposed Right-of-Way Features — Begin/End Limit-of-Access",
-      "All environmentally sensitive areas (ESA) including, but not limited to, stream buffers, wetland boundaries, historical boundaries, T&amp;E habitats, archaeological resources, hazardous materials, and environmental justice areas",
-      "ESA — NOTE: For streams, show linework and labels for only the tops-of-banks and stream flow line (i.e., deepest part of channel). Do not show linework or labels indicating the location of water's edge itself at the time of survey (e.g. edge of water, edge of stream, etc.)",
-      "ESA lines labeled as \"ESA – See General Notes 'Environmental Resources Impact Table' for construction restrictions\" unless the standard legend, which shows the ESA linestyle and states, \"(SEE E.R.I.T.)\", is provided",
-      "Areas requiring no entry by any personnel shall be delineated with Orange Barrier Fence with a Solid Circle Line Code."
+      { text: "Begin/End Project Stations to the nearest 100th (i.e. 1010+26.25) (mainline). This station range should encompass all proposed work shown in the plans (permanent construction, temporary/staging construction, ditch grading, signing and pavement marking, etc.). No proposed work (other than temporary signs for traffic control) should be shown outside the Begin/End Project Stations in the plans.", children: [] },
+      { text: "Additional \"Begin/End ______\" Station callouts should be shown at the discretion of the Design Phase Leader to clearly describe the limits of project work. Examples may include: Begin/End Full Depth Construction, Begin/End Overlay, Begin/End Temporary Pavement, Begin/End Ditch Grading, etc.", children: [] },
+      { text: "Limit of Construction Station to the nearest 100th (i.e. 1010+26.25) (crossroad)", children: [] },
+      { text: "Alignments", children: [
+        "Stations progressing from west to east and from south to north",
+        "PC/PT Stations",
+        "Bearings (flag points for deflection)",
+        "Road names",
+        "Stationing and primary tic marks every 500 feet and secondary tic marks every 100 feet (frequency can be increased) for 1\"=50' to the even station (i.e. 12+30)",
+        "Stationing and primary tic marks every 100 feet and secondary tic marks every 50 feet for 1\"=20' to the even station (i.e. 12+30)",
+        "Curve number",
+        "Equalities with back and ahead stations"
+      ]},
+      { text: "Curve Data Table (not required when Section 11 is included)", children: [
+        "CURVE Number",
+        "P.I. Station",
+        "P.I. Coordinates",
+        "&#9651; or \"DELTA\" (Deflection angle)",
+        "D (Degree of Curve)",
+        "T (Tangent Length)",
+        "L (Length of Curve)",
+        "R (Radius)",
+        "E (External distance)",
+        "e<sub>MAX</sub> (Maximum Superelevation rate in percent)",
+        "e<sub>d</sub> (Design Superelevation rate in percent – Normal Crown and Reverse Crown to be shown as \"NC\" or \"RC\" respectively)",
+        "Design Speed"
+      ]},
+      { text: "Angle and station of intersection", children: [] },
+      { text: "Edges of pavement", children: [] },
+      { text: "Curb and Gutter", children: [] },
+      { text: "Sidewalk", children: [] },
+      { text: "ADA ramps", children: [
+        "Label type"
+      ]},
+      { text: "Paved Shoulder", children: [] },
+      { text: "Ditches and swales", children: [
+        "Material must be labeled if other than grass",
+        "Begin/End labels for berm and special ditches"
+      ]},
+      { text: "Guardrail/Barriers", children: [
+        "Label guardrail type",
+        "Label terminal/anchor type",
+        "Label barrier type",
+        "Begin and end stations for guardrail/barrier"
+      ]},
+      { text: "Walls", children: [
+        "Begin and end stations for retaining walls"
+      ]},
+      { text: "Noise Barrier", children: [
+        "Begin, end and end stations for noise barrier"
+      ]},
+      { text: "Drainage", children: [
+        "Structures (structure number)",
+        "Storm Drains (size and direction)",
+        "Side Drains (size and direction)",
+        "Culverts (label as width (\"W\" - feet) X height (\"H\" - feet))",
+        "Permanent erosion features (i.e. type of rip-rap, concrete aprons, concrete flumes, spillways)",
+        "Inlet/Outlet Structures"
+      ]},
+      { text: "Bridges", children: [
+        "Begin/End Stations",
+        "Alignment intersection stations and angles",
+        "Bent Locations"
+      ]},
+      { text: "Post-Construction Stormwater BMPs", children: [
+        "Outline (BMP footprint)",
+        "Label BMP Type (i.e. bioretention, infiltration trench, etc.)",
+        "Begin/End Stations",
+        "Reference Special Detail Sheet(s)",
+        "Maintenance access features (i.e. access road, fence)"
+      ]},
+      { text: "Approach slabs (stationing label not required)", children: [] },
+      { text: "Construction limits (cut/fill line with cut/fill designations)", children: [] },
+      { text: "Railroad", children: [
+        "Alignment",
+        "Railroad facility adjustments",
+        "NOTE: If this work is not to be included in the roadway contract, then clearly indicate on the plans that this work is to be done \"By Others\"."
+      ]},
+      { text: "Strain poles and overhead sign structures", children: [] },
+      { text: "Limits of pavement work (i.e. limits of resurfacing, pavement removal, widening, full-depth, overlay, milling, reconstruction, etc.)", children: [] },
+      { text: "Survey control points (not required when Section 11 is included)", children: [] },
+      { text: "All permanent detention/retention basins", children: [] },
+      { text: "Superelevation transition stationing", children: [
+        "Both Percent SE and \"NC\" - Normal Crown (station plus)",
+        "Both Percent SE and \"FLAT\" - Zero Crown (station plus)",
+        "Both Percent SE and \"RC\" - Reverse Crown (station plus)",
+        "Both Percent SE and \"BFS\" - Begin Full Superelevation (station plus)",
+        "Both Percent SE and \"EFS\" - End Full Superelevation (station plus)"
+      ]},
+      { text: "Dimensions to reflect the proposed construction", children: [
+        "Roadway dimensions",
+        "Radii dimensions",
+        "Taper stations and dimensions from alignment",
+        "Pavement widths",
+        "Median widths",
+        "End of curb and gutter station"
+      ]},
+      { text: "Driveways (including throat width dimension)", children: [] },
+      { text: "Matchlines (including station and drawing number)", children: [] },
+      { text: "Legend", children: [] },
+      { text: "Proposed Right-of-Way Features", children: [
+        "Required right-of-way lines and labels",
+        "Easement lines and associated patterns",
+        "Property Owner name and parcel number of all affected parcels",
+        "If RW plans are not included, full station and offset of all required right-of-way, and easement (temporary, permanent and driveway) points or point numbers with station and offset information labeled elsewhere or preferably on the same drawing",
+        "Proposed right-of-way markers at locations where RW direction changes (including PC/PT locations)",
+        "Begin/End Limit-of-Access"
+      ]},
+      { text: "All environmentally sensitive areas (ESA) including, but not limited to, stream buffers, wetland boundaries, historical boundaries, T&amp;E habitats, archaeological resources, hazardous materials, and environmental justice areas", children: [
+        "NOTE: For streams, show linework and labels for only the tops-of-banks and stream flow line (i.e., deepest part of channel). Do not show linework or labels indicating the location of water's edge itself at the time of survey (e.g. edge of water, edge of stream, etc.)",
+        "ESA lines labeled as \"ESA – See General Notes 'Environmental Resources Impact Table' for construction restrictions\" unless the standard legend, which shows the ESA linestyle and states, \"(SEE E.R.I.T.)\", is provided"
+      ]},
+      { text: "Areas requiring no entry by any personnel shall be delineated with Orange Barrier Fence with a Solid Circle Line Code.", children: [] }
     ]
   },
   {
     title: "13.003 — Drawing Layout",
     items: [
-      "For a plan scale of 1\" = 50' on 36 x 24 and 1\" = 100' on 11 x 17, place match lines between drawings at even 100 feet intervals with a maximum coverage per drawings of 1500 feet. For a plan scale of 1\" = 20' on 36 x 24 and 1\" = 40' on 11 x 17, place match lines at even 50 feet intervals with a maximum coverage per drawings of 600 feet. The first and last plan drawings may be exceptions in each case."
+      { text: "For a plan scale of 1\" = 50' on 36 x 24 and 1\" = 100' on 11 x 17, place match lines between drawings at even 100 feet intervals with a maximum coverage per drawings of 1500 feet. For a plan scale of 1\" = 20' on 36 x 24 and 1\" = 40' on 11 x 17, place match lines at even 50 feet intervals with a maximum coverage per drawings of 600 feet. The first and last plan drawings may be exceptions in each case.", children: [] }
     ]
   },
   {
     title: "13.004 — Miscellaneous",
     items: [
-      "Specific notes pertaining to project requirements as identified from various sources, including, but not limited to, soil survey, UST report, Environmental Green Sheet, Utility Agreement, RW Agreement, MS4 Post-Construction Stormwater Report, etc."
+      { text: "Specific notes pertaining to project requirements as identified from various sources, including, but not limited to, soil survey, UST report, Environmental Green Sheet, Utility Agreement, RW Agreement, MS4 Post-Construction Stormwater Report, etc.", children: [] }
     ]
   }
 ];
+// =============================================================================
 // DATA END
 // =============================================================================
 
@@ -351,75 +468,199 @@ const sections = [
 // =============================================================================
 // CORE STATE
 // =============================================================================
-const STORAGE_KEY      = 'sec13_state';
-const BACKUP_STORE_KEY = 'sec13_backups';
-const MAX_BACKUPS      = 25;
+var STORAGE_KEY      = 'sec13_state';
+var BACKUP_STORE_KEY = 'sec13_backups';
+var MAX_BACKUPS      = 25;
 
-const state     = {};
-const collapsed = {};
+var state     = {};   // keys: "si-pi" for standalone/parent, "si-pi-ci" for children
+var collapsed = {};
 var currentFilter = 'all';
 var savedAt       = null;
 var saveTimer     = null;
 
-var checkmark = '<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 3.5L3.8 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var CHECKMARK = '<svg class="check" width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 3.5L3.8 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var DASHMARK  = '<svg class="dash" width="8" height="2" viewBox="0 0 8 2" fill="none"><path d="M1 1H7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
 
-function getTitle() {
-  return document.getElementById('projectTitle').textContent.trim();
+function getTitle() { return document.getElementById('projectTitle').textContent.trim(); }
+
+// Count leaf nodes (what progress tracks — excludes parent-group rows)
+function countLeaves(si) {
+  var n = 0;
+  sections[si].items.forEach(function(item) {
+    n += (item.children && item.children.length > 0) ? item.children.length : 1;
+  });
+  return n;
+}
+function countCheckedLeaves(si) {
+  var n = 0;
+  sections[si].items.forEach(function(item, pi) {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(function(_, ci) { if (state[si+'-'+pi+'-'+ci]) n++; });
+    } else {
+      if (state[si+'-'+pi]) n++;
+    }
+  });
+  return n;
 }
 
 
 // =============================================================================
 // BUILD DOM
 // =============================================================================
+function makeCheckbox() {
+  return '<div class="checkbox">' + CHECKMARK + DASHMARK + '</div>';
+}
+
 function buildChecklist() {
   var container = document.getElementById('checklist');
-  var total = 0;
+  var grandTotal = 0;
+
   sections.forEach(function(sec, si) {
     collapsed[si] = false;
+    var leafCount = countLeaves(si);
+    grandTotal += leafCount;
+
     var wrap = document.createElement('div');
     wrap.className = 'section'; wrap.id = 'sec-' + si;
+
+    // Section header
     var hdr = document.createElement('div');
     hdr.className = 'section-header';
     hdr.setAttribute('role','button'); hdr.setAttribute('aria-expanded','true');
     hdr.innerHTML =
       '<div class="section-header-left"><span class="collapse-icon">&#9660;</span><span class="section-title">' + sec.title + '</span></div>' +
-      '<span class="section-badge" id="badge-' + si + '">0/' + sec.items.length + '</span>';
+      '<span class="section-badge" id="badge-' + si + '">0/' + leafCount + '</span>';
     hdr.addEventListener('click', function() { toggleSection(si); });
     wrap.appendChild(hdr);
+
     var itemsWrap = document.createElement('div');
     itemsWrap.className = 'section-items'; itemsWrap.id = 'items-' + si;
-    sec.items.forEach(function(text, ii) {
-      var id = si + '-' + ii; state[id] = false; total++;
-      var item = document.createElement('div');
-      item.className = 'item'; item.id = 'item-' + id;
-      item.tabIndex = 0; item.setAttribute('role','checkbox'); item.setAttribute('aria-checked','false');
-      item.innerHTML = '<div class="checkbox">' + checkmark + '</div><span class="item-text">' + text + '</span>';
-      item.addEventListener('click', function() { toggle(si, ii); });
-      item.addEventListener('keydown', function(e) { if (e.key===' '||e.key==='Enter'){e.preventDefault();toggle(si,ii);} });
-      itemsWrap.appendChild(item);
+
+    sec.items.forEach(function(item, pi) {
+      var children = item.children || [];
+
+      if (children.length === 0) {
+        // ── Standalone item ──
+        var id = si + '-' + pi;
+        state[id] = false;
+        var el = document.createElement('div');
+        el.className = 'item'; el.id = 'item-' + id;
+        el.tabIndex = 0; el.setAttribute('role','checkbox'); el.setAttribute('aria-checked','false');
+        el.innerHTML = makeCheckbox() + '<span class="item-text">' + item.text + '</span>';
+        (function(s,p){ el.addEventListener('click', function(){ toggleStandalone(s,p); }); el.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleStandalone(s,p);} }); })(si,pi);
+        itemsWrap.appendChild(el);
+
+      } else {
+        // ── Parent + children group ──
+        state[si + '-' + pi] = false;
+        children.forEach(function(_, ci) { state[si+'-'+pi+'-'+ci] = false; });
+
+        var group = document.createElement('div');
+        group.className = 'item-group'; group.id = 'group-' + si + '-' + pi;
+
+        // Parent row
+        var parentEl = document.createElement('div');
+        parentEl.className = 'item item-parent'; parentEl.id = 'item-' + si + '-' + pi;
+        parentEl.tabIndex = 0; parentEl.setAttribute('role','checkbox'); parentEl.setAttribute('aria-checked','false');
+        parentEl.innerHTML = makeCheckbox() + '<span class="item-text">' + item.text + '</span>';
+        (function(s,p){ parentEl.addEventListener('click', function(){ toggleParent(s,p); }); parentEl.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleParent(s,p);} }); })(si,pi);
+        group.appendChild(parentEl);
+
+        // Children container
+        var childWrap = document.createElement('div');
+        childWrap.className = 'item-children'; childWrap.id = 'children-' + si + '-' + pi;
+
+        children.forEach(function(childText, ci) {
+          var cid = si + '-' + pi + '-' + ci;
+          var cel = document.createElement('div');
+          cel.className = 'item item-child'; cel.id = 'item-' + cid;
+          cel.tabIndex = 0; cel.setAttribute('role','checkbox'); cel.setAttribute('aria-checked','false');
+          cel.innerHTML = makeCheckbox() + '<span class="item-text">' + childText + '</span>';
+          (function(s,p,c){ cel.addEventListener('click', function(){ toggleChild(s,p,c); }); cel.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleChild(s,p,c);} }); })(si,pi,ci);
+          childWrap.appendChild(cel);
+        });
+
+        group.appendChild(childWrap);
+        itemsWrap.appendChild(group);
+      }
     });
+
     wrap.appendChild(itemsWrap);
     container.appendChild(wrap);
   });
-  document.getElementById('total').textContent = total;
+
+  document.getElementById('total').textContent = grandTotal;
 }
 
 
 // =============================================================================
-// INTERACTIONS
+// TOGGLE LOGIC
 // =============================================================================
-function onTitleInput() {
-  document.getElementById('titleSep').classList.toggle('hidden', !getTitle());
-  scheduleSave();
-}
-
-function toggle(si, ii) {
-  var id = si + '-' + ii; state[id] = !state[id];
+function toggleStandalone(si, pi) {
+  var id = si + '-' + pi;
+  state[id] = !state[id];
   var el = document.getElementById('item-' + id);
-  el.classList.toggle('checked', state[id]); el.setAttribute('aria-checked', String(state[id]));
+  el.classList.toggle('checked', state[id]);
+  el.setAttribute('aria-checked', String(state[id]));
   applyFilter(); updateProgress(); scheduleSave();
 }
 
+function toggleParent(si, pi) {
+  var children = sections[si].items[pi].children;
+  // If all children already checked → uncheck all; otherwise check all
+  var allChecked = children.every(function(_, ci) { return state[si+'-'+pi+'-'+ci]; });
+  var newVal = !allChecked;
+
+  children.forEach(function(_, ci) {
+    var cid = si + '-' + pi + '-' + ci;
+    state[cid] = newVal;
+    var cel = document.getElementById('item-' + cid);
+    if (cel) { cel.classList.toggle('checked', newVal); cel.setAttribute('aria-checked', String(newVal)); }
+  });
+  state[si + '-' + pi] = newVal;
+  syncParentVisual(si, pi);
+  applyFilter(); updateProgress(); scheduleSave();
+}
+
+function toggleChild(si, pi, ci) {
+  var cid = si + '-' + pi + '-' + ci;
+  state[cid] = !state[cid];
+  var cel = document.getElementById('item-' + cid);
+  if (cel) { cel.classList.toggle('checked', state[cid]); cel.setAttribute('aria-checked', String(state[cid])); }
+
+  // Recalculate parent state from children
+  var children = sections[si].items[pi].children;
+  var checkedCount = children.filter(function(_, i) { return state[si+'-'+pi+'-'+i]; }).length;
+  state[si + '-' + pi] = (checkedCount === children.length);
+  syncParentVisual(si, pi);
+  applyFilter(); updateProgress(); scheduleSave();
+}
+
+// Updates parent row's visual class (checked / indeterminate / unchecked)
+function syncParentVisual(si, pi) {
+  var children = sections[si].items[pi].children;
+  var checkedCount = children.filter(function(_, ci) { return state[si+'-'+pi+'-'+ci]; }).length;
+  var el = document.getElementById('item-' + si + '-' + pi);
+  if (!el) return;
+  var allChecked  = checkedCount === children.length;
+  var someChecked = checkedCount > 0 && !allChecked;
+  el.classList.toggle('checked',      allChecked);
+  el.classList.toggle('indeterminate', someChecked);
+  el.setAttribute('aria-checked', allChecked ? 'true' : someChecked ? 'mixed' : 'false');
+}
+
+function syncAllParentVisuals() {
+  sections.forEach(function(sec, si) {
+    sec.items.forEach(function(item, pi) {
+      if (item.children && item.children.length > 0) syncParentVisual(si, pi);
+    });
+  });
+}
+
+
+// =============================================================================
+// SECTION COLLAPSE
+// =============================================================================
 function toggleSection(si) {
   collapsed[si] = !collapsed[si];
   var wrap = document.getElementById('sec-' + si);
@@ -427,6 +668,15 @@ function toggleSection(si) {
   wrap.querySelector('.section-header').setAttribute('aria-expanded', String(!collapsed[si]));
 }
 
+function onTitleInput() {
+  document.getElementById('titleSep').classList.toggle('hidden', !getTitle());
+  scheduleSave();
+}
+
+
+// =============================================================================
+// FILTER
+// =============================================================================
 function setFilter(f) {
   currentFilter = f;
   document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.filter===f); });
@@ -435,37 +685,76 @@ function setFilter(f) {
 
 function applyFilter() {
   var anyVisible = false;
+
   sections.forEach(function(sec, si) {
-    sec.items.forEach(function(_, ii) {
-      var id = si+'-'+ii, checked = state[id];
-      var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
-      document.getElementById('item-'+id).classList.toggle('hidden', !show);
-      if (show) anyVisible = true;
+    sec.items.forEach(function(item, pi) {
+      var children = item.children || [];
+
+      if (children.length === 0) {
+        // Standalone
+        var checked = state[si+'-'+pi];
+        var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
+        var el = document.getElementById('item-' + si + '-' + pi);
+        if (el) el.classList.toggle('hidden', !show);
+        if (show) anyVisible = true;
+
+      } else {
+        // Children
+        var anyChildVisible = false;
+        children.forEach(function(_, ci) {
+          var checked = state[si+'-'+pi+'-'+ci];
+          var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
+          var cel = document.getElementById('item-' + si + '-' + pi + '-' + ci);
+          if (cel) cel.classList.toggle('hidden', !show);
+          if (show) anyChildVisible = true;
+        });
+        // Show group (parent + children container) only if at least one child is visible
+        var group = document.getElementById('group-' + si + '-' + pi);
+        if (group) group.classList.toggle('hidden', !anyChildVisible);
+        if (anyChildVisible) anyVisible = true;
+      }
     });
   });
+
   document.getElementById('emptyState').classList.toggle('visible', !anyVisible);
 }
 
+
+// =============================================================================
+// PROGRESS
+// =============================================================================
 function updateProgress() {
-  var total = Object.keys(state).length;
-  var done  = Object.values(state).filter(Boolean).length;
-  document.getElementById('done').textContent = done;
-  document.getElementById('bar').style.width = total ? ((done/total)*100)+'%' : '0%';
+  var grandTotal = 0, grandDone = 0;
+
   sections.forEach(function(sec, si) {
-    var secDone = sec.items.filter(function(_,ii){ return state[si+'-'+ii]; }).length;
-    var badge = document.getElementById('badge-'+si);
-    badge.textContent = secDone+'/'+sec.items.length;
-    badge.classList.toggle('complete', secDone===sec.items.length);
+    var secTotal = countLeaves(si);
+    var secDone  = countCheckedLeaves(si);
+    grandTotal += secTotal;
+    grandDone  += secDone;
+
+    var badge = document.getElementById('badge-' + si);
+    if (badge) {
+      badge.textContent = secDone + '/' + secTotal;
+      badge.classList.toggle('complete', secDone === secTotal);
+    }
   });
-  document.getElementById('completeBanner').classList.toggle('visible', done===total && total>0);
+
+  document.getElementById('done').textContent  = grandDone;
+  document.getElementById('total').textContent = grandTotal;
+  document.getElementById('bar').style.width   = grandTotal ? ((grandDone / grandTotal) * 100) + '%' : '0%';
+  document.getElementById('completeBanner').classList.toggle('visible', grandDone === grandTotal && grandTotal > 0);
 }
 
+
+// =============================================================================
+// RESET
+// =============================================================================
 function resetAll() {
   if (!confirm('Reset all checked items and clear the project name?')) return;
   Object.keys(state).forEach(function(id) {
     state[id] = false;
-    var el = document.getElementById('item-'+id);
-    el.classList.remove('checked'); el.setAttribute('aria-checked','false');
+    var el = document.getElementById('item-' + id);
+    if (el) { el.classList.remove('checked','indeterminate'); el.setAttribute('aria-checked','false'); }
   });
   document.getElementById('projectTitle').textContent = '';
   document.getElementById('titleSep').classList.add('hidden');
@@ -486,7 +775,7 @@ function applyData(data) {
     Object.keys(data.checked).forEach(function(id) {
       if (!(id in state)) return;
       state[id] = data.checked[id];
-      var el = document.getElementById('item-'+id);
+      var el = document.getElementById('item-' + id);
       if (el) { el.classList.toggle('checked', state[id]); el.setAttribute('aria-checked', String(state[id])); }
     });
   }
@@ -497,25 +786,17 @@ function applyData(data) {
   if (data.savedAt) savedAt = data.savedAt;
 }
 
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(doSave, 600);
-}
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 600); }
 
 function doSave() {
   var payload = buildPayload();
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    savedAt = payload.savedAt;
-    flashSaved();
-  } catch(e) { console.warn('Save failed:', e); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); savedAt = payload.savedAt; flashSaved(); }
+  catch(e) { console.warn('Save failed:', e); }
 }
 
 function loadSaved() {
-  try {
-    var raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) applyData(JSON.parse(raw));
-  } catch(e) {}
+  try { var raw = localStorage.getItem(STORAGE_KEY); if (raw) applyData(JSON.parse(raw)); } catch(e) {}
+  syncAllParentVisuals();
   applyFilter(); updateProgress(); updateSavedLabel();
 }
 
@@ -539,71 +820,50 @@ setInterval(updateSavedLabel, 60000);
 // =============================================================================
 // BACKUP ENGINE
 // =============================================================================
-function uid() { return '_' + Math.random().toString(36).slice(2, 9); }
+function uid() { return '_' + Math.random().toString(36).slice(2,9); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function getBaks() {
-  try { return JSON.parse(localStorage.getItem(BACKUP_STORE_KEY) || '[]'); }
-  catch(e) { return []; }
-}
+function getBaks() { try { return JSON.parse(localStorage.getItem(BACKUP_STORE_KEY)||'[]'); } catch(e){ return []; } }
 function setBaks(a) { localStorage.setItem(BACKUP_STORE_KEY, JSON.stringify(a)); }
 
 function createBak(name) {
   var a = getBaks();
-  var checkedCount = Object.values(state).filter(Boolean).length;
-  a.unshift({ id:uid(), name:name||'Snapshot '+new Date().toLocaleString(), ts:Date.now(), checked:checkedCount, total:Object.keys(state).length, data:JSON.stringify(buildPayload()) });
+  var done = Object.values(state).filter(Boolean).length;
+  a.unshift({ id:uid(), name:name||'Snapshot '+new Date().toLocaleString(), ts:Date.now(), checked:done, total:Object.keys(state).length, data:JSON.stringify(buildPayload()) });
   if (a.length > MAX_BACKUPS) a.splice(MAX_BACKUPS);
-  setBaks(a);
-  notify('Snapshot saved!');
-  showBackupModal();
+  setBaks(a); notify('Snapshot saved!'); showBackupModal();
 }
 
-function restoreBak(id) {
-  var b = getBaks().find(function(x){ return x.id===id; });
-  if (!b) return;
-  showRestoreConfirm(id, b.name);
-}
+function restoreBak(id) { var b=getBaks().find(function(x){return x.id===id;}); if(b) showRestoreConfirm(id,b.name); }
 
 function doRestoreBak(id) {
-  var b = getBaks().find(function(x){ return x.id===id; });
-  if (!b) return;
-  Object.keys(state).forEach(function(k){ state[k]=false; });
+  var b = getBaks().find(function(x){return x.id===id;}); if(!b) return;
+  Object.keys(state).forEach(function(k){state[k]=false;});
   applyData(JSON.parse(b.data));
   localStorage.setItem(STORAGE_KEY, b.data);
-  applyFilter(); updateProgress();
+  syncAllParentVisuals(); applyFilter(); updateProgress();
   closeModal(); notify('Checklist restored!');
 }
 
-function deleteBak(id) {
-  setBaks(getBaks().filter(function(x){ return x.id!==id; }));
-  showBackupModal();
-}
+function deleteBak(id) { setBaks(getBaks().filter(function(x){return x.id!==id;})); showBackupModal(); }
 
 function exportBak(id) {
   var raw, name;
-  if (id) {
-    var b = getBaks().find(function(x){ return x.id===id; }); if (!b) return;
-    raw = b.data; name = b.name;
-  } else {
-    raw = JSON.stringify(buildPayload(), null, 2); name = 'sec13-export';
-  }
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([raw],{type:'application/json'}));
-  a.download = name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json';
-  a.click();
+  if (id) { var b=getBaks().find(function(x){return x.id===id;}); if(!b)return; raw=b.data; name=b.name; }
+  else { raw=JSON.stringify(buildPayload(),null,2); name='sec13-export'; }
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([raw],{type:'application/json'}));
+  a.download=name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json'; a.click();
 }
 
 function importBak() {
-  var inp = document.createElement('input'); inp.type='file'; inp.accept='.json';
-  inp.onchange = function(e) {
-    var f = e.target.files[0]; if (!f) return;
-    var r = new FileReader();
-    r.onload = function(ev) {
-      try {
-        var d = JSON.parse(ev.target.result);
-        if (!d.checked) throw new Error('Invalid');
-        showImportConfirm(d);
-      } catch(err) { showModalBanner('error','Invalid file — not a recognised checklist backup.'); }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
+  inp.onchange=function(e){
+    var f=e.target.files[0]; if(!f)return;
+    var r=new FileReader();
+    r.onload=function(ev){
+      try{ var d=JSON.parse(ev.target.result); if(!d.checked)throw new Error(); showImportConfirm(d); }
+      catch(err){ showModalBanner('error','Invalid file — not a recognised checklist backup.'); }
     };
     r.readAsText(f);
   };
@@ -611,10 +871,9 @@ function importBak() {
 }
 
 function doImportBak(data) {
-  Object.keys(state).forEach(function(k){ state[k]=false; });
-  applyData(data);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  applyFilter(); updateProgress();
+  Object.keys(state).forEach(function(k){state[k]=false;});
+  applyData(data); localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+  syncAllParentVisuals(); applyFilter(); updateProgress();
   closeModal(); notify('Import successful!');
 }
 
@@ -622,39 +881,39 @@ function doImportBak(data) {
 // =============================================================================
 // MODAL ENGINE
 // =============================================================================
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+function closeModal() { document.getElementById('modal-root').innerHTML=''; }
 
 function setModal(html, onReady) {
-  var root = document.getElementById('modal-root'); root.innerHTML = '';
-  var ov = document.createElement('div'); ov.className = 'overlay'; ov.onclick = closeModal;
-  var m = document.createElement('div'); m.className = 'modal';
-  m.onclick = function(e){ e.stopPropagation(); };
-  m.innerHTML = html; ov.appendChild(m); root.appendChild(ov);
-  if (onReady) setTimeout(onReady, 10);
+  var root=document.getElementById('modal-root'); root.innerHTML='';
+  var ov=document.createElement('div'); ov.className='overlay'; ov.onclick=closeModal;
+  var m=document.createElement('div'); m.className='modal';
+  m.onclick=function(e){e.stopPropagation();}; m.innerHTML=html;
+  ov.appendChild(m); root.appendChild(ov);
+  if(onReady) setTimeout(onReady,10);
 }
 
-function showModalBanner(type, message) {
-  var existing = document.getElementById('modal-banner'); if (existing) existing.remove();
-  var m = document.querySelector('#modal-root .modal'); if (!m) return;
-  var colors = { warn:{bg:'rgba(245,158,11,.13)',bd:'rgba(245,158,11,.4)',txt:'#b07d1a'}, error:{bg:'rgba(200,50,50,.10)',bd:'rgba(200,50,50,.30)',txt:'#b83232'}, success:{bg:'rgba(45,158,107,.10)',bd:'rgba(45,158,107,.30)',txt:'#2d9e6b'} };
-  var c = colors[type]||colors.warn;
-  var b = document.createElement('div'); b.id='modal-banner';
+function showModalBanner(type,message){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
+  var colors={warn:{bg:'rgba(245,158,11,.13)',bd:'rgba(245,158,11,.4)',txt:'#b07d1a'},error:{bg:'rgba(200,50,50,.10)',bd:'rgba(200,50,50,.30)',txt:'#b83232'},success:{bg:'rgba(45,158,107,.10)',bd:'rgba(45,158,107,.30)',txt:'#2d9e6b'}};
+  var c=colors[type]||colors.warn;
+  var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:'+c.bg+';border:1px solid '+c.bd+';border-radius:10px;padding:11px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:'+c.txt;
   b.textContent=message; m.insertBefore(b,m.firstChild); m.scrollTop=0;
 }
 
-function showRestoreConfirm(id, bakName) {
-  var existing=document.getElementById('modal-banner'); if(existing) existing.remove();
-  var m=document.querySelector('#modal-root .modal'); if(!m) return;
+function showRestoreConfirm(id,bakName){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
   var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:12px 14px;margin-bottom:16px';
   b.innerHTML='<div style="font-weight:700;font-size:13px;color:#b07d1a;margin-bottom:4px">Restore "'+esc(bakName)+'"?</div><div style="font-size:12px;color:var(--txt-m);margin-bottom:10px">Your current state will be replaced. This cannot be undone.</div><div style="display:flex;gap:8px"><button onclick="doRestoreBak(\''+id+'\')" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:#2d9e6b;color:#fff;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Restore</button><button onclick="document.getElementById(\'modal-banner\').remove()" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:var(--surf3);color:var(--txt-m);font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button></div>';
   m.insertBefore(b,m.firstChild); m.scrollTop=0;
 }
 
-function showImportConfirm(data) {
-  var existing=document.getElementById('modal-banner'); if(existing) existing.remove();
-  var m=document.querySelector('#modal-root .modal'); if(!m) return;
+function showImportConfirm(data){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
   var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:12px 14px;margin-bottom:16px';
   b.innerHTML='<div style="font-weight:700;font-size:13px;color:#b07d1a;margin-bottom:4px">Import this file?</div><div style="font-size:12px;color:var(--txt-m);margin-bottom:10px">Your current state will be replaced.</div><div style="display:flex;gap:8px"><button id="import-yes" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:#2d9e6b;color:#fff;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Yes, Import</button><button onclick="document.getElementById(\'modal-banner\').remove()" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:var(--surf3);color:var(--txt-m);font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button></div>';
@@ -667,7 +926,7 @@ function showBackupModal() {
   var bakHtml=baks.length===0
     ?'<div style="color:var(--txt-dd);font-size:13px;padding:16px 0 8px;font-style:italic">No snapshots yet.</div>'
     :baks.map(function(b){
-      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;&middot;&nbsp; '+b.checked+'/'+b.total+' items checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
+      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;&middot;&nbsp; '+b.checked+'/'+b.total+' states checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
     }).join('');
 
   setModal(
@@ -719,8 +978,8 @@ async function exportPNG() {
         mainEl.style.maxWidth='100%'; mainEl.style.marginTop='18px'; mainEl.style.padding='0 30px';
         ['toolbar','saved-row'].forEach(function(cls){ var el=doc.querySelector('.'+cls); if(el) el.style.display='none'; });
         var banner=doc.getElementById('completeBanner'); if(banner) banner.style.display='none';
-        doc.querySelectorAll('.section').forEach(function(s){ s.classList.remove('collapsed'); var iw=s.querySelector('.section-items'); if(iw) iw.style.maxHeight='9999px'; });
-        doc.querySelectorAll('.item').forEach(function(el){ el.style.display='flex'; });
+        doc.querySelectorAll('.section').forEach(function(s){ s.classList.remove('collapsed'); var iw=s.querySelector('.section-items'); if(iw) iw.style.maxHeight='99999px'; });
+        doc.querySelectorAll('.item,.item-group').forEach(function(el){ el.style.display=el.classList.contains('item-group')?'block':'flex'; });
         var empty=doc.getElementById('emptyState'); if(empty) empty.style.display='none';
         var sep=doc.getElementById('titleSep'), pt=doc.getElementById('projectTitle');
         if(sep && pt && !pt.textContent.trim()) sep.style.display='none';
@@ -733,8 +992,7 @@ async function exportPNG() {
 
 function printPDF() {
   var ts=document.getElementById('exportTimestamp'); ts.textContent=fmtTimestamp();
-  window.print();
-  setTimeout(function(){ ts.textContent=''; }, 2000);
+  window.print(); setTimeout(function(){ ts.textContent=''; }, 2000);
 }
 
 
