@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Section 54 - Erosion, Sedimentation and Pollution Control - Construction Best Management Practices (BMP) Location Details Checklist</title>
+<title>Section 54 — BMP Location Details Checklist</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
@@ -19,38 +19,26 @@
     --txt:var(--text); --txt-b:#0f2744; --txt-m:#555; --txt-d:var(--muted); --txt-dd:#bbb;
     --inp:#f9f7f4;
     --ghost-bg:#f5f3ef; --ghost-c:var(--muted); --ghost-bd:var(--border);
+    --child-bg:#fdfcfb; --tree-line:#d4cec6;
   }
 
   body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:0 0 80px; }
 
-  /* HEADER */
+  /* ── HEADER ── */
   header { background:var(--navy); color:#fff; padding:24px 40px 20px; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.25); display:flex; justify-content:space-between; align-items:center; gap:20px; }
   .eyebrow { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:rgba(255,255,255,.5); margin-bottom:6px; }
   .title-row { display:flex; align-items:baseline; flex-wrap:nowrap; gap:0; }
-
-  /* contenteditable title — sizes itself naturally */
   #projectTitle {
-    font-family:'IBM Plex Sans',sans-serif;
-    font-size:19px; font-weight:600; letter-spacing:-.3px;
-    color:#fff; outline:none;
-    border-bottom:1px dashed rgba(255,255,255,.2);
-    display:inline-block; white-space:nowrap;
-    min-width:2px; max-width:320px;
-    cursor:text; transition:border-color .15s;
-    vertical-align:baseline; line-height:1.3;
+    font-family:'IBM Plex Sans',sans-serif; font-size:19px; font-weight:600; letter-spacing:-.3px;
+    color:#fff; outline:none; border-bottom:1px dashed rgba(255,255,255,.2);
+    display:inline-block; white-space:nowrap; min-width:2px; max-width:320px;
+    cursor:text; transition:border-color .15s; vertical-align:baseline; line-height:1.3;
   }
   #projectTitle:focus { border-bottom-color:rgba(255,255,255,.6); }
-  #projectTitle:empty::before {
-    content:attr(data-placeholder);
-    color:rgba(255,255,255,.28);
-    font-style:italic;
-    pointer-events:none;
-  }
-
+  #projectTitle:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,.28); font-style:italic; pointer-events:none; }
   .title-sep { font-size:19px; font-weight:400; color:rgba(255,255,255,.35); margin:0 7px; flex-shrink:0; line-height:1.3; }
   .title-sep.hidden { display:none; }
   .title-static { font-size:19px; font-weight:600; letter-spacing:-.3px; white-space:nowrap; flex-shrink:0; line-height:1.3; }
-
   .export-timestamp { display:none; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1.5px; color:rgba(255,255,255,.45); margin-top:5px; }
   .progress-block { text-align:right; flex-shrink:0; }
   .progress-count { font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:#fff; line-height:1; }
@@ -58,7 +46,7 @@
   .progress-bar-outer { background:rgba(255,255,255,.15); border-radius:99px; height:5px; width:140px; overflow:hidden; margin-left:auto; }
   .progress-bar-inner { background:var(--green); height:5px; border-radius:99px; width:0%; transition:width .4s ease; }
 
-  /* TOOLBAR */
+  /* ── TOOLBAR ── */
   .toolbar { max-width:860px; margin:22px auto 0; padding:0 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
   .filter-group { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--card); }
   .filter-btn { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; background:none; border:none; border-right:1px solid var(--border); color:var(--muted); padding:7px 15px; cursor:pointer; transition:all .15s; }
@@ -72,17 +60,17 @@
   .action-btn.highlight { background:rgba(45,158,107,.1); color:var(--green); border-color:rgba(45,158,107,.3); }
   .action-btn.highlight:hover { background:rgba(45,158,107,.18); border-color:var(--green); }
 
-  /* SAVED ROW */
+  /* ── SAVED ROW ── */
   .saved-row { max-width:860px; margin:7px auto 0; padding:0 24px; display:flex; justify-content:flex-end; }
   .saved-indicator { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.5px; min-height:14px; }
   .saved-indicator.flash { color:var(--green); }
 
-  /* MAIN */
+  /* ── MAIN ── */
   main { max-width:860px; margin:14px auto 0; padding:0 24px; }
   .complete-banner { display:none; background:var(--green); color:#fff; text-align:center; padding:15px; border-radius:8px; margin-bottom:18px; font-weight:600; font-size:14px; }
   .complete-banner.visible { display:block; }
 
-  /* SECTIONS */
+  /* ── SECTIONS ── */
   .section { background:var(--card); border-radius:8px; margin-bottom:18px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.04); }
   .section-header { background:var(--navy-light); color:#fff; padding:13px 20px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; transition:background .15s; }
   .section-header:hover { background:var(--navy-hover); }
@@ -92,32 +80,79 @@
   .section-title { font-size:13px; font-weight:600; }
   .section-badge { font-family:'IBM Plex Mono',monospace; font-size:11px; background:rgba(255,255,255,.18); padding:2px 10px; border-radius:99px; flex-shrink:0; transition:background .25s; }
   .section-badge.complete { background:var(--green); }
-  .section-items { max-height:3000px; overflow:hidden; transition:max-height .28s ease; }
+  .section-items { max-height:99999px; overflow:hidden; transition:max-height .3s ease; }
   .section.collapsed .section-items { max-height:0; }
 
-  /* ITEMS */
+  /* ── CHECKBOX — three states: unchecked / indeterminate / checked ── */
+  .checkbox {
+    flex-shrink:0; margin-top:2px; width:17px; height:17px;
+    border:2px solid #c5bfb5; border-radius:3px; background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .15s; pointer-events:none;
+  }
+  .checkbox .check { display:none; }
+  .checkbox .dash  { display:none; }
+  /* checked — green fill + checkmark */
+  .item.checked .checkbox { background:var(--green); border-color:var(--green); }
+  .item.checked .checkbox .check { display:block; }
+  /* indeterminate — navy fill + dash (some children checked) */
+  .item.indeterminate .checkbox { background:var(--navy-light); border-color:var(--navy-light); }
+  .item.indeterminate .checkbox .dash { display:block; }
+
+  /* ── STANDALONE ITEMS ── */
   .item { display:flex; align-items:flex-start; gap:14px; padding:11px 20px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; user-select:none; }
   .item:last-child { border-bottom:none; }
   .item:hover { background:#faf8f5; }
   .item.checked { background:var(--green-light); }
   .item.hidden { display:none; }
   .item:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
-  .checkbox { flex-shrink:0; margin-top:2px; width:17px; height:17px; border:2px solid #c5bfb5; border-radius:3px; background:#fff; display:flex; align-items:center; justify-content:center; transition:all .15s; pointer-events:none; }
-  .item.checked .checkbox { background:var(--green); border-color:var(--green); }
-  .checkbox svg { display:none; }
-  .item.checked .checkbox svg { display:block; }
   .item-text { font-size:13px; line-height:1.6; color:var(--text); transition:color .15s; }
   .item.checked .item-text { color:var(--muted); text-decoration:line-through; text-decoration-color:#aaa; }
+
+  /* ── PARENT-CHILD GROUP STRUCTURE ── */
+  .item-group { border-bottom:1px solid var(--border); }
+  .item-group:last-child { border-bottom:none; }
+  .item-group.hidden { display:none; }
+
+  .item.item-parent { border-bottom:none; }
+  .item.item-parent.checked { background:var(--green-light); }
+  .item.item-parent.indeterminate { background:#f5f3ef; }
+
+  .item-children { position:relative; }
+  .item-children::before {
+    content:''; position:absolute;
+    left:28px; top:0; bottom:18px;
+    width:1.5px; background:var(--tree-line);
+    border-radius:2px; pointer-events:none;
+  }
+
+  .item.item-child {
+    padding-left:58px; position:relative;
+    background:var(--child-bg);
+    border-bottom:1px solid var(--border);
+  }
+  .item.item-child:last-child { border-bottom:none; }
+  .item.item-child:hover { background:#f7f5f1; }
+  .item.item-child.checked { background:var(--green-light); }
+  .item.item-child .item-text { font-size:12.5px; }
+  .item.item-child::before {
+    content:''; position:absolute;
+    left:28px; top:50%; transform:translateY(-50%);
+    width:16px; height:1.5px;
+    background:var(--tree-line); pointer-events:none;
+  }
+
+  /* ── EMPTY STATE ── */
   .empty-state { display:none; text-align:center; padding:48px 20px; color:var(--muted); font-size:13px; font-style:italic; }
   .empty-state.visible { display:block; }
 
-  /* EXPORT OVERLAY */
+  /* ── EXPORT OVERLAY ── */
   #exportOverlay { display:none; position:fixed; inset:0; background:rgba(15,39,68,.72); z-index:9999; justify-content:center; align-items:center; flex-direction:column; gap:14px; color:#fff; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; }
   #exportOverlay.visible { display:flex; }
   .spinner { width:30px; height:30px; border:3px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
-  /* BACKUP MODAL */
+  /* ── BACKUP MODAL ── */
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; }
   .modal { background:var(--modal); border:1px solid var(--bd); border-radius:14px; padding:26px; width:560px; max-width:100%; max-height:92vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,.18); }
   .bak-item { background:var(--surf2); border:1px solid var(--bd); border-radius:10px; padding:11px 13px; display:flex; align-items:center; gap:9px; margin-bottom:7px; transition:background .15s; }
@@ -138,11 +173,11 @@
   .mbtn-ghost { background:var(--ghost-bg); color:var(--ghost-c); border:1px solid var(--ghost-bd); }
   .mbtn-green { background:rgba(45,158,107,.12); color:var(--green); border:1px solid rgba(45,158,107,.25); }
 
-  /* TOAST */
+  /* ── TOAST ── */
   #notif { position:fixed; bottom:22px; right:22px; background:var(--navy); border:1px solid var(--navy-light); border-radius:10px; padding:11px 17px; font-size:13px; font-weight:600; color:#fff; z-index:9998; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s cubic-bezier(.34,1.3,.64,1); transform:translateY(12px); font-family:'IBM Plex Sans',sans-serif; }
   #notif.show { opacity:1; transform:translateY(0); }
 
-  /* PRINT */
+  /* ── PRINT ── */
   @media print {
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { background:#fff; padding:0; margin:0; }
@@ -150,8 +185,9 @@
     main { max-width:100%; padding:0 30px; margin-top:16px; }
     .toolbar,.saved-row,#exportOverlay,.complete-banner,#modal-root,#notif { display:none !important; }
     .section { box-shadow:none; border:1px solid #ddd; break-inside:avoid; }
-    .section.collapsed .section-items { max-height:3000px !important; }
+    .section.collapsed .section-items { max-height:99999px !important; }
     .item,.item.hidden { display:flex !important; }
+    .item-group.hidden { display:block !important; }
     .collapse-icon { display:none; }
     .export-timestamp { display:block !important; }
     #projectTitle { border-bottom:none; }
@@ -180,7 +216,7 @@
         onpaste="event.preventDefault();document.execCommand('insertText',false,event.clipboardData.getData('text/plain'))"
       ></span>
       <span class="title-sep hidden" id="titleSep">/</span>
-      <span class="title-static">Erosion, Sedimentation and Pollution Control - Construction Best Management Practices (BMP) Location Details Checklist</span>
+      <span class="title-static">BMP Location Details</span>
     </div>
     <div class="export-timestamp" id="exportTimestamp"></div>
   </div>
@@ -216,138 +252,235 @@
 </main>
 
 <script>
-// =============================================================================
-// DATA START — Replace sections/items below with your checklist content
-// =============================================================================
-const sections = [
+var sections = [
   {
-    title: "54.001 General",
+    title: "54.001 — General",
     items: [
-      "These drawings show the locations of all BMPs installed during the construction of the project.",
-      "A construction project may consist of one, two, three, or more stages."
+      { text: "These drawings show the locations of all BMPs installed during the construction of the project. A construction project may consist of one, two, three, or more stages.", children: [] }
     ]
   },
   {
-    title: "54.002 Required Information",
+    title: "54.002 — Required Information",
     items: [
-      "The ESPCP plans shall be designed and shown to accommodate all stages of construction.",
-      "Staging will be designated numerically.",
-      "All ESPCPs include an initial phase that shows the installation of perimeter BMPs (sediment basins, silt fence, etc.) prior to clearing and grubbing and any major earthwork or major construction.",
-      "BMPs should be shown in bold when initially installed; for subsequent stages and phases, they should be shown faded if still in use or not shown if removed.",
-      "Staged construction activities should be shown in bold (or with optional hatching) for the corresponding stage of construction and for subsequent stages shown faded (or without hatching).",
-      "Ensure BMPs and construction activities are legible and plan drawings are not cluttered.",
-      "The ESPCP plans shall address initial, intermediate, and final phases for each stage of construction.",
-      "Drawings should be titled \"INITIAL PHASE\", \"STAGE 1\", \"STAGE 2\", etc., and \"FINAL PHASE\".",
-      "Construction centerline with stationing",
-      "All edges of pavement",
-      "Construction limits",
-      "Existing and required right of way and all easements",
-      "Location of all drainage structures",
-      "Streams, open water, wetlands, and names of such (if any)",
-      "Stream Buffers",
-      "Bio-impaired stream labels",
-      "Surface water drainage patterns",
-      "All topographical information and existing contours Stage 1, Phase 1 (for stages/phases subsequent to Stage 1, Phase 1, no contours are shown within cut and fill areas)",
-      "All BMPs constructed for each stage of construction in bold format with the proper code designated by the Department's Erosion Control Legend and Uniform Code drawings",
-      "Perimeter Control: Silt control gates Types 1, 2, and 3 shown by code",
-      "All temporary sediment basins: construction limits, principal spillway and outlet pipe, top and bottom elevations of dam, emergency spillway, sediment basin and skimmer BMP symbols, and baffles (if necessary)",
-      "Riprap slope protection by its code",
-      "Any other form of slope protection with its code",
-      "All down-drain structures temporary or permanent by their code",
-      "Silt retention barrier as recommended by the soil lab and/or approved by USACE (Army Corps of Engineers)",
-      "Storm drain outlet protection with BMP symbol",
-      "Any other item required for proper erosion control or directed by another agency",
-      "Note construction erosion control BMPs to be converted to post-construction stormwater BMPs with reference to BMP detail sheet(s) (i.e. sediment basin to stormwater pond)",
-      "Limits of disturbance for each stage",
-      "Any utility relocations that the contractor is performing during the respective stage (ensure included BMPs are adequate for proposed utility work within GDOT ROW or easements)",
-      "All waters of the state that are within 200 ft. of project limits and within the area covered by the drawings",
-      "All environmentally sensitive areas (ESA), including but not limited to stream buffers, wetlands, historical properties, threatened or endangered habitats, archaeological resources, cultural resources, hazardous materials sites, and environmental justice communities",
-      "Delineate ESAs with the inverted saw-toothed line code",
-      "NOTE: For streams, show linework and labels only for tops-of-banks and stream flow line (deepest part of channel). Do not show linework or labels for water's edge at time of survey (e.g., edge of water, edge of stream, etc.)."
+      { text: "The ESPCP plans shall be designed and shown to accommodate all stages of construction. Staging will be designated numerically. All ESPCPs include an initial phase that shows the installation of perimeter BMPs prior to the clearing and grubbing and any major earthwork or major construction. The ESPCP plans shall address the initial, intermediate, and final phases for each stage of construction. Drawings should be titled “INITIAL PHASE”, “STAGE 1”, “STAGE 2”, etc. and “FINAL PHASE”.", children: [] },
+      { text: "Construction centerline with stationing", children: [] },
+      { text: "All edges of pavement", children: [] },
+      { text: "Construction limits", children: [] },
+      { text: "Existing and required right of way and all easements", children: [] },
+      { text: "Location of all drainage structures", children: [] },
+      { text: "Streams, open water, wetlands, and names of such (if any)", children: [] },
+      { text: "Stream Buffers", children: [] },
+      { text: "Bio-impaired stream labels", children: [] },
+      { text: "Surface water drainage patterns", children: [] },
+      { text: "All topographical information and existing contours Stage 1, Phase 1 (However, for stages and phases subsequent to Stage 1, Phase 1, no contours are to be shown within the cut and fill areas.)", children: [] },
+      { text: "All BMPs constructed for each stage of construction in bold format with the proper code designated by the Department’s Erosion Control Legend and Uniform Code drawings. These items include, but are not limited to:", children: [
+        "Perimeter Control",
+        "Silt control gates Types 1, 2, and 3 will be shown by their code",
+        "All temporary sediment basins",
+        "Temporary sediment basins — Construction limits",
+        "Temporary sediment basins — Principal spillway and outlet pipe",
+        "Temporary sediment basins — Top and bottom elevations of dam",
+        "Temporary sediment basins — Emergency spillway",
+        "Temporary sediment basins — Sediment basin and skimmer BMP symbols",
+        "Temporary sediment basins — Baffles (if necessary)",
+        "Riprap slope protection by its code",
+        "Any other form of slope protection with its code",
+        "All down-drain structures temporary or permanent by their code",
+        "Silt retention barrier as recommended by the soil lab and/or approved by USACE (Army Corps of Engineers)",
+        "Storm drain outlet protection with BMP symbol",
+        "Any other item that may be required for proper erosion control or that may be directed by another agency",
+        "Note construction erosion control BMPs to be converted to post-construction stormwater BMPs with reference to BMP detail sheet(s) (i.e.: sediment basin to stormwater pond)"
+      ]},
+      { text: "Limits of disturbance for each stage.", children: [] },
+      { text: "Any utility relocations that the contractor is performing during the respective stage. (Ensure that BMPs included are adequate for the utility work that is proposed within the GDOT ROW or easements.)", children: [] },
+      { text: "All waters of the state that are within 200 ft. of the project limits and that are within the area covered by the drawings", children: [] },
+      { text: "<strong>All environmentally sensitive areas (ESA) including, but not limited to, stream buffers, wetlands, historical properties, threatened or endangered habitats, archaeological resources, cultural resources, hazardous materials sites, and environmental justice communities delineated with the inverted saw-toothed line code</strong>", children: [
+        "<strong>NOTE: For streams, show linework and labels for only the tops-of-banks and stream flow line (i.e., deepest part of channel). Do not show linework or labels indicating the location of water’s edge itself at the time of survey (e.g. edge of water, edge of stream, etc.)</strong>"
+      ]}
     ]
   },
   {
-    title: "54.003 Drawing Layout",
+    title: "54.003 — Drawing Layout",
     items: [
-      "Set up drawings with the same scale and matchlines as the construction plans."
+      { text: "Set up drawings with the same scale and matchlines as the construction plans.", children: [] }
     ]
   }
 ];
-// DATA END
-// =============================================================================
+
+var STORAGE_KEY      = 'sec54_state';
+var BACKUP_STORE_KEY = 'sec54_backups';
+var EXPORT_FILENAME  = 'Section54-Checklist.png';
+var MAX_BACKUPS      = 25;
 
 
-// =============================================================================
-// CORE STATE
-// =============================================================================
-const STORAGE_KEY      = 'sec54_state';
-const BACKUP_STORE_KEY = 'sec54_backups';
-const MAX_BACKUPS      = 25;
-
-const state     = {};
-const collapsed = {};
+var state     = {};
+var collapsed = {};
 var currentFilter = 'all';
 var savedAt       = null;
 var saveTimer     = null;
 
-var checkmark = '<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 3.5L3.8 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var CHECKMARK = '<svg class="check" width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 3.5L3.8 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var DASHMARK  = '<svg class="dash" width="8" height="2" viewBox="0 0 8 2" fill="none"><path d="M1 1H7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
 
-function getTitle() {
-  return document.getElementById('projectTitle').textContent.trim();
+function getTitle() { return document.getElementById('projectTitle').textContent.trim(); }
+
+function countLeaves(si) {
+  var n = 0;
+  sections[si].items.forEach(function(item) {
+    n += (item.children && item.children.length > 0) ? item.children.length : 1;
+  });
+  return n;
+}
+function countCheckedLeaves(si) {
+  var n = 0;
+  sections[si].items.forEach(function(item, pi) {
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(function(_, ci) { if (state[si+'-'+pi+'-'+ci]) n++; });
+    } else {
+      if (state[si+'-'+pi]) n++;
+    }
+  });
+  return n;
 }
 
 
-// =============================================================================
-// BUILD DOM
-// =============================================================================
+function makeCheckbox() {
+  return '<div class="checkbox">' + CHECKMARK + DASHMARK + '</div>';
+}
+
 function buildChecklist() {
   var container = document.getElementById('checklist');
-  var total = 0;
+  var grandTotal = 0;
+
   sections.forEach(function(sec, si) {
     collapsed[si] = false;
+    var leafCount = countLeaves(si);
+    grandTotal += leafCount;
+
     var wrap = document.createElement('div');
     wrap.className = 'section'; wrap.id = 'sec-' + si;
+
     var hdr = document.createElement('div');
     hdr.className = 'section-header';
     hdr.setAttribute('role','button'); hdr.setAttribute('aria-expanded','true');
     hdr.innerHTML =
       '<div class="section-header-left"><span class="collapse-icon">&#9660;</span><span class="section-title">' + sec.title + '</span></div>' +
-      '<span class="section-badge" id="badge-' + si + '">0/' + sec.items.length + '</span>';
+      '<span class="section-badge" id="badge-' + si + '">0/' + leafCount + '</span>';
     hdr.addEventListener('click', function() { toggleSection(si); });
     wrap.appendChild(hdr);
+
     var itemsWrap = document.createElement('div');
     itemsWrap.className = 'section-items'; itemsWrap.id = 'items-' + si;
-    sec.items.forEach(function(text, ii) {
-      var id = si + '-' + ii; state[id] = false; total++;
-      var item = document.createElement('div');
-      item.className = 'item'; item.id = 'item-' + id;
-      item.tabIndex = 0; item.setAttribute('role','checkbox'); item.setAttribute('aria-checked','false');
-      item.innerHTML = '<div class="checkbox">' + checkmark + '</div><span class="item-text">' + text + '</span>';
-      item.addEventListener('click', function() { toggle(si, ii); });
-      item.addEventListener('keydown', function(e) { if (e.key===' '||e.key==='Enter'){e.preventDefault();toggle(si,ii);} });
-      itemsWrap.appendChild(item);
+
+    sec.items.forEach(function(item, pi) {
+      var children = item.children || [];
+
+      if (children.length === 0) {
+        var id = si + '-' + pi;
+        state[id] = false;
+        var el = document.createElement('div');
+        el.className = 'item'; el.id = 'item-' + id;
+        el.tabIndex = 0; el.setAttribute('role','checkbox'); el.setAttribute('aria-checked','false');
+        el.innerHTML = makeCheckbox() + '<span class="item-text">' + item.text + '</span>';
+        (function(s,p){ el.addEventListener('click', function(){ toggleStandalone(s,p); }); el.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleStandalone(s,p);} }); })(si,pi);
+        itemsWrap.appendChild(el);
+
+      } else {
+        state[si + '-' + pi] = false;
+        children.forEach(function(_, ci) { state[si+'-'+pi+'-'+ci] = false; });
+
+        var group = document.createElement('div');
+        group.className = 'item-group'; group.id = 'group-' + si + '-' + pi;
+
+        var parentEl = document.createElement('div');
+        parentEl.className = 'item item-parent'; parentEl.id = 'item-' + si + '-' + pi;
+        parentEl.tabIndex = 0; parentEl.setAttribute('role','checkbox'); parentEl.setAttribute('aria-checked','false');
+        parentEl.innerHTML = makeCheckbox() + '<span class="item-text">' + item.text + '</span>';
+        (function(s,p){ parentEl.addEventListener('click', function(){ toggleParent(s,p); }); parentEl.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleParent(s,p);} }); })(si,pi);
+        group.appendChild(parentEl);
+
+        var childWrap = document.createElement('div');
+        childWrap.className = 'item-children'; childWrap.id = 'children-' + si + '-' + pi;
+
+        children.forEach(function(childText, ci) {
+          var cid = si + '-' + pi + '-' + ci;
+          var cel = document.createElement('div');
+          cel.className = 'item item-child'; cel.id = 'item-' + cid;
+          cel.tabIndex = 0; cel.setAttribute('role','checkbox'); cel.setAttribute('aria-checked','false');
+          cel.innerHTML = makeCheckbox() + '<span class="item-text">' + childText + '</span>';
+          (function(s,p,c){ cel.addEventListener('click', function(){ toggleChild(s,p,c); }); cel.addEventListener('keydown', function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggleChild(s,p,c);} }); })(si,pi,ci);
+          childWrap.appendChild(cel);
+        });
+
+        group.appendChild(childWrap);
+        itemsWrap.appendChild(group);
+      }
     });
+
     wrap.appendChild(itemsWrap);
     container.appendChild(wrap);
   });
-  document.getElementById('total').textContent = total;
+
+  document.getElementById('total').textContent = grandTotal;
 }
 
 
-// =============================================================================
-// INTERACTIONS
-// =============================================================================
-function onTitleInput() {
-  document.getElementById('titleSep').classList.toggle('hidden', !getTitle());
-  scheduleSave();
-}
-
-function toggle(si, ii) {
-  var id = si + '-' + ii; state[id] = !state[id];
+function toggleStandalone(si, pi) {
+  var id = si + '-' + pi;
+  state[id] = !state[id];
   var el = document.getElementById('item-' + id);
-  el.classList.toggle('checked', state[id]); el.setAttribute('aria-checked', String(state[id]));
+  el.classList.toggle('checked', state[id]);
+  el.setAttribute('aria-checked', String(state[id]));
   applyFilter(); updateProgress(); scheduleSave();
 }
+
+function toggleParent(si, pi) {
+  var children = sections[si].items[pi].children;
+  var allChecked = children.every(function(_, ci) { return state[si+'-'+pi+'-'+ci]; });
+  var newVal = !allChecked;
+  children.forEach(function(_, ci) {
+    var cid = si + '-' + pi + '-' + ci;
+    state[cid] = newVal;
+    var cel = document.getElementById('item-' + cid);
+    if (cel) { cel.classList.toggle('checked', newVal); cel.setAttribute('aria-checked', String(newVal)); }
+  });
+  state[si + '-' + pi] = newVal;
+  syncParentVisual(si, pi);
+  applyFilter(); updateProgress(); scheduleSave();
+}
+
+function toggleChild(si, pi, ci) {
+  var cid = si + '-' + pi + '-' + ci;
+  state[cid] = !state[cid];
+  var cel = document.getElementById('item-' + cid);
+  if (cel) { cel.classList.toggle('checked', state[cid]); cel.setAttribute('aria-checked', String(state[cid])); }
+  var children = sections[si].items[pi].children;
+  var checkedCount = children.filter(function(_, i) { return state[si+'-'+pi+'-'+i]; }).length;
+  state[si + '-' + pi] = (checkedCount === children.length);
+  syncParentVisual(si, pi);
+  applyFilter(); updateProgress(); scheduleSave();
+}
+
+function syncParentVisual(si, pi) {
+  var children = sections[si].items[pi].children;
+  var checkedCount = children.filter(function(_, ci) { return state[si+'-'+pi+'-'+ci]; }).length;
+  var el = document.getElementById('item-' + si + '-' + pi);
+  if (!el) return;
+  var allChecked  = checkedCount === children.length;
+  var someChecked = checkedCount > 0 && !allChecked;
+  el.classList.toggle('checked',       allChecked);
+  el.classList.toggle('indeterminate', someChecked);
+  el.setAttribute('aria-checked', allChecked ? 'true' : someChecked ? 'mixed' : 'false');
+}
+
+function syncAllParentVisuals() {
+  sections.forEach(function(sec, si) {
+    sec.items.forEach(function(item, pi) {
+      if (item.children && item.children.length > 0) syncParentVisual(si, pi);
+    });
+  });
+}
+
 
 function toggleSection(si) {
   collapsed[si] = !collapsed[si];
@@ -355,6 +488,12 @@ function toggleSection(si) {
   wrap.classList.toggle('collapsed', collapsed[si]);
   wrap.querySelector('.section-header').setAttribute('aria-expanded', String(!collapsed[si]));
 }
+
+function onTitleInput() {
+  document.getElementById('titleSep').classList.toggle('hidden', !getTitle());
+  scheduleSave();
+}
+
 
 function setFilter(f) {
   currentFilter = f;
@@ -365,36 +504,56 @@ function setFilter(f) {
 function applyFilter() {
   var anyVisible = false;
   sections.forEach(function(sec, si) {
-    sec.items.forEach(function(_, ii) {
-      var id = si+'-'+ii, checked = state[id];
-      var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
-      document.getElementById('item-'+id).classList.toggle('hidden', !show);
-      if (show) anyVisible = true;
+    sec.items.forEach(function(item, pi) {
+      var children = item.children || [];
+      if (children.length === 0) {
+        var checked = state[si+'-'+pi];
+        var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
+        var el = document.getElementById('item-' + si + '-' + pi);
+        if (el) el.classList.toggle('hidden', !show);
+        if (show) anyVisible = true;
+      } else {
+        var anyChildVisible = false;
+        children.forEach(function(_, ci) {
+          var checked = state[si+'-'+pi+'-'+ci];
+          var show = currentFilter==='all' ? true : currentFilter==='done' ? checked : !checked;
+          var cel = document.getElementById('item-' + si + '-' + pi + '-' + ci);
+          if (cel) cel.classList.toggle('hidden', !show);
+          if (show) anyChildVisible = true;
+        });
+        var group = document.getElementById('group-' + si + '-' + pi);
+        if (group) group.classList.toggle('hidden', !anyChildVisible);
+        if (anyChildVisible) anyVisible = true;
+      }
     });
   });
   document.getElementById('emptyState').classList.toggle('visible', !anyVisible);
 }
 
+
 function updateProgress() {
-  var total = Object.keys(state).length;
-  var done  = Object.values(state).filter(Boolean).length;
-  document.getElementById('done').textContent = done;
-  document.getElementById('bar').style.width = total ? ((done/total)*100)+'%' : '0%';
+  var grandTotal = 0, grandDone = 0;
   sections.forEach(function(sec, si) {
-    var secDone = sec.items.filter(function(_,ii){ return state[si+'-'+ii]; }).length;
-    var badge = document.getElementById('badge-'+si);
-    badge.textContent = secDone+'/'+sec.items.length;
-    badge.classList.toggle('complete', secDone===sec.items.length);
+    var secTotal = countLeaves(si);
+    var secDone  = countCheckedLeaves(si);
+    grandTotal += secTotal;
+    grandDone  += secDone;
+    var badge = document.getElementById('badge-' + si);
+    if (badge) { badge.textContent = secDone + '/' + secTotal; badge.classList.toggle('complete', secDone === secTotal); }
   });
-  document.getElementById('completeBanner').classList.toggle('visible', done===total && total>0);
+  document.getElementById('done').textContent  = grandDone;
+  document.getElementById('total').textContent = grandTotal;
+  document.getElementById('bar').style.width   = grandTotal ? ((grandDone / grandTotal) * 100) + '%' : '0%';
+  document.getElementById('completeBanner').classList.toggle('visible', grandDone === grandTotal && grandTotal > 0);
 }
+
 
 function resetAll() {
   if (!confirm('Reset all checked items and clear the project name?')) return;
   Object.keys(state).forEach(function(id) {
     state[id] = false;
-    var el = document.getElementById('item-'+id);
-    el.classList.remove('checked'); el.setAttribute('aria-checked','false');
+    var el = document.getElementById('item-' + id);
+    if (el) { el.classList.remove('checked','indeterminate'); el.setAttribute('aria-checked','false'); }
   });
   document.getElementById('projectTitle').textContent = '';
   document.getElementById('titleSep').classList.add('hidden');
@@ -402,9 +561,6 @@ function resetAll() {
 }
 
 
-// =============================================================================
-// PERSISTENCE
-// =============================================================================
 function buildPayload() {
   return { checked: Object.assign({}, state), title: getTitle(), savedAt: Date.now() };
 }
@@ -415,7 +571,7 @@ function applyData(data) {
     Object.keys(data.checked).forEach(function(id) {
       if (!(id in state)) return;
       state[id] = data.checked[id];
-      var el = document.getElementById('item-'+id);
+      var el = document.getElementById('item-' + id);
       if (el) { el.classList.toggle('checked', state[id]); el.setAttribute('aria-checked', String(state[id])); }
     });
   }
@@ -426,25 +582,17 @@ function applyData(data) {
   if (data.savedAt) savedAt = data.savedAt;
 }
 
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(doSave, 600);
-}
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 600); }
 
 function doSave() {
   var payload = buildPayload();
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    savedAt = payload.savedAt;
-    flashSaved();
-  } catch(e) { console.warn('Save failed:', e); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); savedAt = payload.savedAt; flashSaved(); }
+  catch(e) { console.warn('Save failed:', e); }
 }
 
 function loadSaved() {
-  try {
-    var raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) applyData(JSON.parse(raw));
-  } catch(e) {}
+  try { var raw = localStorage.getItem(STORAGE_KEY); if (raw) applyData(JSON.parse(raw)); } catch(e) {}
+  syncAllParentVisuals();
   applyFilter(); updateProgress(); updateSavedLabel();
 }
 
@@ -465,74 +613,50 @@ function updateSavedLabel() {
 setInterval(updateSavedLabel, 60000);
 
 
-// =============================================================================
-// BACKUP ENGINE
-// =============================================================================
-function uid() { return '_' + Math.random().toString(36).slice(2, 9); }
+function uid() { return '_' + Math.random().toString(36).slice(2,9); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function getBaks() {
-  try { return JSON.parse(localStorage.getItem(BACKUP_STORE_KEY) || '[]'); }
-  catch(e) { return []; }
-}
+function getBaks() { try { return JSON.parse(localStorage.getItem(BACKUP_STORE_KEY)||'[]'); } catch(e){ return []; } }
 function setBaks(a) { localStorage.setItem(BACKUP_STORE_KEY, JSON.stringify(a)); }
 
 function createBak(name) {
   var a = getBaks();
-  var checkedCount = Object.values(state).filter(Boolean).length;
-  a.unshift({ id:uid(), name:name||'Snapshot '+new Date().toLocaleString(), ts:Date.now(), checked:checkedCount, total:Object.keys(state).length, data:JSON.stringify(buildPayload()) });
+  var done = Object.values(state).filter(Boolean).length;
+  a.unshift({ id:uid(), name:name||'Snapshot '+new Date().toLocaleString(), ts:Date.now(), checked:done, total:Object.keys(state).length, data:JSON.stringify(buildPayload()) });
   if (a.length > MAX_BACKUPS) a.splice(MAX_BACKUPS);
-  setBaks(a);
-  notify('Snapshot saved!');
-  showBackupModal();
+  setBaks(a); notify('Snapshot saved!'); showBackupModal();
 }
 
-function restoreBak(id) {
-  var b = getBaks().find(function(x){ return x.id===id; });
-  if (!b) return;
-  showRestoreConfirm(id, b.name);
-}
+function restoreBak(id) { var b=getBaks().find(function(x){return x.id===id;}); if(b) showRestoreConfirm(id,b.name); }
 
 function doRestoreBak(id) {
-  var b = getBaks().find(function(x){ return x.id===id; });
-  if (!b) return;
-  Object.keys(state).forEach(function(k){ state[k]=false; });
+  var b=getBaks().find(function(x){return x.id===id;}); if(!b) return;
+  Object.keys(state).forEach(function(k){state[k]=false;});
   applyData(JSON.parse(b.data));
   localStorage.setItem(STORAGE_KEY, b.data);
-  applyFilter(); updateProgress();
+  syncAllParentVisuals(); applyFilter(); updateProgress();
   closeModal(); notify('Checklist restored!');
 }
 
-function deleteBak(id) {
-  setBaks(getBaks().filter(function(x){ return x.id!==id; }));
-  showBackupModal();
-}
+function deleteBak(id) { setBaks(getBaks().filter(function(x){return x.id!==id;})); showBackupModal(); }
 
 function exportBak(id) {
   var raw, name;
-  if (id) {
-    var b = getBaks().find(function(x){ return x.id===id; }); if (!b) return;
-    raw = b.data; name = b.name;
-  } else {
-    raw = JSON.stringify(buildPayload(), null, 2); name = 'sec54-export';
-  }
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([raw],{type:'application/json'}));
-  a.download = name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json';
-  a.click();
+  if (id) { var b=getBaks().find(function(x){return x.id===id;}); if(!b)return; raw=b.data; name=b.name; }
+  else { raw=JSON.stringify(buildPayload(),null,2); name=STORAGE_KEY+'-export'; }
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([raw],{type:'application/json'}));
+  a.download=name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json'; a.click();
 }
 
 function importBak() {
-  var inp = document.createElement('input'); inp.type='file'; inp.accept='.json';
-  inp.onchange = function(e) {
-    var f = e.target.files[0]; if (!f) return;
-    var r = new FileReader();
-    r.onload = function(ev) {
-      try {
-        var d = JSON.parse(ev.target.result);
-        if (!d.checked) throw new Error('Invalid');
-        showImportConfirm(d);
-      } catch(err) { showModalBanner('error','Invalid file — not a recognised checklist backup.'); }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
+  inp.onchange=function(e){
+    var f=e.target.files[0]; if(!f)return;
+    var r=new FileReader();
+    r.onload=function(ev){
+      try{ var d=JSON.parse(ev.target.result); if(!d.checked)throw new Error(); showImportConfirm(d); }
+      catch(err){ showModalBanner('error','Invalid file — not a recognised checklist backup.'); }
     };
     r.readAsText(f);
   };
@@ -540,50 +664,46 @@ function importBak() {
 }
 
 function doImportBak(data) {
-  Object.keys(state).forEach(function(k){ state[k]=false; });
-  applyData(data);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  applyFilter(); updateProgress();
+  Object.keys(state).forEach(function(k){state[k]=false;});
+  applyData(data); localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+  syncAllParentVisuals(); applyFilter(); updateProgress();
   closeModal(); notify('Import successful!');
 }
 
 
-// =============================================================================
-// MODAL ENGINE
-// =============================================================================
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+function closeModal() { document.getElementById('modal-root').innerHTML=''; }
 
 function setModal(html, onReady) {
-  var root = document.getElementById('modal-root'); root.innerHTML = '';
-  var ov = document.createElement('div'); ov.className = 'overlay'; ov.onclick = closeModal;
-  var m = document.createElement('div'); m.className = 'modal';
-  m.onclick = function(e){ e.stopPropagation(); };
-  m.innerHTML = html; ov.appendChild(m); root.appendChild(ov);
-  if (onReady) setTimeout(onReady, 10);
+  var root=document.getElementById('modal-root'); root.innerHTML='';
+  var ov=document.createElement('div'); ov.className='overlay'; ov.onclick=closeModal;
+  var m=document.createElement('div'); m.className='modal';
+  m.onclick=function(e){e.stopPropagation();}; m.innerHTML=html;
+  ov.appendChild(m); root.appendChild(ov);
+  if(onReady) setTimeout(onReady,10);
 }
 
-function showModalBanner(type, message) {
-  var existing = document.getElementById('modal-banner'); if (existing) existing.remove();
-  var m = document.querySelector('#modal-root .modal'); if (!m) return;
-  var colors = { warn:{bg:'rgba(245,158,11,.13)',bd:'rgba(245,158,11,.4)',txt:'#b07d1a'}, error:{bg:'rgba(200,50,50,.10)',bd:'rgba(200,50,50,.30)',txt:'#b83232'}, success:{bg:'rgba(45,158,107,.10)',bd:'rgba(45,158,107,.30)',txt:'#2d9e6b'} };
-  var c = colors[type]||colors.warn;
-  var b = document.createElement('div'); b.id='modal-banner';
+function showModalBanner(type,message){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
+  var colors={warn:{bg:'rgba(245,158,11,.13)',bd:'rgba(245,158,11,.4)',txt:'#b07d1a'},error:{bg:'rgba(200,50,50,.10)',bd:'rgba(200,50,50,.30)',txt:'#b83232'},success:{bg:'rgba(45,158,107,.10)',bd:'rgba(45,158,107,.30)',txt:'#2d9e6b'}};
+  var c=colors[type]||colors.warn;
+  var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:'+c.bg+';border:1px solid '+c.bd+';border-radius:10px;padding:11px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:'+c.txt;
   b.textContent=message; m.insertBefore(b,m.firstChild); m.scrollTop=0;
 }
 
-function showRestoreConfirm(id, bakName) {
-  var existing=document.getElementById('modal-banner'); if(existing) existing.remove();
-  var m=document.querySelector('#modal-root .modal'); if(!m) return;
+function showRestoreConfirm(id,bakName){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
   var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:12px 14px;margin-bottom:16px';
   b.innerHTML='<div style="font-weight:700;font-size:13px;color:#b07d1a;margin-bottom:4px">Restore "'+esc(bakName)+'"?</div><div style="font-size:12px;color:var(--txt-m);margin-bottom:10px">Your current state will be replaced. This cannot be undone.</div><div style="display:flex;gap:8px"><button onclick="doRestoreBak(\''+id+'\')" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:#2d9e6b;color:#fff;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Restore</button><button onclick="document.getElementById(\'modal-banner\').remove()" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:var(--surf3);color:var(--txt-m);font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button></div>';
   m.insertBefore(b,m.firstChild); m.scrollTop=0;
 }
 
-function showImportConfirm(data) {
-  var existing=document.getElementById('modal-banner'); if(existing) existing.remove();
-  var m=document.querySelector('#modal-root .modal'); if(!m) return;
+function showImportConfirm(data){
+  var existing=document.getElementById('modal-banner'); if(existing)existing.remove();
+  var m=document.querySelector('#modal-root .modal'); if(!m)return;
   var b=document.createElement('div'); b.id='modal-banner';
   b.style.cssText='background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:12px 14px;margin-bottom:16px';
   b.innerHTML='<div style="font-weight:700;font-size:13px;color:#b07d1a;margin-bottom:4px">Import this file?</div><div style="font-size:12px;color:var(--txt-m);margin-bottom:10px">Your current state will be replaced.</div><div style="display:flex;gap:8px"><button id="import-yes" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:#2d9e6b;color:#fff;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Yes, Import</button><button onclick="document.getElementById(\'modal-banner\').remove()" style="flex:1;border:none;border-radius:7px;padding:7px 0;background:var(--surf3);color:var(--txt-m);font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button></div>';
@@ -596,9 +716,8 @@ function showBackupModal() {
   var bakHtml=baks.length===0
     ?'<div style="color:var(--txt-dd);font-size:13px;padding:16px 0 8px;font-style:italic">No snapshots yet.</div>'
     :baks.map(function(b){
-      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;·&nbsp; '+b.checked+'/'+b.total+' items checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
+      return '<div class="bak-item"><div style="flex:1"><div class="bak-name">'+esc(b.name)+'</div><div class="bak-date">'+new Date(b.ts).toLocaleString()+' &nbsp;&middot;&nbsp; '+b.checked+'/'+b.total+' states checked</div></div><div class="bak-actions"><button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(45,158,107,.15);color:#2d9e6b">Restore</button><button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button><button onclick="deleteBak(\''+b.id+'\')" style="background:rgba(184,50,50,.1);color:#b83232">Delete</button></div></div>';
     }).join('');
-
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div style="font-size:17px;font-weight:800;color:var(--txt-b)">Backup & Restore</div><button class="mbtn mbtn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">&#x2715;</button></div>'+
     '<div style="background:rgba(45,158,107,.08);border:1px solid rgba(45,158,107,.2);border-radius:10px;padding:11px 14px;margin-bottom:20px;font-size:13px;color:var(--green)">Auto-save is ON — every change saves to this browser automatically.</div>'+
@@ -614,18 +733,12 @@ function showBackupModal() {
 }
 
 
-// =============================================================================
-// TOAST
-// =============================================================================
 function notify(msg) {
   var el=document.getElementById('notif'); el.textContent=msg; el.classList.add('show');
   setTimeout(function(){ el.classList.remove('show'); }, 2600);
 }
 
 
-// =============================================================================
-// EXPORT
-// =============================================================================
 function fmtTimestamp() {
   return 'Exported '+new Date().toLocaleString([],{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
@@ -648,37 +761,30 @@ async function exportPNG() {
         mainEl.style.maxWidth='100%'; mainEl.style.marginTop='18px'; mainEl.style.padding='0 30px';
         ['toolbar','saved-row'].forEach(function(cls){ var el=doc.querySelector('.'+cls); if(el) el.style.display='none'; });
         var banner=doc.getElementById('completeBanner'); if(banner) banner.style.display='none';
-        doc.querySelectorAll('.section').forEach(function(s){ s.classList.remove('collapsed'); var iw=s.querySelector('.section-items'); if(iw) iw.style.maxHeight='5000px'; });
-        doc.querySelectorAll('.item').forEach(function(el){ el.style.display='flex'; });
+        doc.querySelectorAll('.section').forEach(function(s){ s.classList.remove('collapsed'); var iw=s.querySelector('.section-items'); if(iw) iw.style.maxHeight='99999px'; });
+        doc.querySelectorAll('.item,.item-group').forEach(function(el){ el.style.display=el.classList.contains('item-group')?'block':'flex'; });
         var empty=doc.getElementById('emptyState'); if(empty) empty.style.display='none';
         var sep=doc.getElementById('titleSep'), pt=doc.getElementById('projectTitle');
         if(sep && pt && !pt.textContent.trim()) sep.style.display='none';
       }
     });
-    var link=document.createElement('a'); link.download='Section54-ESPCP-BMP-Location-Details-Checklist.png'; link.href=canvas.toDataURL('image/png'); link.click();
+    var link=document.createElement('a'); link.download=EXPORT_FILENAME; link.href=canvas.toDataURL('image/png'); link.click();
   } catch(e){ alert('PNG export failed.'); console.error(e); }
   finally { overlay.classList.remove('visible'); }
 }
 
 function printPDF() {
   var ts=document.getElementById('exportTimestamp'); ts.textContent=fmtTimestamp();
-  window.print();
-  setTimeout(function(){ ts.textContent=''; }, 2000);
+  window.print(); setTimeout(function(){ ts.textContent=''; }, 2000);
 }
 
 
-// =============================================================================
-// KEYBOARD SHORTCUTS
-// =============================================================================
 document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); createBak('Quick Save '+new Date().toLocaleTimeString()); }
   if (e.key==='Escape') closeModal();
 });
 
 
-// =============================================================================
-// INIT
-// =============================================================================
 buildChecklist();
 loadSaved();
 </script>
