@@ -418,6 +418,8 @@ var THEMES=[
 var curTheme='midnight';
 var _previewTheme=null,_revertTimer=null;
 function isLight(){return!THEMES.find(function(t){return t.id===curTheme;})?.dark;}
+function isLightTheme(id){return!THEMES.find(function(t){return t.id===id;})?.dark;}
+function syncColoredCards(themeId){var lt=isLightTheme(themeId);document.querySelectorAll('.card[data-color]').forEach(function(el){el.style.background=hexToRgba(el.dataset.color,lt?.09:.13);});}
 
 function applyTheme(id,permanent){
   if(permanent===undefined)permanent=true;
@@ -434,8 +436,8 @@ function renderThemeGrid(){
     div.className='tswatch'+(curTheme===t.id?' active':'');
     div.dataset.tid=t.id;div.title=t.name;
     div.innerHTML='<div class="tswatch-inner"><div class="tswatch-ribbon" style="background:'+t.bar+'"></div><div class="tswatch-bg-fill" style="background:'+t.bg+'"></div><div class="tswatch-emoji">'+t.emoji+'</div></div><div class="tswatch-name">'+t.name+'</div>';
-    div.addEventListener('mouseenter',function(){clearTimeout(_revertTimer);_previewTheme=t.id;document.documentElement.setAttribute('data-theme',t.id);document.querySelectorAll('#theme-grid .tswatch').forEach(function(el){el.classList.toggle('active',el===div);});});
-    div.addEventListener('mouseleave',function(){_revertTimer=setTimeout(function(){_previewTheme=null;document.documentElement.setAttribute('data-theme',curTheme);document.querySelectorAll('#theme-grid .tswatch').forEach(function(el){el.classList.toggle('active',el.dataset.tid===curTheme);});},80);});
+    div.addEventListener('mouseenter',function(){clearTimeout(_revertTimer);_previewTheme=t.id;document.documentElement.setAttribute('data-theme',t.id);syncColoredCards(t.id);document.querySelectorAll('#theme-grid .tswatch').forEach(function(el){el.classList.toggle('active',el===div);});});
+    div.addEventListener('mouseleave',function(){_revertTimer=setTimeout(function(){_previewTheme=null;document.documentElement.setAttribute('data-theme',curTheme);syncColoredCards(curTheme);document.querySelectorAll('#theme-grid .tswatch').forEach(function(el){el.classList.toggle('active',el.dataset.tid===curTheme);});},80);});
     div.addEventListener('click',function(e){e.stopPropagation();clearTimeout(_revertTimer);_previewTheme=null;applyTheme(t.id,true);closeThemePanel();});
     return div;
   }
@@ -1282,7 +1284,7 @@ function mkArchiveCard(card,showRestore){
   div.className='card';
   div.style.borderLeftColor=borderColor;
   div.style.cursor='default';
-  if(card.color)div.style.background=hexToRgba(card.color,light?.09:.13);
+  if(card.color){div.dataset.color=card.color;div.style.background=hexToRgba(card.color,light?.09:.13);}
   var h='<div class="card-title">'+esc(card.title)+'</div>';
   if(pct!==null){
     h+='<div class="prog-row"><span>Progress</span><span style="color:'+(pct===100?'#10b981':'var(--txt-m)')+'">'+pct+'%</span></div>'+
@@ -2014,7 +2016,7 @@ function mkCard(card,col,P,fillId){
   var dc=dueClass(card.due);
   var div=document.createElement('div');div.className='card';div.dataset.cid=card.id;
   div.style.borderLeftColor=borderColor;
-  if(card.color)div.style.background=hexToRgba(card.color,isLight()?.09:.13);
+  if(card.color){div.dataset.color=card.color;div.style.background=hexToRgba(card.color,isLight()?.09:.13);}
   if(card.id===fillId)div.classList.add('anim-card-fill');
   else if(card.id===newCardId)div.classList.add('anim-card-new');
   else if(card.id===settleCardId)div.classList.add('anim-card-settle');
