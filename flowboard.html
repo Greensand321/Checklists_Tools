@@ -466,7 +466,7 @@ function renderThemeGrid(){
   g.innerHTML='';
   var dkSec=document.createElement('div');dkSec.className='tp-sec';dkSec.textContent='Dark';g.appendChild(dkSec);
   dk.forEach(function(t){g.appendChild(swatch(t));});
-  var ltSec=document.createElement('div');ltSec.className='tp-sec';ltSec.textContent='Light · Apple-Inspired';g.appendChild(ltSec);
+  var ltSec=document.createElement('div');ltSec.className='tp-sec';ltSec.textContent='Light \u00B7 Apple-Inspired';g.appendChild(ltSec);
   lt.forEach(function(t){g.appendChild(swatch(t));});
 }
 function toggleThemePanel(){
@@ -1345,7 +1345,7 @@ function mkArchivePanel(col,isFullyArchived){
     var rb=document.createElement('button');rb.className='icon-btn';rb.title='Restore column';rb.textContent='↩';
     rb.style.cssText='font-size:13px;color:#60a5fa';
     rb.onclick=function(e){e.stopPropagation();restoreCol(col.id);};hdr.appendChild(rb);
-    var xb=document.createElement('button');xb.className='icon-btn';xb.title='Permanently delete column';xb.textContent='×';
+    var xb=document.createElement('button');xb.className='icon-btn';xb.title='Permanently delete column';xb.textContent='\u00D7';
     xb.style.cssText='font-size:15px;color:rgba(244,63,94,.6)';
     xb.onclick=function(e){e.stopPropagation();deleteArchivedCol(col.id);};hdr.appendChild(xb);
   }else{
@@ -1603,7 +1603,7 @@ function mkChkHtml(colId){
       '<span class="chk-handle">⠿</span>'+
       '<div class="checkbox '+(done?'on':'')+'" onclick="toggleCMItem('+i+',\''+colId+'\')">'+(done?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'')+' </div>'+
       '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" onmouseenter="showTip(event,\''+escA(it)+'\')" onmouseleave="hideTip()" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
-      '<span onclick="removeCMItem('+i+',\''+colId+'\')" style="color:var(--txt-dd);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0">×</span>'+
+      '<span onclick="removeCMItem('+i+',\''+colId+'\')" style="color:var(--txt-dd);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0">&times;</span>'+
       '</div>';
   }).join('');
 }
@@ -1839,7 +1839,7 @@ function render(){
   board.innerHTML='';
   var activeCols=S.cols.filter(function(c){return !c.archived;});
   var tc=activeCols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
-  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' · '+activeCols.length+' cols · '+tc+' cards';
+  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' \u00B7 '+activeCols.length+' cols \u00B7 '+tc+' cards';
   S.groups.forEach(function(g){board.appendChild(mkGroup(g,activeCols.filter(function(c){return c.gid===g.id;}),q,false));});
   var ug=activeCols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
   if(ug.length)board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},ug,q,true));
@@ -1886,7 +1886,7 @@ function mkGroup(g,gcols,q,fake){
     PAL.forEach(function(p,i){var d=document.createElement('div');d.className='cdot'+(g.pi===i?' on':'');d.style.background=p.a;d.title=p.n;d.onclick=function(){setGroupPi(g.id,i);};picker.appendChild(d);});
     pp.appendChild(picker);hdr.appendChild(pp);
     var ac=document.createElement('button');ac.className='icon-btn';ac.title='Add column';ac.textContent='+';ac.style.fontSize='19px';ac.onclick=function(){showAddColModal(g.id);};hdr.appendChild(ac);
-    var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='×';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
+    var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='\u00D7';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
   }
   wrap.appendChild(hdr);
   if(!g.col){
@@ -1971,7 +1971,7 @@ function mkCol(col,q){
   var ab=document.createElement('button');ab.className='icon-btn';ab.title='Archive column';ab.textContent='⊡';
   ab.style.cssText='font-size:13px;color:'+(light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)');
   ab.onclick=function(e){e.stopPropagation();archiveCol(col.id);};hdr.appendChild(ab);
-  var db=document.createElement('button');db.className='icon-btn';db.textContent='×';db.title='Delete column';
+  var db=document.createElement('button');db.className='icon-btn';db.textContent='\u00D7';db.title='Delete column';
   db.style.color=light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)';db.onclick=function(){delCol(col.id);};hdr.appendChild(db);
   wrap.appendChild(hdr);
   var body=document.createElement('div');body.className='col-body';body.dataset.pi=col.pi%PAL.length;body.style.background=bodyBg;body.style.borderColor=bodyBd;body.id='cb_'+col.id;
@@ -2242,7 +2242,7 @@ function renderCM(colId){
 
   var chkHtml=mkChkHtml(colId);
   var chkControls=mkChkControls(colId);
-  var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">×</span></span>';}).join('');
+  var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">&times;</span></span>';}).join('');
 
   var dueLabelHtml='';
   if(dc){
@@ -2340,7 +2340,7 @@ function addCMTag(cid){
   var container=document.getElementById('cm-tags');
   if(container){
     var chip=document.createElement('span');chip.className='tag-chip';
-    chip.innerHTML=esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+cid+'\')">×</span>';
+    chip.innerHTML=esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+cid+'\')">&times;</span>';
     container.appendChild(chip);
     var badge=document.getElementById('cm-tags-badge');
     if(badge)badge.textContent=EC.tags.length;
@@ -2425,7 +2425,7 @@ function showBackupModal(){
       return '<div class="auto-bak-item">'+
         '<div style="flex:1">'+
           '<div class="bak-name" style="cursor:default">'+esc(b.name)+'</div>'+
-          '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' · '+b.cards+' card'+(b.cards!==1?'s':'')+' · '+triggerBadge(b.trigger)+'</div>'+
+          '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' &middot; '+b.cards+' card'+(b.cards!==1?'s':'')+' &middot; '+triggerBadge(b.trigger)+'</div>'+
         '</div>'+
         '<div class="bak-actions">'+
           '<button onclick="restoreAutoBak(\''+b.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
@@ -2438,7 +2438,7 @@ function showBackupModal(){
     :baks.map(function(b){
       return '<div class="bak-item">'+
         '<div style="flex:1"><div id="bakname_'+b.id+'" class="bak-name" ondblclick="renameBak(\''+b.id+'\')" title="Double-click to rename">'+esc(b.name)+'</div>'+
-        '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' · '+b.cards+' card'+(b.cards!==1?'s':'')+'</div></div>'+
+        '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' &middot; '+b.cards+' card'+(b.cards!==1?'s':'')+'</div></div>'+
         '<div class="bak-actions">'+
           '<button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
           '<button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button>'+
@@ -2449,7 +2449,7 @@ function showBackupModal(){
   var ul=_undoStack.length,rl=_redoStack.length;
   var undoBar='<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:18px;font-size:12px;color:var(--txt-m)">'+
     '<span style="flex:1">↩ <strong style="color:var(--txt)">'+ul+'</strong> undo step'+(ul!==1?'s':'')+' in memory'+
-    (rl>0?' &nbsp;·&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
+    (rl>0?' &nbsp;&middot;&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
     (ul>0?'<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="doUndo();showBackupModal()">↩ Undo</button>':'')+'</div>';
 
   setModal(
