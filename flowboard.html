@@ -924,14 +924,54 @@ function showKeysModal(){
 }
 function newKeyBtn(){
   var key=generateKey();
+  var label='Board '+(getKeys().length+1);
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(480,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:22px">'+
+      '<div style="font-size:30px;margin-bottom:9px">✨</div>'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:6px">New Board</div>'+
+      '<div style="font-size:13px;color:var(--txt-m)">How would you like to start?</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',true)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">🌱</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Start Fresh</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Begin with the default demo layout — columns, cards and all</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',false)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">📋</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Copy Current Board</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Duplicate all your existing columns and cards into the new board</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:flex-end">'+
+      '<button class="btn btn-ghost" onclick="forceCloseModal();window._keysModalRender&&window._keysModalRender()">Cancel</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+function confirmNewBoard(key,label,startFresh){
+  forceCloseModal();
   var keys=getKeys();
-  var label='Board '+(keys.length+1);
   keys.push({key:key,label:label,lastUsed:Date.now()});
   setKeys(keys);
-  if(S.prefs)S.prefs.boardName=label;
+  if(startFresh){
+    S=defaultState();
+    S.prefs.boardName=label;
+    // boardId already set by defaultState() via uid()
+  }else{
+    _pushUndo();
+    S.boardId=uid(); // new board identity even though content is copied
+    if(S.prefs)S.prefs.boardName=label;
+  }
+  save();render();
   connectToKey(key);
   window._keysModalRender&&window._keysModalRender();
-  notify('✅ New board created and connected!');
+  notify('✅ New board created — '+(startFresh?'fresh layout loaded!':'current board copied!'));
 }
 function joinKeyBtn(){
   var input=document.getElementById('key-input');
