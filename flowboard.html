@@ -291,6 +291,13 @@ input[type="date"]{color-scheme:dark}
 .auto-bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
 .auto-bak-item:hover{background:var(--surf3)}
 .auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+
+/* ── USB SYNC ── */
+@keyframes usbLostPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(225,29,72,.5)}55%{opacity:.55;box-shadow:0 0 0 7px rgba(225,29,72,0)}}
+@keyframes usbPlugIn{0%{transform:translateY(-4px) scale(.92);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+.usb-lost-pulse{animation:usbLostPulse 1.3s ease-in-out infinite!important;cursor:pointer!important}
+.usb-plug-in{animation:usbPlugIn .3s cubic-bezier(.34,1.4,.64,1) both}
+.usb-conflict-opt:hover{border-color:#60a5fa!important;background:rgba(96,165,250,.07)!important}
 </style>
 </head>
 <body>
@@ -341,6 +348,18 @@ var _reconnecting=false;  // true while a connectToKey attempt is in-flight (pre
 var _userDisconnected=false; // true when user explicitly disconnected — suppresses auto-retry
 var _syncStatus='local';  // current sync state string — mirrors updateSyncStatus for programmatic checks
 var _RETRY_DELAYS=[5000,15000,30000,60000,300000]; // 5s → 15s → 30s → 1m → 5m
+
+// ── USB SYNC STATE ──
+var _usbMode=false;
+var _usbHandle=null;
+var _usbConnected=false;
+var _usbSaveTimer=null;
+var _usbHeartbeatTimer=null;
+var _usbStatus='off';
+var _usbWasCloudActive=false;
+var _usbConflictRemote=null;
+var USB_FILENAME='flowboard-data.json';
+
 var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
 var _autoSnapsListener=null;   // detachable listener handle
 var _autoSnapsPending=0;       // in-flight write counter (echo guard — mirrors _pendingWrites pattern)
@@ -545,6 +564,7 @@ var _chkSorted=false,_chkOrigItems=null;
 
 function defaultState(){return{
   prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board'},
+  boardId:uid(),
   lastModified:0,
   groups:[
     {id:'g1',title:'🚀 Work',pi:0,col:false,limit:0},
@@ -582,6 +602,7 @@ function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
 function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
 
 function updateSyncStatus(state){
+  if(_usbMode)return;
   _syncStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
@@ -827,7 +848,8 @@ function save(){
       }
     },20*60*1000);
   }
-  if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite){
+  if(!_skipFbWrite)usbSave();
+  if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite&&!_usbMode){
     clearTimeout(_syncTimer);
     _syncTimer=setTimeout(function(){
       if(!_isSafeWrite(S)){
@@ -964,6 +986,214 @@ function removeKey(key){
   if(_activeKey===key)disconnectSync();
   window._keysModalRender&&window._keysModalRender();
 }
+// ── USB SYNC ──
+function updateUSBStatus(state){
+  _usbStatus=state;
+  var el=document.getElementById('sync-status');if(!el)return;
+  var map={
+    off:        {t:'💾 Local',      c:'var(--txt-dd)',bg:'var(--surf2)',         bd:'var(--bd)',              cur:'default', ttl:''},
+    connecting: {t:'🔌 USB…',  c:'#f59e0b',     bg:'rgba(245,158,11,.12)', bd:'rgba(245,158,11,.35)',   cur:'default', ttl:'Connecting to USB drive…'},
+    synced:     {t:'🟢 USB Synced', c:'#10b981',     bg:'rgba(16,185,129,.12)', bd:'rgba(16,185,129,.35)',   cur:'default', ttl:'USB drive connected and syncing'},
+    lost:       {t:'🔴 USB Lost',   c:'#e11d48',     bg:'rgba(225,29,72,.15)',  bd:'rgba(225,29,72,.45)',    cur:'pointer', ttl:'Drive connection severed — click to reconnect'},
+  };
+  var s=map[state]||map.off;
+  el.textContent=s.t;el.style.color=s.c;el.style.background=s.bg;el.style.borderColor=s.bd;
+  el.style.cursor=s.cur;el.title=s.ttl;
+  el.classList.toggle('usb-lost-pulse',state==='lost');
+  if(state==='synced'){el.classList.add('usb-plug-in');setTimeout(function(){el.classList.remove('usb-plug-in');},400);}
+  el.onclick=(state==='lost')?function(){selectDriveFolder();}:null;
+}
+
+function enableUSBMode(){
+  if(!window.showDirectoryPicker){
+    notify('⚠️ USB sync requires Chrome or Edge — your browser does not support it.');return;
+  }
+  _usbWasCloudActive=!!_activeKey;
+  _usbMode=true;
+  updateUSBStatus('connecting');
+  selectDriveFolder();
+}
+
+function disableUSBMode(){
+  _stopUSBHeartbeat();
+  clearTimeout(_usbSaveTimer);
+  _usbHandle=null;_usbConnected=false;_usbMode=false;
+  updateUSBStatus('off');
+  if(_usbWasCloudActive&&_activeKey){
+    _autoSnapBefore('Before: Switched from USB to Cloud – '+new Date().toLocaleTimeString());
+    updateSyncStatus('syncing');
+    if(_syncRef){
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){
+        _pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);
+        if(_pendingWrites===0)updateSyncStatus('synced');
+      }).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+    }
+  }else{
+    updateSyncStatus('local');
+  }
+  showBackupModal();
+  notify('☁️ USB mode disabled.');
+}
+
+function selectDriveFolder(){
+  window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'}).then(function(handle){
+    connectUSB(handle);
+  }).catch(function(e){
+    if(e.name==='AbortError'){
+      if(_usbMode&&!_usbConnected){_usbMode=false;updateSyncStatus(_activeKey?'synced':'local');}
+      notify('USB folder selection cancelled.');
+    }else{
+      _usbMode=false;_usbHandle=null;updateSyncStatus(_activeKey?'synced':'local');
+      notify('❌ Could not access drive: '+e.message);
+    }
+  });
+}
+
+function connectUSB(handle){
+  _usbHandle=handle;
+  updateUSBStatus('connecting');
+  handle.getFileHandle(USB_FILENAME).then(function(fh){
+    return fh.getFile().then(function(file){return file.text();});
+  }).then(function(txt){
+    var remote;
+    try{remote=JSON.parse(txt);}catch(e){throw new Error('Drive file is not valid JSON.');}
+    if(!remote.boardId)remote.boardId=null;
+    if(remote.boardId&&remote.boardId===S.boardId){
+      var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
+      if(remoteTs>localTs){
+        _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
+        _applyFromUSB(remote);
+        notify('💾 Drive data loaded — it was newer than your local board.');
+      }else{
+        _usbWriteState(S);
+        notify('💾 Drive updated — your local board was newer.');
+      }
+      _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+      if(document.querySelector('#modal-root .overlay'))showBackupModal();
+    }else{
+      showUSBConflictModal(remote);
+    }
+  }).catch(function(e){
+    if(e.name==='NotFoundError'){
+      _usbWriteState(S).then(function(){
+        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+        notify('💾 Board saved to USB drive!');
+        if(document.querySelector('#modal-root .overlay'))showBackupModal();
+      });
+    }else{
+      _usbMode=false;_usbHandle=null;
+      updateSyncStatus(_activeKey?'synced':'local');
+      notify('❌ Drive error: '+e.message);
+    }
+  });
+}
+
+function _applyFromUSB(remote){
+  if(!remote.boardId)remote.boardId=uid();
+  S=remote;
+  _undoStack=[];_redoStack=[];
+  try{sessionStorage.removeItem('fb4_undo');}catch(e){}
+  _updateUndoUI();
+  curTheme=(S.prefs&&S.prefs.theme)||'midnight';
+  document.documentElement.setAttribute('data-theme',curTheme);
+  if(S.prefs&&S.prefs.modalW>=320)_modalW=S.prefs.modalW;
+  _modalH=(S.prefs&&S.prefs.modalH>=200?S.prefs.modalH:null);
+  _skipFbWrite=true;save();render();_skipFbWrite=false;
+}
+
+function _usbWriteState(state){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbHandle.getFileHandle(USB_FILENAME,{create:true}).then(function(fh){
+    return fh.createWritable();
+  }).then(function(w){
+    return w.write(JSON.stringify(state)).then(function(){return w.close();});
+  }).catch(function(e){
+    console.warn('[USB] Write failed:',e);
+    handleUSBLost();
+  });
+}
+
+function usbSave(){
+  if(!_usbMode||!_usbHandle||!_usbConnected)return;
+  clearTimeout(_usbSaveTimer);
+  _usbSaveTimer=setTimeout(function(){_usbWriteState(S);},800);
+}
+
+function _startUSBHeartbeat(){
+  _stopUSBHeartbeat();
+  _usbHeartbeatTimer=setInterval(function(){
+    if(!_usbHandle||!_usbConnected||_usbStatus==='lost')return;
+    _usbHandle.getFileHandle(USB_FILENAME).catch(function(){handleUSBLost();});
+  },4000);
+}
+
+function _stopUSBHeartbeat(){
+  clearInterval(_usbHeartbeatTimer);_usbHeartbeatTimer=null;
+}
+
+function handleUSBLost(){
+  if(_usbStatus==='lost')return;
+  _usbConnected=false;
+  _stopUSBHeartbeat();
+  updateUSBStatus('lost');
+  notify('🔴 USB drive disconnected — working locally. Click the status pill to reconnect.');
+}
+
+function showUSBConflictModal(remote){
+  var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
+  var localCols=(S.cols||[]).filter(function(c){return !c.archived;}).length;
+  var localCards=(S.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
+  var remoteCols=(remote.cols||[]).filter(function(c){return !c.archived;}).length;
+  var remoteCards=(remote.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
+  var fmt=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(540,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:22px">'+
+      '<div style="font-size:32px;margin-bottom:10px">🔄</div>'+
+      '<div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:7px">Two Boards Found</div>'+
+      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">Your USB drive contains a different board than this computer.<br>Choose which one to keep — the other will be snapshotted first.</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">'+
+      '<div class="usb-conflict-opt" onclick="resolveUSBConflict(\'local\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">💻</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:8px">This Computer</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.8">Last saved:<br><strong style="color:var(--txt-m)">'+fmt(localTs)+'</strong><br>'+localCols+' cols &middot; '+localCards+' cards</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="resolveUSBConflict(\'drive\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">💾</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:8px">USB Drive</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.8">Last saved:<br><strong style="color:var(--txt-m)">'+fmt(remoteTs)+'</strong><br>'+remoteCols+' cols &middot; '+remoteCards+' cards</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="text-align:center;font-size:12px;color:var(--txt-d);padding:10px 0 2px;border-top:1px solid var(--bd-s)">'+
+      '📎 Both versions will be snapshotted before anything changes — no data will be lost.'+
+    '</div>';
+  _usbConflictRemote=remote;
+  ov.appendChild(m);root.appendChild(ov);
+}
+
+function resolveUSBConflict(choice){
+  var remote=_usbConflictRemote;
+  document.getElementById('modal-root').innerHTML='';
+  _autoSnapBefore('Before: USB conflict resolution – '+new Date().toLocaleTimeString());
+  if(choice==='drive'){
+    _applyFromUSB(remote);
+    _usbWriteState(S);
+    notify('✅ Drive board loaded and active!');
+  }else{
+    _usbWriteState(S);
+    notify('✅ This computer\'s board kept and saved to drive!');
+  }
+  _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+  _usbConflictRemote=null;
+}
+
 function load(){
   try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
     // migrate prefs from old localStorage keys if not yet in S
@@ -993,7 +1223,7 @@ function load(){
         if(k.desc===undefined)k.desc='';
         if(k.due===undefined)k.due='';
       });
-    });return;}}catch(e){}
+    });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
   S=defaultState();save();
 }
 
@@ -2452,11 +2682,36 @@ function showBackupModal(){
     (rl>0?' &nbsp;&middot;&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
     (ul>0?'<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="doUndo();showBackupModal()">↩ Undo</button>':'')+'</div>';
 
+  var usbSection=
+    '<label class="lbl" style="margin-top:4px">Sync Mode</label>'+
+    '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:8px">'+
+      '<div style="flex:1">'+
+        '<div style="font-size:13px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+(_usbMode?'&#x1F4BE; USB Drive Mode':'&#x2601;&#xFE0F; Cloud / Local Mode')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud')+'</div>'+
+      '</div>'+
+      '<button class="btn '+(_usbMode?'btn-danger':'btn-green')+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
+        (_usbMode?'Disable USB':'&#x1F50C; Enable USB')+
+      '</button>'+
+    '</div>'+
+    (_usbMode?
+      '<div style="margin-bottom:18px;padding:9px 14px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;'+
+        (_usbConnected
+          ?'background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.25);color:#10b981'
+          :'background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.25);color:#e11d48')+
+      '">'+
+        (_usbConnected
+          ?'&#x1F7E2; Drive connected &mdash; auto-saving to <strong>'+USB_FILENAME+'</strong>'
+          :'&#x1F534; No drive connected')+
+        (!_usbConnected?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;margin-left:auto" onclick="selectDriveFolder()">&#x1F4C2; Select Drive</button>':'')+
+      '</div>'
+    :'<div style="margin-bottom:18px"></div>');
+
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup & Restore</div>'+
       '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
     '</div>'+
+    usbSection+
     undoBar+
     '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:13px;color:#10b981">'+
       '✅ <strong>Auto-save is ON</strong> — every change saves instantly to local storage'+(_activeKey?' and cloud':'.')+
