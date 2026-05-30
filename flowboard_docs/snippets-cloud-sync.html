@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cloud Sync Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Cloud Sync Snippets</h1><p class="lede">Optional Firebase-style sync patterns: status, board keys, debounced writes, and safety checks.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Sync Status</h2><pre><code>var sync = { status: 'local', key: '', ref: null, timer: null };
+
+function setSyncStatus(status) {
+  sync.status = status; // local | syncing | synced | error | offline
+  var el = document.getElementById('sync-status');
+  if (el) el.textContent = status;
+}</code></pre></section><section class="card"><h2>Board Key Helpers</h2><pre><code>function newBoardKey() {
+  var parts = [];
+  for (var i = 0; i < 5; i++) parts.push(Math.random().toString(16).slice(2, 6));
+  return parts.join('-');
+}
+
+function saveActiveKey(key) {
+  localStorage.setItem('fb4_active_key', key);
+  sync.key = key;
+}</code></pre></section><section class="card"><h2>Debounced Remote Write</h2><pre><code>function queueRemoteWrite() {
+  if (!sync.ref || sync.status === 'local') return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(function() {
+    if (!isSafeRemoteWrite(S)) return;
+    setSyncStatus('syncing');
+    sync.ref.set(S).then(function() { setSyncStatus('synced'); })
+      .catch(function() { setSyncStatus('error'); });
+  }, 600);
+}</code></pre></section><section class="card"><h2>Safe Remote Write Guard</h2><pre><code>function isSafeRemoteWrite(next) {
+  if (!next || !Array.isArray(next.cols)) return false;
+  var cardCount = next.cols.reduce(function(n, c) { return n + (c.cards || []).length; }, 0);
+  if (S.cols.length && next.cols.length === 0) return false;
+  if (boardCounts().cards > 5 && cardCount === 0) return false;
+  return true;
+}</code></pre></section></main></body></html>
