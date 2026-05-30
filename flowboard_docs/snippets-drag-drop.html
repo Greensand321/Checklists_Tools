@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Drag & Drop Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Drag & Drop Snippets</h1><p class="lede">Pointer-based drag behavior for cards and columns, including ghosts, drop targets, and array movement.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Basic Pointer Drag Controller</h2><pre><code>var drag = null;
+
+function startDrag(e, data) {
+  drag = { data: data, startX: e.clientX, startY: e.clientY, active: false, ghost: null };
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', endDrag, { once: true });
+}
+
+function onDragMove(e) {
+  if (!drag) return;
+  var dx = e.clientX - drag.startX;
+  var dy = e.clientY - drag.startY;
+  if (!drag.active && Math.hypot(dx, dy) > 5) activateDrag(e);
+  if (drag.active) positionGhost(e);
+}</code></pre></section><section class="card"><h2>Ghost Element</h2><pre><code>function activateDrag(e) {
+  drag.active = true;
+  drag.ghost = drag.data.el.cloneNode(true);
+  drag.ghost.style.position = 'fixed';
+  drag.ghost.style.pointerEvents = 'none';
+  drag.ghost.style.opacity = '0.88';
+  drag.ghost.style.transform = 'rotate(2deg) scale(1.04)';
+  document.body.appendChild(drag.ghost);
+  positionGhost(e);
+}
+
+function positionGhost(e) {
+  drag.ghost.style.left = e.clientX + 12 + 'px';
+  drag.ghost.style.top = e.clientY + 12 + 'px';
+}</code></pre></section><section class="card"><h2>Detect Drop Target</h2><pre><code>function getDropTarget(x, y) {
+  if (drag.ghost) drag.ghost.style.display = 'none';
+  var el = document.elementFromPoint(x, y);
+  if (drag.ghost) drag.ghost.style.display = '';
+  return el ? el.closest('[data-drop-target]') : null;
+}</code></pre></section><section class="card"><h2>Move Item in Arrays</h2><pre><code>function moveBetweenArrays(source, target, itemId, targetIndex) {
+  var idx = source.findIndex(function(x) { return x.id === itemId; });
+  if (idx < 0) return;
+  var item = source.splice(idx, 1)[0];
+  target.splice(targetIndex, 0, item);
+}</code></pre></section></main></body></html>
