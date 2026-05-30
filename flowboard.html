@@ -357,8 +357,8 @@ var _usbSaveTimer=null;
 var _usbHeartbeatTimer=null;
 var _usbStatus='off';
 var _usbWasCloudActive=false;
-var _usbConflictRemote=null;
-var USB_FILENAME='flowboard-data.json';
+var USB_INDEX_FILENAME='flowboard-index.json';
+var _usbIndex=null;
 
 var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
 var _autoSnapsListener=null;   // detachable listener handle
@@ -924,14 +924,54 @@ function showKeysModal(){
 }
 function newKeyBtn(){
   var key=generateKey();
+  var label='Board '+(getKeys().length+1);
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(480,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:22px">'+
+      '<div style="font-size:30px;margin-bottom:9px">✨</div>'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:6px">New Board</div>'+
+      '<div style="font-size:13px;color:var(--txt-m)">How would you like to start?</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',true)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">🌱</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Start Fresh</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Begin with the default demo layout — columns, cards and all</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',false)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">📋</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Copy Current Board</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Duplicate all your existing columns and cards into the new board</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:flex-end">'+
+      '<button class="btn btn-ghost" onclick="forceCloseModal();window._keysModalRender&&window._keysModalRender()">Cancel</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+function confirmNewBoard(key,label,startFresh){
+  forceCloseModal();
   var keys=getKeys();
-  var label='Board '+(keys.length+1);
   keys.push({key:key,label:label,lastUsed:Date.now()});
   setKeys(keys);
-  if(S.prefs)S.prefs.boardName=label;
+  if(startFresh){
+    S=defaultState();
+    S.prefs.boardName=label;
+    // boardId already set by defaultState() via uid()
+  }else{
+    _pushUndo();
+    S.boardId=uid(); // new board identity even though content is copied
+    if(S.prefs)S.prefs.boardName=label;
+  }
+  save();render();
   connectToKey(key);
   window._keysModalRender&&window._keysModalRender();
-  notify('✅ New board created and connected!');
+  notify('✅ New board created — '+(startFresh?'fresh layout loaded!':'current board copied!'));
 }
 function joinKeyBtn(){
   var input=document.getElementById('key-input');
@@ -991,7 +1031,7 @@ function updateUSBStatus(state){
   _usbStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   var map={
-    off:        {t:'💾 Local',      c:'var(--txt-dd)',bg:'var(--surf2)',         bd:'var(--bd)',              cur:'default', ttl:''},
+    off:        {t:'\u{1F4BE} Local',      c:'var(--txt-dd)',bg:'var(--surf2)',         bd:'var(--bd)',              cur:'default', ttl:''},
     connecting: {t:'🔌 USB…',  c:'#f59e0b',     bg:'rgba(245,158,11,.12)', bd:'rgba(245,158,11,.35)',   cur:'default', ttl:'Connecting to USB drive…'},
     synced:     {t:'🟢 USB Synced', c:'#10b981',     bg:'rgba(16,185,129,.12)', bd:'rgba(16,185,129,.35)',   cur:'default', ttl:'USB drive connected and syncing'},
     lost:       {t:'🔴 USB Lost',   c:'#e11d48',     bg:'rgba(225,29,72,.15)',  bd:'rgba(225,29,72,.45)',    cur:'pointer', ttl:'Drive connection severed — click to reconnect'},
@@ -1017,7 +1057,7 @@ function enableUSBMode(){
 function disableUSBMode(){
   _stopUSBHeartbeat();
   clearTimeout(_usbSaveTimer);
-  _usbHandle=null;_usbConnected=false;_usbMode=false;
+  _usbHandle=null;_usbConnected=false;_usbMode=false;_usbIndex=null;
   updateUSBStatus('off');
   if(_usbWasCloudActive&&_activeKey){
     _autoSnapBefore('Before: Switched from USB to Cloud – '+new Date().toLocaleTimeString());
@@ -1050,42 +1090,197 @@ function selectDriveFolder(){
   });
 }
 
+function _usbBoardFilename(boardId){return 'board-'+boardId+'.json';}
+
+function _usbReadIndex(){
+  return _usbHandle.getFileHandle(USB_INDEX_FILENAME).then(function(fh){
+    return fh.getFile().then(function(f){return f.text();});
+  }).then(function(txt){
+    var idx=JSON.parse(txt);
+    return Array.isArray(idx)?idx:[];
+  });
+}
+
+function _usbWriteIndex(index){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbHandle.getFileHandle(USB_INDEX_FILENAME,{create:true}).then(function(fh){
+    return fh.createWritable();
+  }).then(function(w){
+    return w.write(JSON.stringify(index)).then(function(){return w.close();});
+  });
+}
+
+function _usbUpdateIndex(state){
+  var idx=_usbIndex||[];
+  var entry={boardId:state.boardId,name:(state.prefs&&state.prefs.boardName)||'Board',
+    lastModified:state.lastModified||0,
+    cards:(state.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)};
+  var found=false;
+  for(var i=0;i<idx.length;i++){if(idx[i].boardId===state.boardId){idx[i]=entry;found=true;break;}}
+  if(!found)idx.push(entry);
+  _usbIndex=idx;
+  return _usbWriteIndex(idx);
+}
+
+function _usbWriteBoard(state){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbHandle.getFileHandle(_usbBoardFilename(state.boardId),{create:true}).then(function(fh){
+    return fh.createWritable();
+  }).then(function(w){
+    return w.write(JSON.stringify(state)).then(function(){return w.close();});
+  }).catch(function(e){
+    console.warn('[USB] Write failed:',e);
+    handleUSBLost();
+  });
+}
+
+function _usbWriteState(state){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbWriteBoard(state).then(function(){return _usbUpdateIndex(state);}).catch(function(e){
+    console.warn('[USB] Write failed:',e);handleUSBLost();
+  });
+}
+
 function connectUSB(handle){
   _usbHandle=handle;
   updateUSBStatus('connecting');
-  handle.getFileHandle(USB_FILENAME).then(function(fh){
-    return fh.getFile().then(function(file){return file.text();});
-  }).then(function(txt){
-    var remote;
-    try{remote=JSON.parse(txt);}catch(e){throw new Error('Drive file is not valid JSON.');}
-    if(!remote.boardId)remote.boardId=null;
-    if(remote.boardId&&remote.boardId===S.boardId){
-      var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
-      if(remoteTs>localTs){
-        _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
-        _applyFromUSB(remote);
-        notify('💾 Drive data loaded — it was newer than your local board.');
-      }else{
-        _usbWriteState(S);
-        notify('💾 Drive updated — your local board was newer.');
-      }
-      _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
-      if(document.querySelector('#modal-root .overlay'))showBackupModal();
+  _usbReadIndex().then(function(index){
+    _usbIndex=index;
+    var entry=null;
+    for(var i=0;i<index.length;i++){if(index[i].boardId===S.boardId){entry=index[i];break;}}
+    if(entry){
+      return handle.getFileHandle(_usbBoardFilename(S.boardId)).then(function(fh){
+        return fh.getFile().then(function(f){return f.text();});
+      }).then(function(txt){
+        var remote=JSON.parse(txt);
+        var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
+        if(remoteTs>localTs){
+          _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
+          _applyFromUSB(remote);
+          notify('💾 Drive data loaded — it was newer than your local board.');
+        }else{
+          _usbWriteState(S);
+          notify('💾 Drive updated — your local board was newer.');
+        }
+        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+        if(document.querySelector('#modal-root .overlay'))showBackupModal();
+      });
     }else{
-      showUSBConflictModal(remote);
+      showUSBBoardPickerModal(index);
     }
   }).catch(function(e){
     if(e.name==='NotFoundError'){
-      _usbWriteState(S).then(function(){
-        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
-        notify('💾 Board saved to USB drive!');
-        if(document.querySelector('#modal-root .overlay'))showBackupModal();
+      handle.getFileHandle('flowboard-data.json').then(function(fh){
+        return fh.getFile().then(function(f){return f.text();});
+      }).then(function(txt){
+        var legacy=JSON.parse(txt);
+        if(!legacy.boardId)legacy.boardId=uid();
+        var idx=[{boardId:legacy.boardId,name:(legacy.prefs&&legacy.prefs.boardName)||'Board',
+          lastModified:legacy.lastModified||0,
+          cards:(legacy.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)}];
+        _usbIndex=idx;
+        return _usbWriteIndex(idx).then(function(){return _usbWriteBoard(legacy);}).then(function(){return legacy;});
+      }).then(function(legacy){
+        if(legacy.boardId===S.boardId){
+          var localTs=S.lastModified||0,remoteTs=legacy.lastModified||0;
+          if(remoteTs>localTs){
+            _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
+            _applyFromUSB(legacy);
+            notify('💾 Legacy drive data migrated — drive was newer.');
+          }else{
+            _usbWriteState(S);
+            notify('💾 Drive migrated to new format — your local board was newer.');
+          }
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+          if(document.querySelector('#modal-root .overlay'))showBackupModal();
+        }else{
+          showUSBBoardPickerModal(_usbIndex);
+        }
+      }).catch(function(le){
+        if(le.name==='NotFoundError'){
+          _usbWriteState(S).then(function(){
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            notify('💾 Board saved to USB drive!');
+            if(document.querySelector('#modal-root .overlay'))showBackupModal();
+          });
+        }else{
+          _usbMode=false;_usbHandle=null;
+          updateSyncStatus(_activeKey?'synced':'local');
+          notify('❌ Drive error: '+le.message);
+        }
       });
     }else{
       _usbMode=false;_usbHandle=null;
       updateSyncStatus(_activeKey?'synced':'local');
       notify('❌ Drive error: '+e.message);
     }
+  });
+}
+
+function showUSBBoardPickerModal(index){
+  var fmt=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(540,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  var boardCards='';
+  for(var i=0;i<index.length;i++){
+    var b=index[i];
+    boardCards+=
+      '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surf2);border:1px solid var(--bd);border-radius:12px;margin-bottom:10px">'+
+        '<div style="font-size:24px">💾</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-weight:700;font-size:13px;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(b.name||'Board')+'</div>'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-top:2px">'+fmt(b.lastModified)+' · '+(b.cards||0)+' cards</div>'+
+        '</div>'+
+        '<button class="btn btn-green" style="font-size:12px;white-space:nowrap" onclick="switchUSBBoard(\''+b.boardId+'\')">Load Board</button>'+
+      '</div>';
+  }
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:20px">'+
+      '<div style="font-size:32px;margin-bottom:10px">🔄</div>'+
+      '<div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:7px">Drive Boards</div>'+
+      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">Your current board is not on this drive.<br>Load a board from the drive, or add your current board to it.</div>'+
+    '</div>'+
+    (index.length?
+      '<div style="max-height:280px;overflow-y:auto;margin-bottom:16px">'+boardCards+'</div>':
+      '<div style="text-align:center;color:var(--txt-d);font-size:13px;margin-bottom:16px">No boards on this drive yet.</div>')+
+    '<div style="border-top:1px solid var(--bd-s);padding-top:14px;display:flex;gap:10px">'+
+      '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="document.getElementById(\'modal-root\').innerHTML=\'\';_usbMode=false;_usbHandle=null;_usbIndex=null;updateSyncStatus(_activeKey?\'synced\':\'local\')">Cancel</button>'+
+      '<button class="btn btn-green" style="flex:1;font-size:12px" onclick="addCurrentBoardToUSB()">➕ Add My Board to Drive</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+
+function switchUSBBoard(boardId){
+  var filename=_usbBoardFilename(boardId);
+  _autoSnapBefore('Before: Switched to USB board – '+new Date().toLocaleTimeString());
+  _usbWriteState(S).then(function(){
+    return _usbHandle.getFileHandle(filename).then(function(fh){
+      return fh.getFile().then(function(f){return f.text();});
+    });
+  }).then(function(txt){
+    var remote=JSON.parse(txt);
+    document.getElementById('modal-root').innerHTML='';
+    _applyFromUSB(remote);
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    notify('💾 Board loaded from USB drive!');
+    if(document.querySelector('#modal-root .overlay'))showBackupModal();
+  }).catch(function(e){
+    notify('❌ Could not load board: '+e.message);
+  });
+}
+
+function addCurrentBoardToUSB(){
+  document.getElementById('modal-root').innerHTML='';
+  _usbWriteState(S).then(function(){
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    notify('💾 Your board has been added to the USB drive!');
+    if(document.querySelector('#modal-root .overlay'))showBackupModal();
+  }).catch(function(e){
+    notify('❌ Could not save board: '+e.message);
   });
 }
 
@@ -1102,18 +1297,6 @@ function _applyFromUSB(remote){
   _skipFbWrite=true;save();render();_skipFbWrite=false;
 }
 
-function _usbWriteState(state){
-  if(!_usbHandle)return Promise.resolve();
-  return _usbHandle.getFileHandle(USB_FILENAME,{create:true}).then(function(fh){
-    return fh.createWritable();
-  }).then(function(w){
-    return w.write(JSON.stringify(state)).then(function(){return w.close();});
-  }).catch(function(e){
-    console.warn('[USB] Write failed:',e);
-    handleUSBLost();
-  });
-}
-
 function usbSave(){
   if(!_usbMode||!_usbHandle||!_usbConnected)return;
   clearTimeout(_usbSaveTimer);
@@ -1124,7 +1307,7 @@ function _startUSBHeartbeat(){
   _stopUSBHeartbeat();
   _usbHeartbeatTimer=setInterval(function(){
     if(!_usbHandle||!_usbConnected||_usbStatus==='lost')return;
-    _usbHandle.getFileHandle(USB_FILENAME).catch(function(){handleUSBLost();});
+    _usbHandle.getFileHandle(USB_INDEX_FILENAME).catch(function(){handleUSBLost();});
   },4000);
 }
 
@@ -1140,59 +1323,6 @@ function handleUSBLost(){
   notify('🔴 USB drive disconnected — working locally. Click the status pill to reconnect.');
 }
 
-function showUSBConflictModal(remote){
-  var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
-  var localCols=(S.cols||[]).filter(function(c){return !c.archived;}).length;
-  var localCards=(S.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
-  var remoteCols=(remote.cols||[]).filter(function(c){return !c.archived;}).length;
-  var remoteCards=(remote.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
-  var fmt=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
-  closeThemePanel();closeAllPops();
-  var root=document.getElementById('modal-root');root.innerHTML='';
-  var ov=document.createElement('div');ov.className='overlay';
-  var m=document.createElement('div');m.className='modal';
-  m.style.width=Math.min(540,window.innerWidth*.92)+'px';
-  m.onclick=function(e){e.stopPropagation();};
-  m.innerHTML=
-    '<div style="text-align:center;margin-bottom:22px">'+
-      '<div style="font-size:32px;margin-bottom:10px">🔄</div>'+
-      '<div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:7px">Two Boards Found</div>'+
-      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">Your USB drive contains a different board than this computer.<br>Choose which one to keep — the other will be snapshotted first.</div>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">'+
-      '<div class="usb-conflict-opt" onclick="resolveUSBConflict(\'local\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
-        '<div style="font-size:26px;margin-bottom:9px">💻</div>'+
-        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:8px">This Computer</div>'+
-        '<div style="font-size:12px;color:var(--txt-d);line-height:1.8">Last saved:<br><strong style="color:var(--txt-m)">'+fmt(localTs)+'</strong><br>'+localCols+' cols &middot; '+localCards+' cards</div>'+
-      '</div>'+
-      '<div class="usb-conflict-opt" onclick="resolveUSBConflict(\'drive\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
-        '<div style="font-size:26px;margin-bottom:9px">💾</div>'+
-        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:8px">USB Drive</div>'+
-        '<div style="font-size:12px;color:var(--txt-d);line-height:1.8">Last saved:<br><strong style="color:var(--txt-m)">'+fmt(remoteTs)+'</strong><br>'+remoteCols+' cols &middot; '+remoteCards+' cards</div>'+
-      '</div>'+
-    '</div>'+
-    '<div style="text-align:center;font-size:12px;color:var(--txt-d);padding:10px 0 2px;border-top:1px solid var(--bd-s)">'+
-      '📎 Both versions will be snapshotted before anything changes — no data will be lost.'+
-    '</div>';
-  _usbConflictRemote=remote;
-  ov.appendChild(m);root.appendChild(ov);
-}
-
-function resolveUSBConflict(choice){
-  var remote=_usbConflictRemote;
-  document.getElementById('modal-root').innerHTML='';
-  _autoSnapBefore('Before: USB conflict resolution – '+new Date().toLocaleTimeString());
-  if(choice==='drive'){
-    _applyFromUSB(remote);
-    _usbWriteState(S);
-    notify('✅ Drive board loaded and active!');
-  }else{
-    _usbWriteState(S);
-    notify('✅ This computer\'s board kept and saved to drive!');
-  }
-  _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
-  _usbConflictRemote=null;
-}
 
 function load(){
   try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
@@ -2682,6 +2812,25 @@ function showBackupModal(){
     (rl>0?' &nbsp;&middot;&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
     (ul>0?'<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="doUndo();showBackupModal()">↩ Undo</button>':'')+'</div>';
 
+  var usbDriveBoards='';
+  if(_usbMode&&_usbConnected&&_usbIndex&&_usbIndex.length){
+    var fmt2=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+    usbDriveBoards='<div style="margin-top:10px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--txt-d);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Boards on this drive</div>';
+    for(var _bi=0;_bi<_usbIndex.length;_bi++){
+      var _b=_usbIndex[_bi],_isCur=_b.boardId===S.boardId;
+      usbDriveBoards+=
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surf2);border:1px solid '+(_isCur?'rgba(16,185,129,.35)':'var(--bd)')+';border-radius:9px;margin-bottom:6px;font-size:12px">'+
+          '<span style="font-size:16px">&#x1F4BE;</span>'+
+          '<span style="flex:1;color:var(--txt-b);font-weight:'+(_isCur?'700':'400')+'">'+
+            (_b.name||'Board')+(_isCur?' <span style="color:#10b981;font-size:10px">(current)</span>':'')+
+          '</span>'+
+          '<span style="color:var(--txt-d);font-size:11px">'+(_b.cards||0)+' cards</span>'+
+          (!_isCur?'<button class="btn btn-ghost" style="padding:3px 8px;font-size:11px" onclick="switchUSBBoard(\''+_b.boardId+'\')">Switch</button>':'')+
+        '</div>';
+    }
+    usbDriveBoards+='</div>';
+  }
   var usbSection=
     '<label class="lbl" style="margin-top:4px">Sync Mode</label>'+
     '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:8px">'+
@@ -2694,16 +2843,18 @@ function showBackupModal(){
       '</button>'+
     '</div>'+
     (_usbMode?
-      '<div style="margin-bottom:18px;padding:9px 14px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;'+
+      '<div style="margin-bottom:8px;padding:9px 14px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;'+
         (_usbConnected
           ?'background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.25);color:#10b981'
           :'background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.25);color:#e11d48')+
       '">'+
         (_usbConnected
-          ?'&#x1F7E2; Drive connected &mdash; auto-saving to <strong>'+USB_FILENAME+'</strong>'
+          ?'&#x1F7E2; Drive connected — syncing boards'
           :'&#x1F534; No drive connected')+
         (!_usbConnected?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;margin-left:auto" onclick="selectDriveFolder()">&#x1F4C2; Select Drive</button>':'')+
-      '</div>'
+      '</div>'+
+      usbDriveBoards+
+      '<div style="margin-bottom:10px"></div>'
     :'<div style="margin-bottom:18px"></div>');
 
   setModal(
