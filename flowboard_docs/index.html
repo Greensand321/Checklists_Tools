@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowBoard Docs</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5b667a;
+      --border: #d8deea;
+      --accent: #2563eb;
+      --code-bg: #101827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .wrap {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+    header .wrap {
+      padding: 34px 0 28px;
+    }
+    main.wrap {
+      padding: 28px 0 56px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 4vw, 44px);
+      letter-spacing: 0;
+    }
+    .lede {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card {
+      display: block;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: inherit;
+      text-decoration: none;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.08);
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .note {
+      margin-top: 28px;
+      padding: 16px 18px;
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      border-radius: 4px;
+      color: var(--muted);
+    }
+    code {
+      background: #e9eef7;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>FlowBoard Documentation</h1>
+      <p class="lede">Implementation notes and reusable code patterns for FlowBoard features. These docs focus on snippets that can be copied into similar browser-based apps.</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="grid" aria-label="Documentation pages">
+      <a class="card" href="feature-patterns.html">
+        <h2>Feature Patterns</h2>
+        <p>Undo/redo, manual backups, auto-snapshots, import/export, and archive patterns.</p>
+      </a>
+    </section>
+    <section class="note">
+      <strong>Folder purpose:</strong> <code>flowboard_docs</code> is only for FlowBoard documentation, so it stays separate from checklist docs and other tools in the repository.
+    </section>
+  </main>
+</body>
+</html>
