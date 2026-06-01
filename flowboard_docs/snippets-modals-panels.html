@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Modals & Panels Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Modals & Panels Snippets</h1><p class="lede">Generic overlay, floating panel, dirty-close, and dropdown patterns for single-page tools.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Generic Modal Root</h2><pre><code>function setModal(html, width) {
+  var root = document.getElementById('modal-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'modal-root';
+    document.body.appendChild(root);
+  }
+
+  root.innerHTML = '<div class="overlay"><div class="modal" style="max-width:' + (width || 520) + 'px">' + html + '</div></div>';
+}
+
+function closeModal() {
+  var root = document.getElementById('modal-root');
+  if (root) root.innerHTML = '';
+}</code></pre></section><section class="card"><h2>Dirty Close Guard</h2><pre><code>var modalDirty = false;
+
+function guardedCloseModal() {
+  if (modalDirty && !confirm('Discard unsaved changes?')) return;
+  modalDirty = false;
+  closeModal();
+}</code></pre></section><section class="card"><h2>Click Outside to Close Panel</h2><pre><code>function openPanel(panel, anchor) {
+  panel.classList.add('open');
+
+  setTimeout(function() {
+    document.addEventListener('pointerdown', function handler(e) {
+      if (!panel.contains(e.target) && !anchor.contains(e.target)) {
+        panel.classList.remove('open');
+        document.removeEventListener('pointerdown', handler);
+      }
+    });
+  }, 0);
+}</code></pre></section><section class="card"><h2>Dropdown Select Pattern</h2><pre><code>function selectFromDropdown(value, onSelect) {
+  pushUndo();
+  onSelect(value);
+  saveState();
+  render();
+}</code></pre></section></main></body></html>
