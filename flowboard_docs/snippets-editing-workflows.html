@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Editing Workflow Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Editing Workflow Snippets</h1><p class="lede">Reusable patterns for adding, renaming, deleting, duplicating, and editing board data.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Add Group / Column / Card</h2><pre><code>function addGroup(title) {
+  pushUndo();
+  S.groups.push({ id: uid(), title: title || 'New Group', pi: 0, collapsed: false, limit: 0 });
+  saveState(); render();
+}
+
+function addColumn(title, gid) {
+  pushUndo();
+  S.cols.push({ id: uid(), gid: gid || null, title: title || 'New Column', pi: 0, collapsed: false, sort: false, cards: [] });
+  saveState(); render();
+}
+
+function addCard(colId, title) {
+  var col = findColumn(colId);
+  if (!col) return;
+  pushUndo();
+  col.cards.push({ id: uid(), title: title || 'New Card', desc: '', pri: 0, tags: [], items: [], done: [], due: '', color: null });
+  saveState(); render();
+}</code></pre></section><section class="card"><h2>Inline Rename Pattern</h2><pre><code>function startInlineRename(labelEl, currentValue, onSave) {
+  var input = document.createElement('input');
+  input.value = currentValue;
+  labelEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  input.onblur = function() {
+    var next = input.value.trim() || currentValue;
+    onSave(next);
+  };
+
+  input.onkeydown = function(e) {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') {
+      input.value = currentValue;
+      input.blur();
+    }
+  };
+}</code></pre></section><section class="card"><h2>Delete with Snapshot</h2><pre><code>function deleteColumn(colId) {
+  if (!confirm('Delete this column and all cards?')) return;
+  createAutoSnapshot('Before deleting column', 'destructive');
+  pushUndo();
+  S.cols = S.cols.filter(function(c) { return c.id !== colId; });
+  saveState(); render();
+}</code></pre></section><section class="card"><h2>Checklist Item Operations</h2><pre><code>function addChecklistItem(card, text) {
+  pushUndo();
+  card.items.unshift(text);
+  saveState(); render();
+}
+
+function toggleChecklistItem(card, text) {
+  pushUndo();
+  var i = card.done.indexOf(text);
+  if (i >= 0) card.done.splice(i, 1);
+  else card.done.push(text);
+  saveState(); render();
+}</code></pre></section></main></body></html>

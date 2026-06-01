@@ -30,16 +30,16 @@
       width: min(1080px, calc(100% - 32px));
       margin: 0 auto;
     }
-    header .wrap {
-      padding: 34px 0 28px;
-    }
-    main.wrap {
-      padding: 28px 0 56px;
-    }
+    header .wrap { padding: 34px 0 28px; }
+    main.wrap { padding: 28px 0 56px; }
     h1 {
       margin: 0 0 8px;
       font-size: clamp(30px, 4vw, 44px);
       letter-spacing: 0;
+    }
+    h2.section-title {
+      margin: 30px 0 12px;
+      font-size: 22px;
     }
     .lede {
       max-width: 760px;
@@ -51,7 +51,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 16px;
-      margin-top: 24px;
+      margin-top: 16px;
     }
     .card {
       display: block;
@@ -97,12 +97,35 @@
     </div>
   </header>
   <main class="wrap">
-    <section class="grid" aria-label="Documentation pages">
+    <h2 class="section-title">Planning</h2>
+    <section class="grid" aria-label="Planning pages">
+      <a class="card" href="feature-groups.html">
+        <h2>Feature Groups</h2>
+        <p>Grouped inventory of FlowBoard features and the recommended order for building reusable snippet pages.</p>
+      </a>
       <a class="card" href="feature-patterns.html">
         <h2>Feature Patterns</h2>
         <p>Undo/redo, manual backups, auto-snapshots, import/export, and archive patterns.</p>
       </a>
     </section>
+
+    <h2 class="section-title">Snippet Guides</h2>
+    <section class="grid" aria-label="Snippet guide pages">
+      <a class="card" href="snippets-state-persistence.html"><h2>State & Persistence</h2><p>State shape, localStorage load/save, validation, and full-state replacement.</p></a>
+      <a class="card" href="snippets-recovery-history.html"><h2>Recovery & History</h2><p>Undo, redo, manual snapshots, auto-snapshots, and restore behavior.</p></a>
+      <a class="card" href="snippets-board-data-model.html"><h2>Board Data Model</h2><p>Groups, columns, cards, checklist items, IDs, selectors, and move helpers.</p></a>
+      <a class="card" href="snippets-editing-workflows.html"><h2>Editing Workflows</h2><p>Add, rename, delete, duplicate, and checklist editing patterns.</p></a>
+      <a class="card" href="snippets-drag-drop.html"><h2>Drag & Drop</h2><p>Pointer drag, ghost elements, drop targets, and array movement.</p></a>
+      <a class="card" href="snippets-task-metadata.html"><h2>Task Metadata</h2><p>Priority, tags, due dates, color labels, and checklist progress.</p></a>
+      <a class="card" href="snippets-organization-limits.html"><h2>Organization & Limits</h2><p>Collapse states, WIP limits, priority sorting, and board stats.</p></a>
+      <a class="card" href="snippets-search-filtering.html"><h2>Search & Filtering</h2><p>Query matching, tag search, archive filtering, and checklist filters.</p></a>
+      <a class="card" href="snippets-theming-ui.html"><h2>Theming & UI</h2><p>CSS theme tokens, theme switching, palette helpers, and notifications.</p></a>
+      <a class="card" href="snippets-modals-panels.html"><h2>Modals & Panels</h2><p>Modal root, dirty-close guard, dropdowns, and click-outside panels.</p></a>
+      <a class="card" href="snippets-cloud-sync.html"><h2>Cloud Sync</h2><p>Sync status, board keys, debounced writes, and safe remote write checks.</p></a>
+      <a class="card" href="snippets-exporting-transfer.html"><h2>Exporting & Transfer</h2><p>JSON download, import pipeline, filename cleanup, and print hooks.</p></a>
+      <a class="card" href="snippets-quality-safety.html"><h2>Quality & Safety</h2><p>Destructive action wrappers, undo clearing, storage checks, and safe import.</p></a>
+    </section>
+
     <section class="note">
       <strong>Folder purpose:</strong> <code>flowboard_docs</code> is only for FlowBoard documentation, so it stays separate from checklist docs and other tools in the repository.
     </section>

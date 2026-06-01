@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>State & Persistence Snippets</title>
+  <style>
+    body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede,.note{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}.note{border-left:4px solid #2563eb;background:#fff;padding:14px 16px;border-radius:4px}
+  </style>
+</head>
+<body>
+<header><div class="wrap"><h1>State & Persistence Snippets</h1><p class="lede">Foundation helpers for browser apps that store their full state locally and replace that state during imports, restores, or sync events.</p></div></header>
+<main class="wrap">
+<a class="back" href="feature-groups.html">Back to Feature Groups</a>
+<section class="note"><strong>Use first:</strong> these helpers should exist before undo, snapshots, import/export, archive, or cloud sync. Those systems all depend on predictable state load, save, validation, and replacement.</section>
+<section class="card"><h2>Storage Keys and Default State</h2><pre><code>var STORE_KEY = 'fb4';
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+function defaultState() {
+  return {
+    prefs: { theme: 'midnight', modalW: 510, modalH: null, boardName: 'My Board' },
+    lastModified: 0,
+    groups: [],
+    cols: []
+  };
+}</code></pre></section>
+<section class="card"><h2>Validate State Shape</h2><pre><code>function validateState(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (!Array.isArray(data.groups)) return false;
+  if (!Array.isArray(data.cols)) return false;
+  if (!data.prefs || typeof data.prefs !== 'object') data.prefs = {};
+
+  data.cols.forEach(function(col) {
+    if (!Array.isArray(col.cards)) col.cards = [];
+  });
+
+  return true;
+}</code></pre></section>
+<section class="card"><h2>Load and Save</h2><pre><code>var S = defaultState();
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (!raw) {
+      S = defaultState();
+      return;
+    }
+
+    var parsed = JSON.parse(raw);
+    S = validateState(parsed) ? parsed : defaultState();
+  } catch (e) {
+    console.warn('State failed to load. Starting from defaults.', e);
+    S = defaultState();
+  }
+}
+
+function saveState() {
+  S.lastModified = Date.now();
+  localStorage.setItem(STORE_KEY, JSON.stringify(S));
+}</code></pre></section>
+<section class="card"><h2>Replace State Safely</h2><pre><code>function replaceState(nextState, options) {
+  options = options || {};
+  if (!validateState(nextState)) throw new Error('Invalid state object.');
+
+  S = nextState;
+  if (options.touch !== false) S.lastModified = Date.now();
+
+  localStorage.setItem(STORE_KEY, JSON.stringify(S));
+  render();
+}</code></pre><p class="lede">Use <code>replaceState()</code> for imports, snapshot restores, undo/redo, and remote sync so all full-state replacement paths behave consistently.</p></section>
+</main>
+</body>
+</html>
