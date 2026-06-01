@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Task Metadata Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Task Metadata Snippets</h1><p class="lede">Reusable helpers for priority, tags, due dates, color labels, and checklist progress.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Priority Labels</h2><pre><code>var PRIORITIES = [
+  { label: 'Low', className: 'pri-low' },
+  { label: 'Med', className: 'pri-med' },
+  { label: 'High', className: 'pri-high' }
+];
+
+function priorityInfo(value) {
+  return PRIORITIES[value] || PRIORITIES[0];
+}</code></pre></section><section class="card"><h2>Tag Add / Remove</h2><pre><code>function addTag(card, tag) {
+  tag = tag.trim();
+  if (!tag || card.tags.indexOf(tag) >= 0) return;
+  pushUndo();
+  card.tags.push(tag);
+  saveState(); render();
+}
+
+function removeTag(card, tag) {
+  pushUndo();
+  card.tags = card.tags.filter(function(x) { return x !== tag; });
+  saveState(); render();
+}</code></pre></section><section class="card"><h2>Due Date Classifier</h2><pre><code>function dueInfo(isoDate) {
+  if (!isoDate) return { label: '', className: '' };
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var due = new Date(isoDate + 'T00:00:00');
+  var diff = Math.round((due - today) / 86400000);
+
+  if (diff < 0) return { label: Math.abs(diff) + 'd overdue', className: 'due-over' };
+  if (diff === 0) return { label: 'Today', className: 'due-soon' };
+  if (diff === 1) return { label: 'Tomorrow', className: 'due-soon' };
+  if (diff <= 2) return { label: diff + 'd', className: 'due-soon' };
+  return { label: due.toLocaleDateString(), className: 'due-ok' };
+}</code></pre></section><section class="card"><h2>Checklist Progress</h2><pre><code>function checklistProgress(card) {
+  var total = card.items.length;
+  var done = card.done.length;
+  return {
+    done: done,
+    total: total,
+    pct: total ? Math.round((done / total) * 100) : 0
+  };
+}</code></pre></section></main></body></html>

@@ -291,6 +291,13 @@ input[type="date"]{color-scheme:dark}
 .auto-bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
 .auto-bak-item:hover{background:var(--surf3)}
 .auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+
+/* ── USB SYNC ── */
+@keyframes usbLostPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(225,29,72,.5)}55%{opacity:.55;box-shadow:0 0 0 7px rgba(225,29,72,0)}}
+@keyframes usbPlugIn{0%{transform:translateY(-4px) scale(.92);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+.usb-lost-pulse{animation:usbLostPulse 1.3s ease-in-out infinite!important;cursor:pointer!important}
+.usb-plug-in{animation:usbPlugIn .3s cubic-bezier(.34,1.4,.64,1) both}
+.usb-conflict-opt:hover{border-color:#60a5fa!important;background:rgba(96,165,250,.07)!important}
 </style>
 </head>
 <body>
@@ -305,6 +312,7 @@ input[type="date"]{color-scheme:dark}
   <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
   <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
+  <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
   <button class="btn btn-ghost" onclick="showArchiveModal()">📦 Archive</button>
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
   <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
@@ -341,6 +349,18 @@ var _reconnecting=false;  // true while a connectToKey attempt is in-flight (pre
 var _userDisconnected=false; // true when user explicitly disconnected — suppresses auto-retry
 var _syncStatus='local';  // current sync state string — mirrors updateSyncStatus for programmatic checks
 var _RETRY_DELAYS=[5000,15000,30000,60000,300000]; // 5s → 15s → 30s → 1m → 5m
+
+// ── USB SYNC STATE ──
+var _usbMode=false;
+var _usbHandle=null;
+var _usbConnected=false;
+var _usbSaveTimer=null;
+var _usbHeartbeatTimer=null;
+var _usbStatus='off';
+var _usbWasCloudActive=false;
+var USB_INDEX_FILENAME='flowboard-index.json';
+var _usbIndex=null;
+
 var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
 var _autoSnapsListener=null;   // detachable listener handle
 var _autoSnapsPending=0;       // in-flight write counter (echo guard — mirrors _pendingWrites pattern)
@@ -466,7 +486,7 @@ function renderThemeGrid(){
   g.innerHTML='';
   var dkSec=document.createElement('div');dkSec.className='tp-sec';dkSec.textContent='Dark';g.appendChild(dkSec);
   dk.forEach(function(t){g.appendChild(swatch(t));});
-  var ltSec=document.createElement('div');ltSec.className='tp-sec';ltSec.textContent='Light · Apple-Inspired';g.appendChild(ltSec);
+  var ltSec=document.createElement('div');ltSec.className='tp-sec';ltSec.textContent='Light \u00B7 Apple-Inspired';g.appendChild(ltSec);
   lt.forEach(function(t){g.appendChild(swatch(t));});
 }
 function toggleThemePanel(){
@@ -545,6 +565,7 @@ var _chkSorted=false,_chkOrigItems=null;
 
 function defaultState(){return{
   prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board'},
+  boardId:uid(),
   lastModified:0,
   groups:[
     {id:'g1',title:'🚀 Work',pi:0,col:false,limit:0},
@@ -582,6 +603,7 @@ function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
 function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
 
 function updateSyncStatus(state){
+  if(_usbMode)return;
   _syncStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
@@ -827,7 +849,8 @@ function save(){
       }
     },20*60*1000);
   }
-  if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite){
+  if(!_skipFbWrite)usbSave();
+  if(FIREBASE_ENABLED&&_syncRef&&_activeKey&&!_skipFbWrite&&!_usbMode){
     clearTimeout(_syncTimer);
     _syncTimer=setTimeout(function(){
       if(!_isSafeWrite(S)){
@@ -902,14 +925,54 @@ function showKeysModal(){
 }
 function newKeyBtn(){
   var key=generateKey();
+  var label='Board '+(getKeys().length+1);
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(480,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:22px">'+
+      '<div style="font-size:30px;margin-bottom:9px">✨</div>'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:6px">New Board</div>'+
+      '<div style="font-size:13px;color:var(--txt-m)">How would you like to start?</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',true)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">🌱</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Start Fresh</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Begin with the default demo layout — columns, cards and all</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',false)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:26px;margin-bottom:9px">📋</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Copy Current Board</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Duplicate all your existing columns and cards into the new board</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:flex-end">'+
+      '<button class="btn btn-ghost" onclick="forceCloseModal();window._keysModalRender&&window._keysModalRender()">Cancel</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+function confirmNewBoard(key,label,startFresh){
+  forceCloseModal();
   var keys=getKeys();
-  var label='Board '+(keys.length+1);
   keys.push({key:key,label:label,lastUsed:Date.now()});
   setKeys(keys);
-  if(S.prefs)S.prefs.boardName=label;
+  if(startFresh){
+    S=defaultState();
+    S.prefs.boardName=label;
+    // boardId already set by defaultState() via uid()
+  }else{
+    _pushUndo();
+    S.boardId=uid(); // new board identity even though content is copied
+    if(S.prefs)S.prefs.boardName=label;
+  }
+  save();render();
   connectToKey(key);
   window._keysModalRender&&window._keysModalRender();
-  notify('✅ New board created and connected!');
+  notify('✅ New board created — '+(startFresh?'fresh layout loaded!':'current board copied!'));
 }
 function joinKeyBtn(){
   var input=document.getElementById('key-input');
@@ -964,6 +1027,304 @@ function removeKey(key){
   if(_activeKey===key)disconnectSync();
   window._keysModalRender&&window._keysModalRender();
 }
+// ── USB SYNC ──
+function updateUSBStatus(state){
+  _usbStatus=state;
+  var el=document.getElementById('sync-status');if(!el)return;
+  var map={
+    off:        {t:'\u{1F4BE} Local',      c:'var(--txt-dd)',bg:'var(--surf2)',         bd:'var(--bd)',              cur:'default', ttl:''},
+    connecting: {t:'🔌 USB…',  c:'#f59e0b',     bg:'rgba(245,158,11,.12)', bd:'rgba(245,158,11,.35)',   cur:'default', ttl:'Connecting to USB drive…'},
+    synced:     {t:'🟢 USB Synced', c:'#10b981',     bg:'rgba(16,185,129,.12)', bd:'rgba(16,185,129,.35)',   cur:'default', ttl:'USB drive connected and syncing'},
+    lost:       {t:'🔴 USB Lost',   c:'#e11d48',     bg:'rgba(225,29,72,.15)',  bd:'rgba(225,29,72,.45)',    cur:'pointer', ttl:'Drive connection severed — click to reconnect'},
+  };
+  var s=map[state]||map.off;
+  el.textContent=s.t;el.style.color=s.c;el.style.background=s.bg;el.style.borderColor=s.bd;
+  el.style.cursor=s.cur;el.title=s.ttl;
+  el.classList.toggle('usb-lost-pulse',state==='lost');
+  if(state==='synced'){el.classList.add('usb-plug-in');setTimeout(function(){el.classList.remove('usb-plug-in');},400);}
+  el.onclick=(state==='lost')?function(){selectDriveFolder();}:null;
+}
+
+function enableUSBMode(){
+  if(!window.showDirectoryPicker){
+    notify('⚠️ USB sync requires Chrome or Edge — your browser does not support it.');return;
+  }
+  _usbWasCloudActive=!!_activeKey;
+  _usbMode=true;
+  updateUSBStatus('connecting');
+  selectDriveFolder();
+}
+
+function disableUSBMode(){
+  _stopUSBHeartbeat();
+  clearTimeout(_usbSaveTimer);
+  _usbHandle=null;_usbConnected=false;_usbMode=false;_usbIndex=null;
+  updateUSBStatus('off');
+  if(_usbWasCloudActive&&_activeKey){
+    _autoSnapBefore('Before: Switched from USB to Cloud – '+new Date().toLocaleTimeString());
+    updateSyncStatus('syncing');
+    if(_syncRef){
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){
+        _pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);
+        if(_pendingWrites===0)updateSyncStatus('synced');
+      }).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+    }
+  }else{
+    updateSyncStatus('local');
+  }
+  showBackupModal();
+  notify('☁️ USB mode disabled.');
+}
+
+function selectDriveFolder(){
+  window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'}).then(function(handle){
+    connectUSB(handle);
+  }).catch(function(e){
+    if(e.name==='AbortError'){
+      if(_usbMode&&!_usbConnected){_usbMode=false;updateSyncStatus(_activeKey?'synced':'local');}
+      notify('USB folder selection cancelled.');
+    }else{
+      _usbMode=false;_usbHandle=null;updateSyncStatus(_activeKey?'synced':'local');
+      notify('❌ Could not access drive: '+e.message);
+    }
+  });
+}
+
+function _usbBoardFilename(boardId){return 'board-'+boardId+'.json';}
+
+function _usbReadIndex(){
+  return _usbHandle.getFileHandle(USB_INDEX_FILENAME).then(function(fh){
+    return fh.getFile().then(function(f){return f.text();});
+  }).then(function(txt){
+    var idx=JSON.parse(txt);
+    return Array.isArray(idx)?idx:[];
+  });
+}
+
+function _usbWriteIndex(index){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbHandle.getFileHandle(USB_INDEX_FILENAME,{create:true}).then(function(fh){
+    return fh.createWritable();
+  }).then(function(w){
+    return w.write(JSON.stringify(index)).then(function(){return w.close();});
+  });
+}
+
+function _usbUpdateIndex(state){
+  var idx=_usbIndex||[];
+  var entry={boardId:state.boardId,name:(state.prefs&&state.prefs.boardName)||'Board',
+    lastModified:state.lastModified||0,
+    cards:(state.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)};
+  var found=false;
+  for(var i=0;i<idx.length;i++){if(idx[i].boardId===state.boardId){idx[i]=entry;found=true;break;}}
+  if(!found)idx.push(entry);
+  _usbIndex=idx;
+  return _usbWriteIndex(idx);
+}
+
+function _usbWriteBoard(state){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbHandle.getFileHandle(_usbBoardFilename(state.boardId),{create:true}).then(function(fh){
+    return fh.createWritable();
+  }).then(function(w){
+    return w.write(JSON.stringify(state)).then(function(){return w.close();});
+  }).catch(function(e){
+    console.warn('[USB] Write failed:',e);
+    handleUSBLost();
+  });
+}
+
+function _usbWriteState(state){
+  if(!_usbHandle)return Promise.resolve();
+  return _usbWriteBoard(state).then(function(){return _usbUpdateIndex(state);}).catch(function(e){
+    console.warn('[USB] Write failed:',e);handleUSBLost();
+  });
+}
+
+function connectUSB(handle){
+  _usbHandle=handle;
+  updateUSBStatus('connecting');
+  _usbReadIndex().then(function(index){
+    _usbIndex=index;
+    var entry=null;
+    for(var i=0;i<index.length;i++){if(index[i].boardId===S.boardId){entry=index[i];break;}}
+    if(entry){
+      return handle.getFileHandle(_usbBoardFilename(S.boardId)).then(function(fh){
+        return fh.getFile().then(function(f){return f.text();});
+      }).then(function(txt){
+        var remote=JSON.parse(txt);
+        var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
+        if(remoteTs>localTs){
+          _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
+          _applyFromUSB(remote);
+          notify('💾 Drive data loaded — it was newer than your local board.');
+        }else{
+          _usbWriteState(S);
+          notify('💾 Drive updated — your local board was newer.');
+        }
+        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+        if(document.querySelector('#modal-root .overlay'))showBackupModal();
+      });
+    }else{
+      showUSBBoardPickerModal(index);
+    }
+  }).catch(function(e){
+    if(e.name==='NotFoundError'){
+      handle.getFileHandle('flowboard-data.json').then(function(fh){
+        return fh.getFile().then(function(f){return f.text();});
+      }).then(function(txt){
+        var legacy=JSON.parse(txt);
+        if(!legacy.boardId)legacy.boardId=uid();
+        var idx=[{boardId:legacy.boardId,name:(legacy.prefs&&legacy.prefs.boardName)||'Board',
+          lastModified:legacy.lastModified||0,
+          cards:(legacy.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)}];
+        _usbIndex=idx;
+        return _usbWriteIndex(idx).then(function(){return _usbWriteBoard(legacy);}).then(function(){return legacy;});
+      }).then(function(legacy){
+        if(legacy.boardId===S.boardId){
+          var localTs=S.lastModified||0,remoteTs=legacy.lastModified||0;
+          if(remoteTs>localTs){
+            _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
+            _applyFromUSB(legacy);
+            notify('💾 Legacy drive data migrated — drive was newer.');
+          }else{
+            _usbWriteState(S);
+            notify('💾 Drive migrated to new format — your local board was newer.');
+          }
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+          if(document.querySelector('#modal-root .overlay'))showBackupModal();
+        }else{
+          showUSBBoardPickerModal(_usbIndex);
+        }
+      }).catch(function(le){
+        if(le.name==='NotFoundError'){
+          _usbWriteState(S).then(function(){
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            notify('💾 Board saved to USB drive!');
+            if(document.querySelector('#modal-root .overlay'))showBackupModal();
+          });
+        }else{
+          _usbMode=false;_usbHandle=null;
+          updateSyncStatus(_activeKey?'synced':'local');
+          notify('❌ Drive error: '+le.message);
+        }
+      });
+    }else{
+      _usbMode=false;_usbHandle=null;
+      updateSyncStatus(_activeKey?'synced':'local');
+      notify('❌ Drive error: '+e.message);
+    }
+  });
+}
+
+function showUSBBoardPickerModal(index){
+  var fmt=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(540,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  var boardCards='';
+  for(var i=0;i<index.length;i++){
+    var b=index[i];
+    boardCards+=
+      '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surf2);border:1px solid var(--bd);border-radius:12px;margin-bottom:10px">'+
+        '<div style="font-size:24px">💾</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-weight:700;font-size:13px;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(b.name||'Board')+'</div>'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-top:2px">'+fmt(b.lastModified)+' · '+(b.cards||0)+' cards</div>'+
+        '</div>'+
+        '<button class="btn btn-green" style="font-size:12px;white-space:nowrap" onclick="switchUSBBoard(\''+b.boardId+'\')">Load Board</button>'+
+      '</div>';
+  }
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:20px">'+
+      '<div style="font-size:32px;margin-bottom:10px">🔄</div>'+
+      '<div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:7px">Drive Boards</div>'+
+      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">Your current board is not on this drive.<br>Load a board from the drive, or add your current board to it.</div>'+
+    '</div>'+
+    (index.length?
+      '<div style="max-height:280px;overflow-y:auto;margin-bottom:16px">'+boardCards+'</div>':
+      '<div style="text-align:center;color:var(--txt-d);font-size:13px;margin-bottom:16px">No boards on this drive yet.</div>')+
+    '<div style="border-top:1px solid var(--bd-s);padding-top:14px;display:flex;gap:10px">'+
+      '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="document.getElementById(\'modal-root\').innerHTML=\'\';_usbMode=false;_usbHandle=null;_usbIndex=null;updateSyncStatus(_activeKey?\'synced\':\'local\')">Cancel</button>'+
+      '<button class="btn btn-green" style="flex:1;font-size:12px" onclick="addCurrentBoardToUSB()">➕ Add My Board to Drive</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+
+function switchUSBBoard(boardId){
+  var filename=_usbBoardFilename(boardId);
+  _autoSnapBefore('Before: Switched to USB board – '+new Date().toLocaleTimeString());
+  _usbWriteState(S).then(function(){
+    return _usbHandle.getFileHandle(filename).then(function(fh){
+      return fh.getFile().then(function(f){return f.text();});
+    });
+  }).then(function(txt){
+    var remote=JSON.parse(txt);
+    document.getElementById('modal-root').innerHTML='';
+    _applyFromUSB(remote);
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    notify('💾 Board loaded from USB drive!');
+    if(document.querySelector('#modal-root .overlay'))showBackupModal();
+  }).catch(function(e){
+    notify('❌ Could not load board: '+e.message);
+  });
+}
+
+function addCurrentBoardToUSB(){
+  document.getElementById('modal-root').innerHTML='';
+  _usbWriteState(S).then(function(){
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    notify('💾 Your board has been added to the USB drive!');
+    if(document.querySelector('#modal-root .overlay'))showBackupModal();
+  }).catch(function(e){
+    notify('❌ Could not save board: '+e.message);
+  });
+}
+
+function _applyFromUSB(remote){
+  if(!remote.boardId)remote.boardId=uid();
+  S=remote;
+  _undoStack=[];_redoStack=[];
+  try{sessionStorage.removeItem('fb4_undo');}catch(e){}
+  _updateUndoUI();
+  curTheme=(S.prefs&&S.prefs.theme)||'midnight';
+  document.documentElement.setAttribute('data-theme',curTheme);
+  if(S.prefs&&S.prefs.modalW>=320)_modalW=S.prefs.modalW;
+  _modalH=(S.prefs&&S.prefs.modalH>=200?S.prefs.modalH:null);
+  _skipFbWrite=true;save();render();_skipFbWrite=false;
+}
+
+function usbSave(){
+  if(!_usbMode||!_usbHandle||!_usbConnected)return;
+  clearTimeout(_usbSaveTimer);
+  _usbSaveTimer=setTimeout(function(){_usbWriteState(S);},800);
+}
+
+function _startUSBHeartbeat(){
+  _stopUSBHeartbeat();
+  _usbHeartbeatTimer=setInterval(function(){
+    if(!_usbHandle||!_usbConnected||_usbStatus==='lost')return;
+    _usbHandle.getFileHandle(USB_INDEX_FILENAME).catch(function(){handleUSBLost();});
+  },4000);
+}
+
+function _stopUSBHeartbeat(){
+  clearInterval(_usbHeartbeatTimer);_usbHeartbeatTimer=null;
+}
+
+function handleUSBLost(){
+  if(_usbStatus==='lost')return;
+  _usbConnected=false;
+  _stopUSBHeartbeat();
+  updateUSBStatus('lost');
+  notify('🔴 USB drive disconnected — working locally. Click the status pill to reconnect.');
+}
+
+
 function load(){
   try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
     // migrate prefs from old localStorage keys if not yet in S
@@ -993,7 +1354,7 @@ function load(){
         if(k.desc===undefined)k.desc='';
         if(k.due===undefined)k.due='';
       });
-    });return;}}catch(e){}
+    });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
   S=defaultState();save();
 }
 
@@ -1345,7 +1706,7 @@ function mkArchivePanel(col,isFullyArchived){
     var rb=document.createElement('button');rb.className='icon-btn';rb.title='Restore column';rb.textContent='↩';
     rb.style.cssText='font-size:13px;color:#60a5fa';
     rb.onclick=function(e){e.stopPropagation();restoreCol(col.id);};hdr.appendChild(rb);
-    var xb=document.createElement('button');xb.className='icon-btn';xb.title='Permanently delete column';xb.textContent='×';
+    var xb=document.createElement('button');xb.className='icon-btn';xb.title='Permanently delete column';xb.textContent='\u00D7';
     xb.style.cssText='font-size:15px;color:rgba(244,63,94,.6)';
     xb.onclick=function(e){e.stopPropagation();deleteArchivedCol(col.id);};hdr.appendChild(xb);
   }else{
@@ -1603,7 +1964,7 @@ function mkChkHtml(colId){
       '<span class="chk-handle">⠿</span>'+
       '<div class="checkbox '+(done?'on':'')+'" onclick="toggleCMItem('+i+',\''+colId+'\')">'+(done?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'')+' </div>'+
       '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" onmouseenter="showTip(event,\''+escA(it)+'\')" onmouseleave="hideTip()" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
-      '<span onclick="removeCMItem('+i+',\''+colId+'\')" style="color:var(--txt-dd);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0">×</span>'+
+      '<span onclick="removeCMItem('+i+',\''+colId+'\')" style="color:var(--txt-dd);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0">&times;</span>'+
       '</div>';
   }).join('');
 }
@@ -1839,7 +2200,7 @@ function render(){
   board.innerHTML='';
   var activeCols=S.cols.filter(function(c){return !c.archived;});
   var tc=activeCols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
-  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' · '+activeCols.length+' cols · '+tc+' cards';
+  document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' \u00B7 '+activeCols.length+' cols \u00B7 '+tc+' cards';
   S.groups.forEach(function(g){board.appendChild(mkGroup(g,activeCols.filter(function(c){return c.gid===g.id;}),q,false));});
   var ug=activeCols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
   if(ug.length)board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},ug,q,true));
@@ -1886,7 +2247,7 @@ function mkGroup(g,gcols,q,fake){
     PAL.forEach(function(p,i){var d=document.createElement('div');d.className='cdot'+(g.pi===i?' on':'');d.style.background=p.a;d.title=p.n;d.onclick=function(){setGroupPi(g.id,i);};picker.appendChild(d);});
     pp.appendChild(picker);hdr.appendChild(pp);
     var ac=document.createElement('button');ac.className='icon-btn';ac.title='Add column';ac.textContent='+';ac.style.fontSize='19px';ac.onclick=function(){showAddColModal(g.id);};hdr.appendChild(ac);
-    var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='×';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
+    var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='\u00D7';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
   }
   wrap.appendChild(hdr);
   if(!g.col){
@@ -1971,7 +2332,7 @@ function mkCol(col,q){
   var ab=document.createElement('button');ab.className='icon-btn';ab.title='Archive column';ab.textContent='⊡';
   ab.style.cssText='font-size:13px;color:'+(light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)');
   ab.onclick=function(e){e.stopPropagation();archiveCol(col.id);};hdr.appendChild(ab);
-  var db=document.createElement('button');db.className='icon-btn';db.textContent='×';db.title='Delete column';
+  var db=document.createElement('button');db.className='icon-btn';db.textContent='\u00D7';db.title='Delete column';
   db.style.color=light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)';db.onclick=function(){delCol(col.id);};hdr.appendChild(db);
   wrap.appendChild(hdr);
   var body=document.createElement('div');body.className='col-body';body.dataset.pi=col.pi%PAL.length;body.style.background=bodyBg;body.style.borderColor=bodyBd;body.id='cb_'+col.id;
@@ -2242,7 +2603,7 @@ function renderCM(colId){
 
   var chkHtml=mkChkHtml(colId);
   var chkControls=mkChkControls(colId);
-  var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">×</span></span>';}).join('');
+  var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">&times;</span></span>';}).join('');
 
   var dueLabelHtml='';
   if(dc){
@@ -2340,7 +2701,7 @@ function addCMTag(cid){
   var container=document.getElementById('cm-tags');
   if(container){
     var chip=document.createElement('span');chip.className='tag-chip';
-    chip.innerHTML=esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+cid+'\')">×</span>';
+    chip.innerHTML=esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+cid+'\')">&times;</span>';
     container.appendChild(chip);
     var badge=document.getElementById('cm-tags-badge');
     if(badge)badge.textContent=EC.tags.length;
@@ -2425,7 +2786,7 @@ function showBackupModal(){
       return '<div class="auto-bak-item">'+
         '<div style="flex:1">'+
           '<div class="bak-name" style="cursor:default">'+esc(b.name)+'</div>'+
-          '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' · '+b.cards+' card'+(b.cards!==1?'s':'')+' · '+triggerBadge(b.trigger)+'</div>'+
+          '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' &middot; '+b.cards+' card'+(b.cards!==1?'s':'')+' &middot; '+triggerBadge(b.trigger)+'</div>'+
         '</div>'+
         '<div class="bak-actions">'+
           '<button onclick="restoreAutoBak(\''+b.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
@@ -2438,7 +2799,7 @@ function showBackupModal(){
     :baks.map(function(b){
       return '<div class="bak-item">'+
         '<div style="flex:1"><div id="bakname_'+b.id+'" class="bak-name" ondblclick="renameBak(\''+b.id+'\')" title="Double-click to rename">'+esc(b.name)+'</div>'+
-        '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' · '+b.cards+' card'+(b.cards!==1?'s':'')+'</div></div>'+
+        '<div class="bak-date">'+new Date(b.ts).toLocaleString()+' &middot; '+b.cards+' card'+(b.cards!==1?'s':'')+'</div></div>'+
         '<div class="bak-actions">'+
           '<button onclick="restoreBak(\''+b.id+'\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
           '<button onclick="exportBak(\''+b.id+'\')" style="background:var(--surf3);color:var(--txt-m)">Export</button>'+
@@ -2449,14 +2810,60 @@ function showBackupModal(){
   var ul=_undoStack.length,rl=_redoStack.length;
   var undoBar='<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:18px;font-size:12px;color:var(--txt-m)">'+
     '<span style="flex:1">↩ <strong style="color:var(--txt)">'+ul+'</strong> undo step'+(ul!==1?'s':'')+' in memory'+
-    (rl>0?' &nbsp;·&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
+    (rl>0?' &nbsp;&middot;&nbsp; ↪ <strong style="color:var(--txt)">'+rl+'</strong> redo step'+(rl!==1?'s':''):'')+'</span>'+
     (ul>0?'<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="doUndo();showBackupModal()">↩ Undo</button>':'')+'</div>';
+
+  var usbDriveBoards='';
+  if(_usbMode&&_usbConnected&&_usbIndex&&_usbIndex.length){
+    var fmt2=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+    usbDriveBoards='<div style="margin-top:10px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--txt-d);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Boards on this drive</div>';
+    for(var _bi=0;_bi<_usbIndex.length;_bi++){
+      var _b=_usbIndex[_bi],_isCur=_b.boardId===S.boardId;
+      usbDriveBoards+=
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surf2);border:1px solid '+(_isCur?'rgba(16,185,129,.35)':'var(--bd)')+';border-radius:9px;margin-bottom:6px;font-size:12px">'+
+          '<span style="font-size:16px">&#x1F4BE;</span>'+
+          '<span style="flex:1;color:var(--txt-b);font-weight:'+(_isCur?'700':'400')+'">'+
+            (_b.name||'Board')+(_isCur?' <span style="color:#10b981;font-size:10px">(current)</span>':'')+
+          '</span>'+
+          '<span style="color:var(--txt-d);font-size:11px">'+(_b.cards||0)+' cards</span>'+
+          (!_isCur?'<button class="btn btn-ghost" style="padding:3px 8px;font-size:11px" onclick="switchUSBBoard(\''+_b.boardId+'\')">Switch</button>':'')+
+        '</div>';
+    }
+    usbDriveBoards+='</div>';
+  }
+  var usbSection=
+    '<label class="lbl" style="margin-top:4px">Sync Mode</label>'+
+    '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:8px">'+
+      '<div style="flex:1">'+
+        '<div style="font-size:13px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+(_usbMode?'&#x1F4BE; USB Drive Mode':'&#x2601;&#xFE0F; Cloud / Local Mode')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud')+'</div>'+
+      '</div>'+
+      '<button class="btn '+(_usbMode?'btn-danger':'btn-green')+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
+        (_usbMode?'Disable USB':'&#x1F50C; Enable USB')+
+      '</button>'+
+    '</div>'+
+    (_usbMode?
+      '<div style="margin-bottom:8px;padding:9px 14px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;'+
+        (_usbConnected
+          ?'background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.25);color:#10b981'
+          :'background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.25);color:#e11d48')+
+      '">'+
+        (_usbConnected
+          ?'&#x1F7E2; Drive connected — syncing boards'
+          :'&#x1F534; No drive connected')+
+        (!_usbConnected?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;margin-left:auto" onclick="selectDriveFolder()">&#x1F4C2; Select Drive</button>':'')+
+      '</div>'+
+      usbDriveBoards+
+      '<div style="margin-bottom:10px"></div>'
+    :'<div style="margin-bottom:18px"></div>');
 
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup & Restore</div>'+
       '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
     '</div>'+
+    usbSection+
     undoBar+
     '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:13px;color:#10b981">'+
       '✅ <strong>Auto-save is ON</strong> — every change saves instantly to local storage'+(_activeKey?' and cloud':'.')+
@@ -2481,6 +2888,164 @@ function showBackupModal(){
       '2. On another device: open FlowBoard → Import .json'+
     '</div>',
   '580px',function(){var i=document.getElementById('bak-n');if(i)i.focus();});
+}
+
+function showReportModal(){
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">📋 Print Report</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">&#x2715;</button>'+
+    '</div>'+
+    '<div style="font-size:13px;color:var(--txt-d);margin-bottom:18px;line-height:1.6">Choose a format — opens in a new tab, ready to print or save as PDF.</div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px">'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'overview\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F4CB;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Board Overview</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Columns with card headings — one-page snapshot for quick reference</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'tasks\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x2705;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Full Task List</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Every card expanded with all tasks, organised by column</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'agenda\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F5E3;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Meeting Agenda</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Numbered agenda items with tasks and notes lines — print and bring to the table</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>',
+  '480px');
+}
+
+function openReport(type){
+  var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
+  var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  var cols=(S.cols||[]).filter(function(c){return !c.archived;});
+  var titles={overview:'Board Overview',tasks:'Full Task List',agenda:'Meeting Agenda'};
+  var reportTitle=titles[type]||'Report';
+
+  function xe(str){return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  var body='';
+
+  if(type==='overview'){
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      if(!cards.length){body+='<p class="empty">— No cards —</p>';}
+      else{
+        body+='<ul>';
+        cards.forEach(function(card){
+          body+='<li>'+xe(card.title);
+          if(card.due)body+=' <span class="due">'+xe(card.due)+'</span>';
+          body+='</li>';
+        });
+        body+='</ul>';
+      }
+      body+='</div>';
+    });
+  }
+
+  if(type==='tasks'){
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      if(!cards.length)return;
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      cards.forEach(function(card){
+        body+='<div class="card-block"><h3>'+xe(card.title)+'</h3>';
+        if(card.desc)body+='<p class="desc">'+xe(card.desc)+'</p>';
+        if(card.items&&card.items.length){
+          body+='<ul class="tasks">';
+          card.items.forEach(function(item){
+            var done=card.done&&card.done.indexOf(item)>=0;
+            body+='<li'+(done?' class="done"':'')+'><span class="cb">'+(done?'&#x2611;':'&#x2610;')+'</span>'+xe(item)+'</li>';
+          });
+          body+='</ul>';
+        }
+        body+='</div>';
+      });
+      body+='</div>';
+    });
+  }
+
+  if(type==='agenda'){
+    var n=0;
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      if(!cards.length)return;
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      cards.forEach(function(card){
+        n++;
+        body+='<div class="agenda-item"><h3><span class="num">'+n+'.</span> '+xe(card.title)+'</h3>';
+        if(card.items&&card.items.length){
+          body+='<ul class="tasks">';
+          card.items.forEach(function(item){
+            var done=card.done&&card.done.indexOf(item)>=0;
+            body+='<li'+(done?' class="done"':'')+'><span class="cb">'+(done?'&#x2611;':'&#x2610;')+'</span>'+xe(item)+'</li>';
+          });
+          body+='</ul>';
+        }
+        body+='<div class="notes-row"><span class="notes-label">Notes:</span><span class="nline"></span></div>';
+        body+='<div class="notes-row"><span class="notes-label"></span><span class="nline"></span></div>';
+        body+='</div>';
+      });
+      body+='</div>';
+    });
+  }
+
+  var css=
+    '*{box-sizing:border-box;margin:0;padding:0;}'+
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;font-size:13px;color:#111;background:#fff;padding:40px 48px;max-width:860px;margin:0 auto;}'+
+    '.header{margin-bottom:32px;padding-bottom:14px;border-bottom:2px solid #111;}'+
+    '.board-name{font-size:22px;font-weight:800;margin-bottom:5px;}'+
+    '.meta{font-size:12px;color:#666;display:flex;align-items:center;gap:10px;}'+
+    '.section{margin-bottom:28px;}'+
+    'h2{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:12px;}'+
+    'ul{padding:0;list-style:none;}'+
+    'ul>li{padding:5px 0 5px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#222;line-height:1.4;}'+
+    'ul>li:last-child{border-bottom:none;}'+
+    '.due{font-size:10px;color:#999;margin-left:8px;}'+
+    '.empty{color:#bbb;font-style:italic;font-size:12px;padding:4px 0;}'+
+    '.card-block{margin-bottom:14px;padding:12px 14px;border:1px solid #e8e8e8;border-left:3px solid #ccc;border-radius:4px;break-inside:avoid;}'+
+    '.card-block h3{font-size:13px;font-weight:700;margin-bottom:6px;color:#111;}'+
+    '.desc{font-size:12px;color:#666;margin-bottom:8px;line-height:1.5;}'+
+    'ul.tasks{padding:0;margin-top:4px;}'+
+    'ul.tasks li{position:relative;padding:3px 0 3px 22px;border-bottom:1px solid #f5f5f5;font-size:12px;line-height:1.5;color:#222;}'+
+    'ul.tasks li:last-child{border-bottom:none;}'+
+    'ul.tasks li.done{color:#aaa;text-decoration:line-through;}'+
+    '.cb{position:absolute;left:0;color:#555;text-decoration:none;}'+
+    '.done .cb{color:#aaa;}'+
+    '.agenda-item{margin-bottom:18px;padding:14px 16px;border:1px solid #ddd;border-radius:6px;break-inside:avoid;}'+
+    '.agenda-item h3{font-size:14px;font-weight:700;margin-bottom:8px;color:#111;}'+
+    '.num{color:#888;font-weight:400;}'+
+    '.notes-row{display:flex;align-items:flex-end;gap:8px;margin-top:9px;}'+
+    '.notes-label{font-size:12px;color:#888;white-space:nowrap;width:44px;flex-shrink:0;}'+
+    '.nline{flex:1;border-bottom:1px solid #bbb;min-height:16px;}'+
+    '.print-btn{position:fixed;top:20px;right:20px;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);}'+
+    '.print-btn:hover{background:#1d4ed8;}'+
+    '@media print{.print-btn{display:none;}body{padding:20px 24px;}'+
+    '.card-block{border-color:#ccc;break-inside:avoid;}.agenda-item{break-inside:avoid;}.section{break-inside:auto;}}';
+
+  var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
+    '<title>'+xe(boardName)+' — '+xe(reportTitle)+'</title>'+
+    '<style>'+css+'</style></head><body>'+
+    '<button class="print-btn" onclick="window.print()">&#x1F5A8; Print / Save PDF</button>'+
+    '<div class="header">'+
+      '<div class="board-name">'+xe(boardName)+'</div>'+
+      '<div class="meta"><span>'+xe(reportTitle)+'</span><span>&middot;</span><span>'+xe(dateStr)+'</span></div>'+
+    '</div>'+
+    body+
+    '</body></html>';
+
+  var win=window.open('','_blank');
+  if(win){win.document.write(html);win.document.close();}
+  else notify('&#x26A0;&#xFE0F; Pop-up blocked — please allow pop-ups for this site.');
 }
 
 var _modalW=510,_modalH=null;

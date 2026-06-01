@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Recovery & History Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede,.note{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}.note{border-left:4px solid #2563eb;background:#fff;padding:14px 16px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Recovery & History Snippets</h1><p class="lede">Undo, redo, manual snapshots, and auto-snapshots for preventing data loss in single-page browser apps.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="note"><strong>Depends on:</strong> state replacement and persistence helpers from the State & Persistence guide.</section><section class="card"><h2>Undo / Redo Stack</h2><pre><code>var _undoStack = [];
+var _redoStack = [];
+var _undoInProgress = false;
+
+function pushUndo() {
+  if (_undoInProgress) return;
+  _undoStack.push(JSON.stringify(S));
+  if (_undoStack.length > 50) _undoStack.shift();
+  _redoStack = [];
+  persistUndoSession();
+  updateUndoButtons();
+}
+
+function doUndo() {
+  if (!_undoStack.length) return;
+  _redoStack.push(JSON.stringify(S));
+  _undoInProgress = true;
+  replaceState(JSON.parse(_undoStack.pop()), { touch: false });
+  _undoInProgress = false;
+  persistUndoSession();
+  updateUndoButtons();
+}
+
+function doRedo() {
+  if (!_redoStack.length) return;
+  _undoStack.push(JSON.stringify(S));
+  _undoInProgress = true;
+  replaceState(JSON.parse(_redoStack.pop()), { touch: false });
+  _undoInProgress = false;
+  persistUndoSession();
+  updateUndoButtons();
+}</code></pre></section><section class="card"><h2>Session Undo Restore</h2><pre><code>function persistUndoSession() {
+  try { sessionStorage.setItem('fb4_undo', JSON.stringify(_undoStack.slice(-10))); }
+  catch (e) {}
+}
+
+function restoreUndoSession() {
+  try {
+    var arr = JSON.parse(sessionStorage.getItem('fb4_undo') || '[]');
+    if (Array.isArray(arr)) _undoStack = arr;
+    updateUndoButtons();
+  } catch (e) {}
+}</code></pre></section><section class="card"><h2>Manual Snapshots</h2><pre><code>function getSnapshots() {
+  try { return JSON.parse(localStorage.getItem('fb4_baks') || '[]'); }
+  catch (e) { return []; }
+}
+
+function setSnapshots(items) {
+  localStorage.setItem('fb4_baks', JSON.stringify(items));
+}
+
+function createSnapshot(name) {
+  var items = getSnapshots();
+  items.unshift({ id: uid(), name: name || 'Snapshot', ts: Date.now(), data: JSON.stringify(S) });
+  if (items.length > 25) items.splice(25);
+  setSnapshots(items);
+}</code></pre></section><section class="card"><h2>Auto-Snapshot Before Risky Actions</h2><pre><code>function createAutoSnapshot(label, trigger) {
+  var items = JSON.parse(localStorage.getItem('fb4_auto') || '[]');
+  items.unshift({ id: uid(), name: label, trigger: trigger || 'auto', ts: Date.now(), data: JSON.stringify(S) });
+  if (items.length > 15) items.splice(15);
+  localStorage.setItem('fb4_auto', JSON.stringify(items));
+}
+
+function withDestructiveSnapshot(label, fn) {
+  createAutoSnapshot(label, 'destructive');
+  pushUndo();
+  fn();
+  saveState();
+  render();
+}</code></pre></section></main></body></html>

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowBoard Feature Patterns</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5b667a;
+      --border: #d8deea;
+      --accent: #2563eb;
+      --accent-soft: #e8f0ff;
+      --code-bg: #101827;
+      --code-text: #e6edf7;
+      --code-muted: #9fb0c8;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.58;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+    header .wrap { padding: 30px 0 26px; }
+    main.wrap { padding: 24px 0 64px; }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 4vw, 44px);
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 27px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 14px; }
+    a { color: var(--accent); }
+    .lede {
+      max-width: 830px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .top-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+    nav {
+      position: sticky;
+      top: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    nav strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+    nav a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    nav a:hover { background: var(--accent-soft); color: var(--accent); }
+    section.doc-section {
+      margin-bottom: 22px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .summary {
+      color: var(--muted);
+      max-width: 820px;
+    }
+    .callout {
+      margin: 16px 0;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: #244066;
+    }
+    pre {
+      margin: 12px 0 18px;
+      overflow: auto;
+      padding: 16px;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+    }
+    :not(pre) > code {
+      background: #e9eef7;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #172033;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef3fb; }
+    @media (max-width: 840px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; }
+      section.doc-section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>FlowBoard Feature Patterns</h1>
+      <p class="lede">Reusable implementation notes for app features that are useful beyond FlowBoard: undo/redo, snapshots, auto-backups, import/export, and archive behavior.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <a class="top-link" href="index.html">Back to FlowBoard Docs</a>
+    <div class="layout">
+      <nav aria-label="Page sections">
+        <strong>Contents</strong>
+        <a href="#state-variables">State Variables</a>
+        <a href="#undo-redo">Undo / Redo</a>
+        <a href="#manual-backups">Manual Backups</a>
+        <a href="#auto-snapshots">Auto-Snapshots</a>
+        <a href="#import-export">Import / Export</a>
+        <a href="#archive">Archive</a>
+        <a href="#design-patterns">Design Patterns</a>
+      </nav>
+
+      <div>
+        <section id="state-variables" class="doc-section">
+          <h2>1. State Variables</h2>
+          <p class="summary">These globals hold undo history, redo history, and auto-snapshot timing state. Keep them outside the saved app state unless you specifically want these mechanics to sync across devices.</p>
+          <pre><code>// -- Undo / Redo --
+var _undoStack = [];        // array of JSON strings, full state snapshots, max 50
+var _redoStack = [];        // same shape as _undoStack, max 50
+var _undoInProgress = false; // prevents re-entrant pushes during doUndo/doRedo
+
+// -- Auto-snapshot trigger counter --
+var _savesSinceAutoSnap = 0;
+var _idleSnapTimer = null;  // fires after 20 minutes of inactivity</code></pre>
+        </section>
+
+        <section id="undo-redo" class="doc-section">
+          <h2>2. Undo / Redo</h2>
+          <p class="summary">The core pattern is simple: snapshot the full state before each user-level mutation. Undo replaces the live state with the last snapshot and pushes the replaced state onto the redo stack.</p>
+
+          <h3>Core stack logic</h3>
+          <pre><code>// Call _pushUndo() at the start of every mutation, before changing state.
+function _pushUndo() {
+  if (_undoInProgress) return;
+  _undoStack.push(JSON.stringify(S));
+  if (_undoStack.length > 50) _undoStack.shift();
+  _redoStack = [];
+  _persistUndoSession();
+  _updateUndoUI();
+}
+
+function doUndo() {
+  if (_undoStack.length === 0) return;
+  _redoStack.push(JSON.stringify(S));
+  if (_redoStack.length > 50) _redoStack.shift();
+  _undoInProgress = true;
+  S = JSON.parse(_undoStack.pop());
+  save();
+  render();
+  _undoInProgress = false;
+  _persistUndoSession();
+  _updateUndoUI();
+  notify('Undone' + ((_undoStack.length > 0) ? ' (' + _undoStack.length + ' more)' : ''));
+}
+
+function doRedo() {
+  if (_redoStack.length === 0) return;
+  _undoStack.push(JSON.stringify(S));
+  if (_undoStack.length > 50) _undoStack.shift();
+  _undoInProgress = true;
+  S = JSON.parse(_redoStack.pop());
+  save();
+  render();
+  _undoInProgress = false;
+  _persistUndoSession();
+  _updateUndoUI();
+  notify('Redone' + ((_redoStack.length > 0) ? ' (' + _redoStack.length + ' more)' : ''));
+}</code></pre>
+
+          <h3>Button state sync</h3>
+          <pre><code>function _updateUndoUI() {
+  var ub = document.getElementById('undo-btn');
+  var rb = document.getElementById('redo-btn');
+
+  if (ub) {
+    var ul = _undoStack.length;
+    ub.disabled = ul === 0;
+    ub.title = ul === 0
+      ? 'Nothing to undo'
+      : 'Undo (' + ul + ' step' + (ul !== 1 ? 's' : '') + ') - Ctrl+Z';
+  }
+
+  if (rb) {
+    var rl = _redoStack.length;
+    rb.disabled = rl === 0;
+    rb.title = rl === 0
+      ? 'Nothing to redo'
+      : 'Redo (' + rl + ' step' + (rl !== 1 ? 's' : '') + ') - Ctrl+Y';
+  }
+}</code></pre>
+
+          <h3>Session persistence</h3>
+          <p class="summary">This mirrors the last 10 undo snapshots into <code>sessionStorage</code>. It can survive a page refresh, but clears when the browser tab is closed.</p>
+          <pre><code>function _persistUndoSession() {
+  try {
+    var slice = _undoStack.slice(-10);
+    sessionStorage.setItem('fb4_undo', JSON.stringify(slice));
+  } catch (e) {}
+}
+
+function _restoreUndoSession() {
+  try {
+    var stored = sessionStorage.getItem('fb4_undo');
+    if (!stored) return;
+
+    var arr = JSON.parse(stored);
+    if (!Array.isArray(arr) || arr.length === 0) return;
+
+    _undoStack = arr;
+    _updateUndoUI();
+    notify('Undo history restored from last session (' + arr.length + ' step' + (arr.length !== 1 ? 's' : '') + ')');
+  } catch (e) {}
+}</code></pre>
+
+          <h3>Keyboard shortcuts</h3>
+          <pre><code>document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    doUndo();
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+    e.preventDefault();
+    doRedo();
+  }
+});</code></pre>
+
+          <h3>Mutation wiring pattern</h3>
+          <pre><code>function addItem(data) {
+  _pushUndo();
+  S.items.push(data);
+  save();
+  render();
+}
+
+function deleteItem(id) {
+  _pushUndo();
+  S.items = S.items.filter(function(x) { return x.id !== id; });
+  save();
+  render();
+}</code></pre>
+        </section>
+
+        <section id="manual-backups" class="doc-section">
+          <h2>3. Manual Backups</h2>
+          <p class="summary">Manual snapshots are durable user-created save points stored in <code>localStorage</code>. They are intentionally separate from undo history.</p>
+
+          <h3>Storage helpers</h3>
+          <pre><code>function getBaks() {
+  try {
+    return JSON.parse(localStorage.getItem('fb4_baks') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function setBaks(a) {
+  localStorage.setItem('fb4_baks', JSON.stringify(a));
+}</code></pre>
+
+          <h3>Create, rename, delete, restore</h3>
+          <pre><code>function createBak(name) {
+  var a = getBaks();
+  var tc = S.cols.reduce(function(n, c) { return n + c.cards.length; }, 0);
+
+  a.unshift({
+    id: uid(),
+    name: name || 'Snapshot ' + new Date().toLocaleString(),
+    ts: Date.now(),
+    cards: tc,
+    data: JSON.stringify(S)
+  });
+
+  if (a.length > 25) a.splice(25);
+  setBaks(a);
+  notify('Snapshot saved.');
+}
+
+function renameBak(id) {
+  var baks = getBaks();
+  var b = baks.find(function(x) { return x.id === id; });
+  if (!b) return;
+
+  var orig = b.name;
+  var inp = document.createElement('input');
+  inp.value = orig;
+
+  inp.onblur = function() {
+    var v = inp.value.trim() || orig;
+    baks.forEach(function(x) {
+      if (x.id === id) x.name = v;
+    });
+    setBaks(baks);
+  };
+
+  inp.onkeydown = function(e) {
+    if (e.key === 'Enter') inp.blur();
+    else if (e.key === 'Escape') {
+      inp.value = orig;
+      inp.blur();
+    }
+  };
+
+  // Replace the name element with the input in your UI.
+}
+
+function deleteBak(id) {
+  setBaks(getBaks().filter(function(x) { return x.id !== id; }));
+}
+
+function restoreBak(id) {
+  var b = getBaks().find(function(x) { return x.id === id; });
+  if (!b || !confirm('Restore snapshot? Current board will be replaced.')) return;
+
+  _autoSnapBefore('Before: Restore snapshot - ' + new Date().toLocaleTimeString());
+  _undoStack = [];
+  _redoStack = [];
+  _persistUndoSession();
+  _updateUndoUI();
+
+  S = JSON.parse(b.data);
+  save();
+  render();
+  notify('Board restored.');
+}</code></pre>
+        </section>
+
+        <section id="auto-snapshots" class="doc-section">
+          <h2>4. Auto-Snapshots</h2>
+          <p class="summary">Auto-snapshots protect users before risky operations and preserve useful recovery points without requiring manual action.</p>
+          <pre><code>function getAutoBaks() {
+  try {
+    return JSON.parse(localStorage.getItem('fb4_auto') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function setAutoBaks(a) {
+  try {
+    localStorage.setItem('fb4_auto', JSON.stringify(a));
+  } catch (e) {
+    console.warn('Storage full - auto-snapshot skipped.');
+  }
+}
+
+function _createAutoSnap(name, trigger) {
+  var autos = getAutoBaks();
+  autos.unshift({
+    id: uid(),
+    name: name,
+    ts: Date.now(),
+    trigger: trigger || 'auto',
+    data: JSON.stringify(S)
+  });
+
+  if (autos.length > 15) autos.splice(15);
+  setAutoBaks(autos);
+}
+
+function _autoSnapBefore(label) {
+  _createAutoSnap(label, 'destructive');
+}
+
+function _sessionStartSnap() {
+  var boardTs = S.lastModified || 0;
+  if (boardTs === 0) return;
+
+  var autos = getAutoBaks();
+  var lastAutoTs = autos.length > 0 ? autos[0].ts : 0;
+  if (boardTs <= lastAutoTs) return;
+
+  _createAutoSnap('Opened - ' + new Date().toLocaleString(), 'session');
+}
+
+function restoreAutoBak(id) {
+  var b = getAutoBaks().find(function(x) { return x.id === id; });
+  if (!b || !confirm('Restore this auto-snapshot? Current board will be replaced.')) return;
+
+  _autoSnapBefore('Before: Restore auto-snapshot - ' + new Date().toLocaleTimeString());
+  _undoStack = [];
+  _redoStack = [];
+  _persistUndoSession();
+  _updateUndoUI();
+
+  S = JSON.parse(b.data);
+  save();
+  render();
+  notify('Board restored from auto-snapshot.');
+}
+
+function deleteAutoBak(id) {
+  setAutoBaks(getAutoBaks().filter(function(x) { return x.id !== id; }));
+}</code></pre>
+        </section>
+
+        <section id="import-export" class="doc-section">
+          <h2>5. Export / Import</h2>
+          <p class="summary">Export writes either the live board state or a named snapshot to a JSON file. Import validates the JSON, creates a protective auto-snapshot, then replaces the live state.</p>
+          <pre><code>function exportBak(id) {
+  var data, name;
+
+  if (id) {
+    var b = getBaks().find(function(x) { return x.id === id; });
+    if (!b) return;
+    data = b.data;
+    name = b.name;
+  } else {
+    data = JSON.stringify(S);
+    name = 'flowboard_export';
+  }
+
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') + '_' + Date.now() + '.json';
+  a.click();
+}
+
+function importBak() {
+  var inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json';
+
+  inp.onchange = function(e) {
+    var f = e.target.files[0];
+    if (!f) return;
+
+    var r = new FileReader();
+    r.onload = function(ev) {
+      try {
+        var d = JSON.parse(ev.target.result);
+        if (!d.cols) throw 0;
+        if (!confirm('Import? Current board will be replaced.')) return;
+
+        _autoSnapBefore('Before: Import - ' + new Date().toLocaleTimeString());
+        _undoStack = [];
+        _redoStack = [];
+        _persistUndoSession();
+        _updateUndoUI();
+
+        S = d;
+        save();
+        render();
+        notify('Imported.');
+      } catch (e2) {
+        alert('Invalid file.');
+      }
+    };
+
+    r.readAsText(f);
+  };
+
+  inp.click();
+}</code></pre>
+        </section>
+
+        <section id="archive" class="doc-section">
+          <h2>6. Archive</h2>
+          <p class="summary">Archive is non-destructive. Items stay in the data model with flags and timestamps, while the active board render filters them out.</p>
+
+          <h3>Mark as archived</h3>
+          <pre><code>function archiveCard(cid) {
+  _pushUndo();
+
+  for (var i = 0; i < S.cols.length; i++) {
+    var idx = S.cols[i].cards.findIndex(function(x) { return x.id === cid; });
+    if (idx >= 0) {
+      var card = S.cols[i].cards[idx];
+      card.archived = true;
+      card.archivedAt = Date.now();
+      card.archivedFromCol = S.cols[i].id;
+      break;
+    }
+  }
+
+  save();
+  render();
+  notify('Card archived.');
+}
+
+function archiveCol(cid) {
+  var col = S.cols.find(function(x) { return x.id === cid; });
+  if (!col) return;
+
+  _pushUndo();
+  col.archived = true;
+  col.archivedAt = Date.now();
+  save();
+  render();
+  notify('Column archived.');
+}</code></pre>
+
+          <h3>Restore from archive</h3>
+          <pre><code>function restoreCard(cid) {
+  _pushUndo();
+
+  for (var i = 0; i < S.cols.length; i++) {
+    var idx = S.cols[i].cards.findIndex(function(x) { return x.id === cid; });
+    if (idx >= 0) {
+      var card = S.cols[i].cards[idx];
+      delete card.archived;
+      delete card.archivedAt;
+      delete card.archivedFromCol;
+      break;
+    }
+  }
+
+  save();
+  render();
+  notify('Card restored.');
+}
+
+function restoreCol(cid) {
+  var col = S.cols.find(function(x) { return x.id === cid; });
+  if (!col) return;
+
+  _pushUndo();
+  delete col.archived;
+  delete col.archivedAt;
+
+  col.cards.forEach(function(card) {
+    delete card.archived;
+    delete card.archivedAt;
+    delete card.archivedFromCol;
+  });
+
+  save();
+  render();
+  notify('Column restored.');
+}</code></pre>
+
+          <h3>Permanent delete from archive</h3>
+          <pre><code>function deleteArchivedCard(cid) {
+  if (!confirm('Permanently delete this card?')) return;
+  _pushUndo();
+
+  for (var i = 0; i < S.cols.length; i++) {
+    var idx = S.cols[i].cards.findIndex(function(x) { return x.id === cid; });
+    if (idx >= 0) {
+      S.cols[i].cards.splice(idx, 1);
+      break;
+    }
+  }
+
+  save();
+  render();
+}
+
+function deleteArchivedCol(cid) {
+  if (!confirm('Permanently delete this column and all its cards?')) return;
+  _pushUndo();
+  S.cols = S.cols.filter(function(x) { return x.id !== cid; });
+  save();
+  render();
+}</code></pre>
+
+          <h3>Filter archived items out of the live board</h3>
+          <pre><code>var activeCols = S.cols.filter(function(c) { return !c.archived; });
+var activeCards = col.cards.filter(function(k) { return !k.archived; });</code></pre>
+        </section>
+
+        <section id="design-patterns" class="doc-section">
+          <h2>Key Design Patterns</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Pattern</th>
+                <th>How it works</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Undo granularity</td>
+                <td>Use one <code>_pushUndo()</code> call per user action, not per keystroke.</td>
+              </tr>
+              <tr>
+                <td>Redo invalidation</td>
+                <td>Any new action clears <code>_redoStack</code>, matching standard editor behavior.</td>
+              </tr>
+              <tr>
+                <td>Auto-snap triggers</td>
+                <td>Create snapshots at session start, after idle timeout, and before destructive deletes or full-state replacement.</td>
+              </tr>
+              <tr>
+                <td>Archive vs delete</td>
+                <td>Archive sets flags and preserves the item in state. Delete removes it from the array.</td>
+              </tr>
+              <tr>
+                <td>Import/restore clears undo</td>
+                <td>Replacing the entire state makes prior undo steps unreliable, so both stacks are wiped.</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout">When adapting these snippets to another app, rename the storage keys and replace schema-specific checks like <code>d.cols</code> with validation for that app's state model.</div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
