@@ -312,6 +312,7 @@ input[type="date"]{color-scheme:dark}
   <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
   <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
+  <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
   <button class="btn btn-ghost" onclick="showArchiveModal()">📦 Archive</button>
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
   <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
@@ -2887,6 +2888,164 @@ function showBackupModal(){
       '2. On another device: open FlowBoard → Import .json'+
     '</div>',
   '580px',function(){var i=document.getElementById('bak-n');if(i)i.focus();});
+}
+
+function showReportModal(){
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">📋 Print Report</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">&#x2715;</button>'+
+    '</div>'+
+    '<div style="font-size:13px;color:var(--txt-d);margin-bottom:18px;line-height:1.6">Choose a format — opens in a new tab, ready to print or save as PDF.</div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px">'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'overview\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F4CB;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Board Overview</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Columns with card headings — one-page snapshot for quick reference</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'tasks\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x2705;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Full Task List</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Every card expanded with all tasks, organised by column</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'agenda\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F5E3;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Meeting Agenda</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Numbered agenda items with tasks and notes lines — print and bring to the table</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>',
+  '480px');
+}
+
+function openReport(type){
+  var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
+  var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  var cols=(S.cols||[]).filter(function(c){return !c.archived;});
+  var titles={overview:'Board Overview',tasks:'Full Task List',agenda:'Meeting Agenda'};
+  var reportTitle=titles[type]||'Report';
+
+  function xe(str){return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  var body='';
+
+  if(type==='overview'){
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      if(!cards.length){body+='<p class="empty">— No cards —</p>';}
+      else{
+        body+='<ul>';
+        cards.forEach(function(card){
+          body+='<li>'+xe(card.title);
+          if(card.due)body+=' <span class="due">'+xe(card.due)+'</span>';
+          body+='</li>';
+        });
+        body+='</ul>';
+      }
+      body+='</div>';
+    });
+  }
+
+  if(type==='tasks'){
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      if(!cards.length)return;
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      cards.forEach(function(card){
+        body+='<div class="card-block"><h3>'+xe(card.title)+'</h3>';
+        if(card.desc)body+='<p class="desc">'+xe(card.desc)+'</p>';
+        if(card.items&&card.items.length){
+          body+='<ul class="tasks">';
+          card.items.forEach(function(item){
+            var done=card.done&&card.done.indexOf(item)>=0;
+            body+='<li'+(done?' class="done"':'')+'><span class="cb">'+(done?'&#x2611;':'&#x2610;')+'</span>'+xe(item)+'</li>';
+          });
+          body+='</ul>';
+        }
+        body+='</div>';
+      });
+      body+='</div>';
+    });
+  }
+
+  if(type==='agenda'){
+    var n=0;
+    cols.forEach(function(col){
+      var cards=(col.cards||[]).filter(function(k){return !k.archived;});
+      if(!cards.length)return;
+      body+='<div class="section"><h2>'+xe(col.title)+'</h2>';
+      cards.forEach(function(card){
+        n++;
+        body+='<div class="agenda-item"><h3><span class="num">'+n+'.</span> '+xe(card.title)+'</h3>';
+        if(card.items&&card.items.length){
+          body+='<ul class="tasks">';
+          card.items.forEach(function(item){
+            var done=card.done&&card.done.indexOf(item)>=0;
+            body+='<li'+(done?' class="done"':'')+'><span class="cb">'+(done?'&#x2611;':'&#x2610;')+'</span>'+xe(item)+'</li>';
+          });
+          body+='</ul>';
+        }
+        body+='<div class="notes-row"><span class="notes-label">Notes:</span><span class="nline"></span></div>';
+        body+='<div class="notes-row"><span class="notes-label"></span><span class="nline"></span></div>';
+        body+='</div>';
+      });
+      body+='</div>';
+    });
+  }
+
+  var css=
+    '*{box-sizing:border-box;margin:0;padding:0;}'+
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;font-size:13px;color:#111;background:#fff;padding:40px 48px;max-width:860px;margin:0 auto;}'+
+    '.header{margin-bottom:32px;padding-bottom:14px;border-bottom:2px solid #111;}'+
+    '.board-name{font-size:22px;font-weight:800;margin-bottom:5px;}'+
+    '.meta{font-size:12px;color:#666;display:flex;align-items:center;gap:10px;}'+
+    '.section{margin-bottom:28px;}'+
+    'h2{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:12px;}'+
+    'ul{padding:0;list-style:none;}'+
+    'ul>li{padding:5px 0 5px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#222;line-height:1.4;}'+
+    'ul>li:last-child{border-bottom:none;}'+
+    '.due{font-size:10px;color:#999;margin-left:8px;}'+
+    '.empty{color:#bbb;font-style:italic;font-size:12px;padding:4px 0;}'+
+    '.card-block{margin-bottom:14px;padding:12px 14px;border:1px solid #e8e8e8;border-left:3px solid #ccc;border-radius:4px;break-inside:avoid;}'+
+    '.card-block h3{font-size:13px;font-weight:700;margin-bottom:6px;color:#111;}'+
+    '.desc{font-size:12px;color:#666;margin-bottom:8px;line-height:1.5;}'+
+    'ul.tasks{padding:0;margin-top:4px;}'+
+    'ul.tasks li{position:relative;padding:3px 0 3px 22px;border-bottom:1px solid #f5f5f5;font-size:12px;line-height:1.5;color:#222;}'+
+    'ul.tasks li:last-child{border-bottom:none;}'+
+    'ul.tasks li.done{color:#aaa;text-decoration:line-through;}'+
+    '.cb{position:absolute;left:0;color:#555;text-decoration:none;}'+
+    '.done .cb{color:#aaa;}'+
+    '.agenda-item{margin-bottom:18px;padding:14px 16px;border:1px solid #ddd;border-radius:6px;break-inside:avoid;}'+
+    '.agenda-item h3{font-size:14px;font-weight:700;margin-bottom:8px;color:#111;}'+
+    '.num{color:#888;font-weight:400;}'+
+    '.notes-row{display:flex;align-items:flex-end;gap:8px;margin-top:9px;}'+
+    '.notes-label{font-size:12px;color:#888;white-space:nowrap;width:44px;flex-shrink:0;}'+
+    '.nline{flex:1;border-bottom:1px solid #bbb;min-height:16px;}'+
+    '.print-btn{position:fixed;top:20px;right:20px;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);}'+
+    '.print-btn:hover{background:#1d4ed8;}'+
+    '@media print{.print-btn{display:none;}body{padding:20px 24px;}'+
+    '.card-block{border-color:#ccc;break-inside:avoid;}.agenda-item{break-inside:avoid;}.section{break-inside:auto;}}';
+
+  var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
+    '<title>'+xe(boardName)+' — '+xe(reportTitle)+'</title>'+
+    '<style>'+css+'</style></head><body>'+
+    '<button class="print-btn" onclick="window.print()">&#x1F5A8; Print / Save PDF</button>'+
+    '<div class="header">'+
+      '<div class="board-name">'+xe(boardName)+'</div>'+
+      '<div class="meta"><span>'+xe(reportTitle)+'</span><span>&middot;</span><span>'+xe(dateStr)+'</span></div>'+
+    '</div>'+
+    body+
+    '</body></html>';
+
+  var win=window.open('','_blank');
+  if(win){win.document.write(html);win.document.close();}
+  else notify('&#x26A0;&#xFE0F; Pop-up blocked — please allow pop-ups for this site.');
 }
 
 var _modalW=510,_modalH=null;
