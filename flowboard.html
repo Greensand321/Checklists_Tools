@@ -93,14 +93,17 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .icon-btn:active{transform:scale(.9)}
 .group-cols{display:flex;gap:12px;overflow-x:auto;align-items:stretch;padding-bottom:6px;overscroll-behavior-x:none}
 
-.col{min-width:268px;max-width:268px;flex-shrink:0;display:flex;flex-direction:column;border-radius:14px}
+.col{min-width:268px;max-width:268px;flex-shrink:0;display:flex;flex-direction:column;border-radius:14px;max-height:calc(100vh - 150px)}
 .col-hdr{border-radius:14px 14px 0 0;padding:10px 12px;display:flex;align-items:center;gap:7px;border:1px solid transparent;border-bottom:none}
 .col-name{flex:1;font-weight:700;font-size:12px;color:var(--txt-b);cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .col-count{border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;background:rgba(0,0,0,.18);cursor:pointer;user-select:none;transition:background .18s,color .18s,transform .12s}
 .col-count:hover{transform:scale(1.08)}
 .col-count:active{transform:scale(.95)}
-.col-body{border-radius:0 0 14px 14px;padding:8px 8px 10px;min-height:56px;display:flex;flex-direction:column;gap:6px;border:1px solid transparent;border-top:none;transition:border-color .2s,box-shadow .2s}
+.col-body{border-radius:0;padding:8px 8px 4px;min-height:0;flex:1;display:flex;flex-direction:column;gap:6px;border:1px solid transparent;border-top:none;border-bottom:none;transition:border-color .2s,box-shadow .2s;overflow-y:auto}
+.col-body::-webkit-scrollbar{width:4px}.col-body::-webkit-scrollbar-track{background:transparent}.col-body::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
 .col-body.drag-over{border-color:#60a5fa !important;box-shadow:inset 0 0 20px var(--dnd)}
+.col-body.drag-over+.col-foot{border-color:#60a5fa !important}
+.col-foot{border-radius:0 0 14px 14px;padding:4px 8px 8px;border:1px solid transparent;border-top:none;flex-shrink:0}
 
 .anim-card-fill{animation:cardFill .34s cubic-bezier(.34,1.2,.64,1) both}
 .col-body.limited{transition:height .32s cubic-bezier(.4,0,.2,1);overflow:hidden}
@@ -2422,6 +2425,7 @@ function mkCol(col,q){
     var slots=Math.min(col.cards.length,limit);
     var targetH=slots*CARD_SLOT_H+COL_BODY_PAD;
     body.classList.add('limited');
+    body.style.flex='0 0 auto';
     var prevH=_colHeights[col.id];
     if(prevH&&Math.round(prevH)!==targetH){
       body.style.height=prevH+'px';
@@ -2469,7 +2473,10 @@ function mkCol(col,q){
     if(light){ab.style.borderColor=hexToRgba(P.a,.3);ab.style.color=hexToRgba(P.a,.6);}
     ab.onclick=function(){addCardColor=null;addTo=col.id;render();};aa.appendChild(ab);
   }
-  body.appendChild(aa);wrap.appendChild(body);
+  var foot=document.createElement('div');foot.className='col-foot';
+  foot.style.background=bodyBg;foot.style.borderColor=bodyBd;
+  foot.appendChild(aa);
+  wrap.appendChild(body);wrap.appendChild(foot);
   return wrap;
 }
 
