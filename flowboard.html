@@ -2724,7 +2724,7 @@ function renderCM(colId){
         '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
         '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
         '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\')">📄 Report</button>'+
+        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
       '</div>'+
       '<div style="display:flex;gap:9px">'+
         '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
@@ -2981,12 +2981,19 @@ function showReportModal(){
   '480px');
 }
 
-function openReport(type){
+function openReport(type, cardId){
   var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
   var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
   var cols=(S.cols||[]).filter(function(c){return !c.archived;});
+  // When called from a card modal, narrow to just that one card
+  if(cardId){
+    cols=cols.map(function(col){
+      var match=(col.cards||[]).filter(function(k){return k.id===cardId&&!k.archived;});
+      return match.length?{id:col.id,title:col.title,cards:match}:null;
+    }).filter(Boolean);
+  }
   var titles={overview:'Board Overview',tasks:'Full Task List',agenda:'Meeting Agenda'};
-  var reportTitle=titles[type]||'Report';
+  var reportTitle=cardId&&cols[0]&&cols[0].cards[0]?cols[0].cards[0].title:titles[type]||'Report';
   var PALETTE=['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
   var totalCards=cols.reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
 
