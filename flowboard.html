@@ -1403,7 +1403,10 @@ function load(){
         if(k.due===undefined)k.due='';
       });
     });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
-  S=defaultState();save();
+  // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
+  // Keeping lastModified=0 ensures the Firebase listener sees the cloud as newer on first connect
+  // and pulls the real board instead of overwriting it with this empty default.
+  S=defaultState();_skipFbWrite=true;save();_skipFbWrite=false;
 }
 
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
