@@ -3144,7 +3144,7 @@ function openReport(type){
     '.ag-col{flex:1;min-width:0;}'+
     '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-sep:first-child{margin-top:0;}'+
-    '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;break-inside:avoid;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
@@ -3153,6 +3153,13 @@ function openReport(type){
     '.ag-task.done .ag-ttext{color:#bbb;text-decoration:line-through;}'+
     '.ag-notes{padding:3px 9px 6px;}'+
     '.ag-nline{border-bottom:1px solid #d4d4d4;height:22px;}'+
+    /* Continued header — hidden on screen, injected before print for cards that bleed across pages */
+    '.ag-cont-hdr{display:none;}'+
+    '@media print{'+
+      '.ag-cont-hdr{display:flex;align-items:center;gap:7px;padding:4px 9px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;break-before:page;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+      '.ag-cont-ttl{font-size:11px;font-weight:700;color:#555;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'+
+      '.ag-cont-lbl{font-size:9px;color:#aaa;font-style:italic;white-space:nowrap;}'+
+    '}'+
     /* Checkbox */
     '.cb{width:11px;height:11px;border:1.5px solid #d0d0d0;border-radius:2px;flex-shrink:0;margin-top:2px;position:relative;display:inline-flex;}'+
     '.cb.chk{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
@@ -3175,11 +3182,65 @@ function openReport(type){
       '</div>'+
     '</div>';
 
+  // Script injected into the popup: detects ag-item elements that bleed across
+  // a page boundary and inserts a "Continued" header at the crossing point.
+  // Runs on DOMContentLoaded (so it's visible on screen too, hidden via CSS)
+  // and re-runs on beforeprint so print layout measurements are fresh.
+  var contScript=
+    '<script>(function(){'+
+      'var _inj=[];'+
+      // Measure printable page height: Letter (11in) minus 2 × 0.6in @page margins
+      'function pageH(){'+
+        'var r=document.createElement("div");'+
+        'r.style.cssText="position:absolute;top:-9999px;width:1in;height:0";'+
+        'document.body.appendChild(r);'+
+        'var d=r.offsetWidth||96;'+
+        'document.body.removeChild(r);'+
+        'return(11-1.2)*d;'+
+      '}'+
+      'function inject(){'+
+        // Remove previously injected elements
+        '_inj.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e);});_inj=[];'+
+        'var ph=pageH();'+
+        '[].forEach.call(document.querySelectorAll(".ag-item"),function(item){'+
+          'var iTop=item.getBoundingClientRect().top;'+
+          'var pg0=Math.floor(iTop/ph);'+
+          'var pg1=Math.floor((iTop+item.offsetHeight-1)/ph);'+
+          'if(pg1<=pg0)return;'+
+          // Find the first child (skip ag-ihead at index 0) that starts on a later page
+          'var kids=[].slice.call(item.children,1);'+
+          'var target=null;'+
+          'for(var i=0;i<kids.length;i++){'+
+            'if(Math.floor(kids[i].getBoundingClientRect().top/ph)>pg0){target=kids[i];break;}'+
+          '}'+
+          'if(!target)return;'+
+          'var te=item.querySelector(".ag-title");'+
+          'var ne=item.querySelector(".ag-num");'+
+          'var c=document.createElement("div");'+
+          'c.className="ag-cont-hdr";'+
+          'c.style.borderLeft="3px solid "+item.style.borderLeftColor;'+
+          'c.style.borderRadius="0 5px 0 0";'+
+          'c.innerHTML='+
+            '(ne?"<span class=\\"ag-num\\" style=\\"background:"+item.style.borderLeftColor+";opacity:.5\\">"+ne.textContent+"</span>":"")+'+
+            '"<span class=\\"ag-cont-ttl\\">"+(te?te.textContent:"")+"</span>"+'+
+            '"<span class=\\"ag-cont-lbl\\">continued ↑</span>";'+
+          'item.insertBefore(c,target);_inj.push(c);'+
+        '});'+
+      '}'+
+      'document.addEventListener("DOMContentLoaded",inject);'+
+      'window.addEventListener("beforeprint",inject);'+
+      'window.addEventListener("afterprint",function(){'+
+        '_inj.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e);});_inj=[];'+
+      '});'+
+    '})();<\/script>';
+
+  var agendaScript=(type==='agenda')?contScript:'';
+
   var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
     '<title>'+xe(boardName)+' — '+xe(reportTitle)+'</title>'+
     '<style>'+css+'</style></head><body>'+
     '<button class="print-btn" onclick="window.print()">Print / Save PDF</button>'+
-    header+body+
+    header+body+agendaScript+
     '</body></html>';
 
   var win=window.open('','_blank');
