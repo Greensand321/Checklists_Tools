@@ -3019,54 +3019,63 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Full Task List: explicit 2-col flex per section ──
-     Each board column becomes a full-width section header followed by its
-     cards packed into two explicit flex columns using a greedy (FFD-style)
-     height estimator. Avoids CSS columns:2 which causes blank first pages
-     in Chrome print and interacts badly with break-inside:avoid. ── */
+  /* ── Full Task List: global FFD into 2 columns ──
+     Same First Fit Decreasing approach as the Agenda: estimate each board
+     column's total height, sort largest-first, then greedily pack entire
+     sections into whichever display column is currently shorter. This avoids
+     the per-section packing problem where a section with one tall card leaves
+     the opposite display column entirely empty. ── */
   if(type==='tasks'){
-    var TL_HEAD=32,TL_TASK=18,TL_DESC=16,TL_GAP=6,TL_CHARS=45;
-    body='';
+    var TL_SEP=28,TL_HEAD=32,TL_TASK=18,TL_DESC=16,TL_GAP=6,TL_CHARS=45;
+    var tlGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
       if(!cards.length)return;
       var bg=hexToRgba(color,.06);
-      body+='<div class="tl-sep" style="border-left-color:'+color+';background:'+bg+'">';
-      body+='<span class="tl-sep-name">'+xe(col.title)+'</span><span class="tl-sep-ct">'+cards.length+' card'+(cards.length!==1?'s':'')+'</span>';
-      body+='</div>';
-      // Greedy pack cards into 2 display columns within this section
-      var tcols=[{html:'',h:0},{html:'',h:0}];
+      var h=TL_SEP;
       cards.forEach(function(card){
         var items=card.items||[];
-        var done_n=card.done?card.done.length:0;
-        var total_n=items.length;
-        // Character-based height estimate matches agenda approach
+        var descH=card.desc?Math.max(1,Math.ceil((card.desc||'').length/TL_CHARS))*TL_DESC:0;
         var tasksH=items.reduce(function(sum,item){
           return sum+Math.max(1,Math.ceil((item||'').length/TL_CHARS))*TL_TASK;
         },0);
-        var descH=card.desc?Math.max(1,Math.ceil((card.desc||'').length/TL_CHARS))*TL_DESC:0;
-        var h=TL_HEAD+descH+(total_n?tasksH:TL_TASK)+TL_GAP;
-        var side=tcols[0].h<=tcols[1].h?0:1;
-        var ch='<div class="tl-card" style="border-left-color:'+color+'">';
-        ch+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
-        if(total_n)ch+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
-        ch+='</div>';
-        if(card.desc)ch+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
+        h+=TL_HEAD+descH+(items.length?tasksH:TL_TASK)+TL_GAP;
+      });
+      tlGroups.push({col:col,color:color,cards:cards,h:h,bg:bg});
+    });
+    // Sort largest-first, then greedy assign to shorter column
+    tlGroups.sort(function(a,b){return b.h-a.h;});
+    var dcols=[{html:'',h:0},{html:'',h:0}];
+    tlGroups.forEach(function(g){
+      var side=dcols[0].h<=dcols[1].h?0:1;
+      var html='<div class="tl-sep" style="border-left-color:'+g.color+';background:'+g.bg+'">'+
+        '<span class="tl-sep-name">'+xe(g.col.title)+'</span>'+
+        '<span class="tl-sep-ct">'+g.cards.length+' card'+(g.cards.length!==1?'s':'')+'</span>'+
+        '</div>';
+      g.cards.forEach(function(card){
+        var items=card.items||[];
+        var done_n=card.done?card.done.length:0;
+        var total_n=items.length;
+        html+='<div class="tl-card" style="border-left-color:'+g.color+'">';
+        html+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
+        if(total_n)html+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
+        html+='</div>';
+        if(card.desc)html+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
         if(items.length){
           items.forEach(function(item){
             var done=card.done&&card.done.indexOf(item)>=0;
-            ch+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
+            html+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
           });
         }else{
-          ch+='<div class="tl-notasks">No tasks</div>';
+          html+='<div class="tl-notasks">No tasks</div>';
         }
-        ch+='</div>';
-        tcols[side].html+=ch;
-        tcols[side].h+=h;
+        html+='</div>';
       });
-      body+='<div class="tl-cols"><div class="tl-col">'+tcols[0].html+'</div><div class="tl-col">'+tcols[1].html+'</div></div>';
+      dcols[side].html+=html;
+      dcols[side].h+=g.h;
     });
+    body='<div class="tl-cols"><div class="tl-col">'+dcols[0].html+'</div><div class="tl-col">'+dcols[1].html+'</div></div>';
   }
 
   /* ── Meeting Agenda: First Fit Decreasing into 2 columns ──
@@ -3156,7 +3165,7 @@ function openReport(type){
     '.ov-empty{font-size:10.5px;color:#ccc;font-style:italic;padding:3px 0;}'+
     /* Task List — explicit flex columns per section (no CSS columns:2) */
     '.tl-sep{display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:14px 0 6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.tl-sep:first-of-type{margin-top:0;}'+
+    '.tl-sep:first-child{margin-top:0;}'+
     '.tl-cols{display:flex;gap:20px;align-items:flex-start;margin-bottom:4px;}'+
     '.tl-col{flex:1;min-width:0;}'+
     '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
