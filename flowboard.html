@@ -2756,7 +2756,7 @@ function renderCM(colId){
     '</div>'+
     (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'')+
     '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-      '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
+      '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-bottom:14px">'+
@@ -2825,6 +2825,100 @@ function addCMItem(colId){
     }
   }
   setTimeout(function(){var ni=document.getElementById('cm-ni');if(ni)ni.focus();},0);
+}
+function cleanPastedChecklistItem(s){
+  return String(s||'')
+    .replace(/^\s*(?:[-*•–—]\s+|\d+[\.)]\s+|[A-Za-z][\.)]\s+|\[[ xX]\]\s*)/,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function parseChecklistPaste(text,mode){
+  var normalized=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  if(mode==='single'){
+    var single=cleanPastedChecklistItem(normalized);
+    return single?[single]:[];
+  }
+  if(mode==='paragraphs'){
+    return normalized.split(/\n\s*\n+/).map(cleanPastedChecklistItem).filter(Boolean);
+  }
+  return normalized.split('\n').map(cleanPastedChecklistItem).filter(Boolean);
+}
+function closeCMItemPastePreview(){
+  var overlay=document.getElementById('cm-paste-preview');
+  if(overlay)overlay.remove();
+}
+function cmPastePreviewList(items){
+  if(!items.length)return '<div style="font-size:12px;color:var(--txt-d);padding:8px 0">No checklist items detected.</div>';
+  return '<div style="max-height:168px;overflow:auto;border-top:1px solid var(--bd-s);margin-top:8px;padding-top:4px">'+
+    items.slice(0,12).map(function(x){
+      return '<div class="chk-row" style="padding:5px 0">'+
+        '<span class="checkbox" style="cursor:default"></span>'+
+        '<span style="flex:1;font-size:12px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(x)+'</span>'+
+      '</div>';
+    }).join('')+
+    (items.length>12?'<div class="bak-date" style="padding-top:6px">...and '+(items.length-12)+' more</div>':'')+
+  '</div>';
+}
+function cmPasteOptionHtml(colId,mode,title,desc,items,btnClass,btnText){
+  return '<div class="bak-item" style="display:block;padding:13px 14px">'+
+    '<div style="display:flex;align-items:flex-start;gap:12px">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div class="bak-name" style="cursor:default;margin-bottom:3px">'+title+'</div>'+
+        '<div class="bak-date">'+desc+' &middot; '+items.length+' item'+(items.length===1?'':'s')+'</div>'+
+      '</div>'+
+      '<button class="btn '+btnClass+'" style="padding:6px 11px;font-size:12px;flex-shrink:0" onclick="applyCMItemPaste(\''+colId+'\',\''+mode+'\',this.closest(\'#cm-paste-preview\').dataset.text)">'+btnText+'</button>'+
+    '</div>'+
+    cmPastePreviewList(items)+
+  '</div>';
+}
+function applyCMItemPaste(colId,mode,text){
+  var items=parseChecklistPaste(text,mode);
+  if(!items.length)return;
+  EC.items=items.concat(EC.items);
+  var input=document.getElementById('cm-ni');
+  if(input)input.value='';
+  closeCMItemPastePreview();
+  saveCard(EC);refreshChk(colId);
+  notify('Added '+items.length+' checklist item'+(items.length===1?'':'s'));
+  setTimeout(function(){var ni=document.getElementById('cm-ni');if(ni)ni.focus();},0);
+}
+function showCMItemPastePreview(colId,text){
+  closeCMItemPastePreview();
+  var lineItems=parseChecklistPaste(text,'lines');
+  var paragraphItems=parseChecklistPaste(text,'paragraphs');
+  var singleItems=parseChecklistPaste(text,'single');
+  var overlay=document.createElement('div');
+  overlay.id='cm-paste-preview';
+  overlay.className='overlay';
+  overlay.dataset.text=text;
+  overlay.style.zIndex='260';
+  overlay.innerHTML=
+    '<div class="modal" style="width:560px;padding:22px">'+
+      '<button class="icon-btn" style="position:absolute;top:14px;right:16px;color:var(--txt-d)" onclick="closeCMItemPastePreview()">×</button>'+
+      '<div class="modal-title" style="margin-bottom:6px">Paste checklist items</div>'+
+      '<div style="font-size:12px;color:var(--txt-m);line-height:1.5;margin-bottom:16px;max-width:460px">Choose how FlowBoard should interpret the pasted line breaks before adding them to this card.</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:14px;font-size:12px;color:var(--txt-m)">'+
+        '<span style="flex:1">Plain text preserves line breaks, but not whether the user meant lines or paragraphs.</span>'+
+        '<span class="auto-trigger-badge" style="background:rgba(96,165,250,.15);color:#60a5fa">Preview</span>'+
+      '</div>'+
+      '<div style="display:grid;gap:10px">'+
+        cmPasteOptionHtml(colId,'lines','One item per line','Best for pasted task lists',lineItems,'btn-primary','Add')+
+        cmPasteOptionHtml(colId,'paragraphs','One item per paragraph','Best when each task has wrapped notes',paragraphItems,'btn-ghost','Add')+
+        cmPasteOptionHtml(colId,'single','Paste as one checklist item','Best for one long item or copied notes',singleItems,'btn-ghost','Add')+
+      '</div>'+
+    '</div>';
+  overlay.onclick=function(e){if(e.target===overlay)closeCMItemPastePreview();};
+  document.body.appendChild(overlay);
+}
+function handleCMItemPaste(e,colId){
+  var clip=e.clipboardData||window.clipboardData;
+  var text=clip?clip.getData('text/plain'):'';
+  if(!text||!/[\r\n]/.test(text))return;
+  e.preventDefault();
+  var input=e.target;
+  var before=input&&typeof input.selectionStart==='number'?input.value.slice(0,input.selectionStart):'';
+  var after=input&&typeof input.selectionEnd==='number'?input.value.slice(input.selectionEnd):'';
+  showCMItemPastePreview(colId,before+text+after);
 }
 function updateCMProgress(){
   var pct=EC.items.length?Math.round(EC.done.length/EC.items.length*100):null;
