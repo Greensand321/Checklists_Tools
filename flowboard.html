@@ -674,10 +674,13 @@ function connectToKey(key){
       return;
     }
     migrateRemote(remote);
-    // ── Board identity guard: if remote boardId doesn't match local, push local ──
-    // This prevents a stale or cross-contaminated Firebase record from overwriting
-    // a correctly renamed or freshly created local board.
-    if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId&&_isSafeWrite(S)){
+    // ── Board identity guard: only fires during ACTIVE sync (baseline already set) ──
+    // On initial connect or board switch _remoteBaseline is null, so S still holds the
+    // previous board's data. Pushing local here would overwrite the target board with the
+    // wrong board's content — which is exactly the bug we must prevent.
+    // During active sync (baseline set) a sudden boardId change on the remote is suspicious
+    // (cross-contamination from another tab/device) — in that case push local to correct it.
+    if(_remoteBaseline&&remote.boardId&&S.boardId&&remote.boardId!==S.boardId&&_isSafeWrite(S)){
       _pendingWrites++;
       _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
       return;
@@ -688,6 +691,12 @@ function connectToKey(key){
     _setRemoteBaseline(remote);
     var localTs=S.lastModified||0;
     var remoteTs=remote.lastModified||0;
+    // On initial connect / board switch the remote boardId differs from the stale local S.
+    // Always trust the remote — it IS the board we just switched to.
+    if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId){
+      _applyRemote(remote);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');
+      return;
+    }
     if(localTs>remoteTs&&_isSafeWrite(S)){
       // Local is newer AND structurally consistent with cloud — push local up.
       _pendingWrites++;
@@ -968,7 +977,6 @@ function confirmNewBoard(key,label,startFresh){
   // same board (shared structure/timestamps) which leads to sync collisions.
   S=defaultState();
   S.prefs.boardName=label;
-  S.lastModified=Date.now(); // ensure local wins the Firebase timestamp race
   save();render();
   connectToKey(key);
   window._keysModalRender&&window._keysModalRender();
