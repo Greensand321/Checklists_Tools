@@ -3052,26 +3052,35 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Meeting Agenda: row-by-row pair layout ──
-     Groups are paired in board order (1+2, 3+4, …) and each pair renders as
-     an independent flex row. This bounds empty space to at most one group's
-     height per row — a large last group can't leave multiple blank pages the
-     way a continuous two-column layout could. ── */
+  /* ── Meeting Agenda: First Fit Decreasing into 2 columns ──
+     Sort groups by estimated height largest-first, then greedily assign
+     each to whichever display column is currently shorter. This is the
+     classic "First Fit Decreasing" bin-packing heuristic — it produces
+     near-optimal column balance and prevents one column running many pages
+     longer than the other. Groups appear sorted by size, not board order. ── */
   if(type==='agenda'){
     var n=0;
-    // Collect non-empty groups preserving board order
+    var H_SEP=26,H_CARD_BASE=47,H_ITEM=20,H_NOTES=30,H_GAP=7;
     var agGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
       if(!cards.length)return;
-      agGroups.push({col:col,color:color,cards:cards,ci:ci});
+      var h=H_SEP;
+      cards.forEach(function(card){
+        var nl=card.items?card.items.length:0;
+        h+=H_CARD_BASE+nl*H_ITEM+(nl<=3?H_NOTES*0.5:nl<=8?H_NOTES:H_NOTES*1.5)+H_GAP;
+      });
+      agGroups.push({col:col,color:color,cards:cards,h:h,ci:ci});
     });
-    // Render each group as a cell; two cells per row
-    function renderCell(g){
+    // Sort largest-first for First Fit Decreasing
+    agGroups.sort(function(a,b){return b.h-a.h;});
+    // Greedy assign to shorter column
+    var dcols=[{html:'',h:0},{html:'',h:0}];
+    agGroups.forEach(function(g){
+      var side=dcols[0].h<=dcols[1].h?0:1;
       var bg=hexToRgba(g.color,.06);
-      var h='<div class="ag-cell">';
-      h+='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
+      var h='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
       g.cards.forEach(function(card){
         n++;
         h+='<div class="ag-item" style="border-left-color:'+g.color+'">';
@@ -3087,21 +3096,10 @@ function openReport(type){
         h+='<div class="ag-notes">'+_nHtml+'</div>';
         h+='</div>';
       });
-      h+='</div>';
-      return h;
-    }
-    var rowsHtml='';
-    for(var gi=0;gi<agGroups.length;gi+=2){
-      rowsHtml+='<div class="ag-row">';
-      rowsHtml+=renderCell(agGroups[gi]);
-      if(gi+1<agGroups.length){
-        rowsHtml+=renderCell(agGroups[gi+1]);
-      }else{
-        rowsHtml+='<div class="ag-cell"></div>'; // pad last odd row
-      }
-      rowsHtml+='</div>';
-    }
-    body='<div class="ag-rows">'+rowsHtml+'</div>';
+      dcols[side].html+=h;
+      dcols[side].h+=g.h;
+    });
+    body='<div class="ag-cols"><div class="ag-col">'+dcols[0].html+'</div><div class="ag-col">'+dcols[1].html+'</div></div>';
   }
 
   var css=
@@ -3146,9 +3144,8 @@ function openReport(type){
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
     /* Agenda — row-by-row pairs */
-    '.ag-rows{}'+
-    '.ag-row{display:flex;gap:20px;align-items:flex-start;margin-bottom:4px;}'+
-    '.ag-cell{flex:1;min-width:0;}'+
+    '.ag-cols{display:flex;gap:20px;align-items:flex-start;}'+
+    '.ag-col{flex:1;min-width:0;}'+
     '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-sep:first-child{margin-top:0;}'+
     '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
