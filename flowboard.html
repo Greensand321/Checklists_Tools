@@ -252,6 +252,10 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-row:hover .chk-handle{opacity:1}
 .chk-ctrl-btn{background:none;border:none;color:var(--txt-d);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;border-radius:6px;transition:background .15s,color .15s}
 .chk-ctrl-btn:hover{background:var(--surf3);color:var(--txt-m)}
+.paste-opt{background:var(--surf2);border:1px solid var(--bd);border-radius:11px;padding:12px 14px;transition:background .15s}
+.paste-opt-primary{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.05)}
+.paste-opt-title{font-weight:700;font-size:13px;color:var(--txt-b);margin-bottom:2px}
+.paste-opt-desc{font-size:11px;color:var(--txt-d)}
 .chk-tip{position:fixed;background:var(--surf);border:1px solid var(--bd-i);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--txt);max-width:260px;word-break:break-word;line-height:1.5;z-index:999;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:0;transition:opacity .15s}
 .checkbox{width:17px;height:17px;border-radius:5px;border:2px solid var(--bd-i);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s cubic-bezier(.34,1.4,.64,1)}
 .checkbox.on{background:#10b981;border-color:#10b981;transform:scale(1.1)}
@@ -2848,25 +2852,27 @@ function closeCMItemPastePreview(){
   if(overlay)overlay.remove();
 }
 function cmPastePreviewList(items){
-  if(!items.length)return '<div style="font-size:12px;color:var(--txt-d);padding:8px 0">No checklist items detected.</div>';
-  return '<div style="max-height:168px;overflow:auto;border-top:1px solid var(--bd-s);margin-top:8px;padding-top:4px">'+
-    items.slice(0,12).map(function(x){
-      return '<div class="chk-row" style="padding:5px 0">'+
-        '<span class="checkbox" style="cursor:default"></span>'+
-        '<span style="flex:1;font-size:12px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(x)+'</span>'+
+  if(!items.length)return '<div style="font-size:12px;color:var(--txt-dd);padding:7px 0 2px">Nothing to add.</div>';
+  return '<div style="margin-top:9px;border-top:1px solid var(--bd-s);padding-top:4px">'+
+    items.slice(0,10).map(function(x){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'+
+        '<span class="checkbox" style="cursor:default;flex-shrink:0"></span>'+
+        '<span style="flex:1;font-size:12px;color:var(--txt-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(x)+'</span>'+
       '</div>';
     }).join('')+
-    (items.length>12?'<div class="bak-date" style="padding-top:6px">...and '+(items.length-12)+' more</div>':'')+
+    (items.length>10?'<div style="font-size:11px;color:var(--txt-dd);padding-top:4px">+&thinsp;'+(items.length-10)+' more</div>':'')+
   '</div>';
 }
-function cmPasteOptionHtml(colId,mode,title,desc,items,btnClass,btnText){
-  return '<div class="bak-item" style="display:block;padding:13px 14px">'+
-    '<div style="display:flex;align-items:flex-start;gap:12px">'+
+function cmPasteOptionHtml(colId,mode,title,desc,items,isPrimary){
+  var countLabel=items.length+' item'+(items.length===1?'':'s');
+  return '<div class="paste-opt'+(isPrimary?' paste-opt-primary':'')+'">'+
+    '<div style="display:flex;align-items:center;gap:10px">'+
       '<div style="flex:1;min-width:0">'+
-        '<div class="bak-name" style="cursor:default;margin-bottom:3px">'+title+'</div>'+
-        '<div class="bak-date">'+desc+' &middot; '+items.length+' item'+(items.length===1?'':'s')+'</div>'+
+        '<div class="paste-opt-title">'+title+'</div>'+
+        '<div class="paste-opt-desc">'+desc+'</div>'+
       '</div>'+
-      '<button class="btn '+btnClass+'" style="padding:6px 11px;font-size:12px;flex-shrink:0" onclick="applyCMItemPaste(\''+colId+'\',\''+mode+'\',this.closest(\'#cm-paste-preview\').dataset.text)">'+btnText+'</button>'+
+      '<span style="font-size:11px;font-weight:700;color:var(--txt-d);flex-shrink:0">'+countLabel+'</span>'+
+      '<button class="btn '+(isPrimary?'btn-primary':'btn-ghost')+'" style="padding:5px 12px;font-size:12px;flex-shrink:0" onclick="applyCMItemPaste(\''+colId+'\',\''+mode+'\',this.closest(\'#cm-paste-preview\').dataset.text)">Add</button>'+
     '</div>'+
     cmPastePreviewList(items)+
   '</div>';
@@ -2874,7 +2880,8 @@ function cmPasteOptionHtml(colId,mode,title,desc,items,btnClass,btnText){
 function applyCMItemPaste(colId,mode,text){
   var items=parseChecklistPaste(text,mode);
   if(!items.length)return;
-  EC.items=items.concat(EC.items);
+  EC.items=EC.items.concat(items);
+  _cmDirty=true;
   var input=document.getElementById('cm-ni');
   if(input)input.value='';
   closeCMItemPastePreview();
@@ -2893,18 +2900,14 @@ function showCMItemPastePreview(colId,text){
   overlay.dataset.text=text;
   overlay.style.zIndex='260';
   overlay.innerHTML=
-    '<div class="modal" style="width:560px;padding:22px">'+
-      '<button class="icon-btn" style="position:absolute;top:14px;right:16px;color:var(--txt-d)" onclick="closeCMItemPastePreview()">×</button>'+
-      '<div class="modal-title" style="margin-bottom:6px">Paste checklist items</div>'+
-      '<div style="font-size:12px;color:var(--txt-m);line-height:1.5;margin-bottom:16px;max-width:460px">Choose how FlowBoard should interpret the pasted line breaks before adding them to this card.</div>'+
-      '<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:14px;font-size:12px;color:var(--txt-m)">'+
-        '<span style="flex:1">Plain text preserves line breaks, but not whether the user meant lines or paragraphs.</span>'+
-        '<span class="auto-trigger-badge" style="background:rgba(96,165,250,.15);color:#60a5fa">Preview</span>'+
-      '</div>'+
-      '<div style="display:grid;gap:10px">'+
-        cmPasteOptionHtml(colId,'lines','One item per line','Best for pasted task lists',lineItems,'btn-primary','Add')+
-        cmPasteOptionHtml(colId,'paragraphs','One item per paragraph','Best when each task has wrapped notes',paragraphItems,'btn-ghost','Add')+
-        cmPasteOptionHtml(colId,'single','Paste as one checklist item','Best for one long item or copied notes',singleItems,'btn-ghost','Add')+
+    '<div class="modal" style="width:min(560px,100%)">'+
+      '<button class="icon-btn" style="position:absolute;top:16px;right:16px;font-size:17px;line-height:1;color:var(--txt-d)" onclick="closeCMItemPastePreview()">&#x2715;</button>'+
+      '<div class="modal-title" style="margin-bottom:5px">Paste checklist items</div>'+
+      '<div style="font-size:12px;color:var(--txt-d);margin-bottom:20px">Select how the pasted text should be split into items.</div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+
+        cmPasteOptionHtml(colId,'lines','One item per line','Best for task lists and bullet points',lineItems,true)+
+        cmPasteOptionHtml(colId,'paragraphs','One item per paragraph','Best when tasks span multiple lines',paragraphItems,false)+
+        cmPasteOptionHtml(colId,'single','Keep as one item','Paste everything as a single task',singleItems,false)+
       '</div>'+
     '</div>';
   overlay.onclick=function(e){if(e.target===overlay)closeCMItemPastePreview();};
