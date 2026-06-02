@@ -956,7 +956,9 @@ function showKeysModal(){
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
-      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'">'
+      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'"'
+        +(isActive?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
+        +'>'
         +'<div style="flex:1;min-width:0">'
         +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
         +'<div class="key-val">'+esc(k.key)+'</div>'
@@ -990,6 +992,10 @@ function showKeysModal(){
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
     setModal(h);
+    // Override overlay click to close without going through the card-dirty guard —
+    // there is no editable card in this modal so the guard is irrelevant here.
+    var ov=document.querySelector('#modal-root .overlay');
+    if(ov)ov.onclick=function(){document.getElementById('modal-root').innerHTML='';};
   }
   window._keysModalRender=renderKeysModal;
   renderKeysModal();
