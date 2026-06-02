@@ -3052,31 +3052,50 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Meeting Agenda: 2-col grid, flat siblings (sep spans full width, each card is its own cell) ── */
+  /* ── Meeting Agenda: greedy height-balanced 2-col layout ──
+     Estimate each board-column group's height, then greedily assign it to
+     whichever display column is currently shorter (tetris-style packing).
+     Two explicit <div> columns avoid CSS grid's dumb left-to-right flow
+     and the blank-first-page bug caused by grid + break-inside:avoid. ── */
   if(type==='agenda'){
     var n=0;
-    body='<div class="ag-grid">';
+    // Height constants (approximate px values matching the CSS below)
+    var H_SEP=26,H_CARD_BASE=47,H_ITEM=20,H_NOTES=50,H_GAP=7;
+    // Pre-compute groups with their estimated heights
+    var agGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
       if(!cards.length)return;
-      var bg=hexToRgba(color,.06);
-      body+='<div class="ag-sep" style="border-left-color:'+color+';background:'+bg+'">'+xe(col.title)+'</div>';
+      var h=H_SEP;
       cards.forEach(function(card){
+        h+=H_CARD_BASE+(card.items?card.items.length:0)*H_ITEM+H_NOTES+H_GAP;
+      });
+      agGroups.push({col:col,color:color,cards:cards,h:h,ci:ci});
+    });
+    // Greedy bin-pack: assign each group to the shorter display column
+    var dcols=[{html:'',h:0},{html:'',h:0}];
+    agGroups.forEach(function(g){
+      var side=dcols[0].h<=dcols[1].h?0:1;
+      var bg=hexToRgba(g.color,.06);
+      var h='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
+      g.cards.forEach(function(card){
         n++;
-        body+='<div class="ag-item" style="border-left-color:'+color+'">';
-        body+='<div class="ag-ihead"><span class="ag-num" style="background:'+color+'">'+n+'</span><span class="ag-title">'+xe(card.title)+'</span></div>';
+        h+='<div class="ag-item" style="border-left-color:'+g.color+'">';
+        h+='<div class="ag-ihead"><span class="ag-num" style="background:'+g.color+'">'+n+'</span><span class="ag-title">'+xe(card.title)+'</span></div>';
         if(card.items&&card.items.length){
           card.items.forEach(function(item){
             var done=card.done&&card.done.indexOf(item)>=0;
-            body+='<div class="ag-task'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="ag-ttext">'+xe(item)+'</span></div>';
+            h+='<div class="ag-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="ag-ttext">'+xe(item)+'</span></div>';
           });
         }
-        body+='<div class="ag-notes"><div class="ag-nline"></div><div class="ag-nline"></div></div>';
-        body+='</div>';
+        h+='<div class="ag-notes"><div class="ag-nline"></div><div class="ag-nline"></div></div>';
+        h+='</div>';
       });
+      dcols[side].html+=h;
+      dcols[side].h+=g.h;
     });
-    body+='</div>';
+    body='<div class="ag-cols"><div class="ag-col">'+dcols[0].html+'</div><div class="ag-col">'+dcols[1].html+'</div></div>';
   }
 
   var css=
@@ -3120,10 +3139,12 @@ function openReport(type){
     '.tl-task:last-child{border-bottom:none;}'+
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
-    /* Agenda */
-    '.ag-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 20px;align-items:start;}'+
-    '.ag-sep{grid-column:1/-1;display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:8px 0 2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    /* Agenda — two explicit flex columns, greedy-packed by height */
+    '.ag-cols{display:flex;gap:20px;align-items:flex-start;}'+
+    '.ag-col{flex:1;min-width:0;}'+
+    '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-sep:first-child{margin-top:0;}'+
+    '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;break-inside:avoid;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
