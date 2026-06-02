@@ -3060,7 +3060,8 @@ function openReport(type){
      longer than the other. Groups appear sorted by size, not board order. ── */
   if(type==='agenda'){
     var n=0;
-    var H_SEP=26,H_CARD_BASE=47,H_ITEM=20,H_NOTES=30,H_GAP=7;
+    // H_CHARS_PER_LINE: print column is ~340px, ag-task font is 11px with ~8px/char
+    var H_SEP=28,H_CARD_HEAD=38,H_LINE=20,H_GAP=7,H_CHARS=42;
     var agGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
@@ -3068,8 +3069,14 @@ function openReport(type){
       if(!cards.length)return;
       var h=H_SEP;
       cards.forEach(function(card){
-        var nl=card.items?card.items.length:0;
-        h+=H_CARD_BASE+nl*H_ITEM+(nl<=3?H_NOTES*0.5:nl<=8?H_NOTES:H_NOTES*1.5)+H_GAP;
+        var items=card.items||[];
+        var nl=items.length;
+        // Account for task text wrapping: long items take multiple lines in print
+        var tasksH=items.reduce(function(sum,item){
+          return sum+Math.max(1,Math.ceil((item||'').length/H_CHARS))*H_LINE;
+        },0);
+        var notesH=nl<=3?28:nl<=8?50:72;
+        h+=H_CARD_HEAD+tasksH+notesH+H_GAP;
       });
       agGroups.push({col:col,color:color,cards:cards,h:h,ci:ci});
     });
