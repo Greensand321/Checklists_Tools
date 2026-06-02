@@ -2748,7 +2748,7 @@ function renderCM(colId){
     '</div>'+
     (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'')+
     '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-      '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
+      '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-bottom:14px">'+
@@ -2817,6 +2817,87 @@ function addCMItem(colId){
     }
   }
   setTimeout(function(){var ni=document.getElementById('cm-ni');if(ni)ni.focus();},0);
+}
+function cleanPastedChecklistItem(s){
+  return String(s||'')
+    .replace(/^\s*(?:[-*•–—]\s+|\d+[\.)]\s+|[A-Za-z][\.)]\s+|\[[ xX]\]\s*)/,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function parseChecklistPaste(text,mode){
+  var normalized=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  if(mode==='single'){
+    var single=cleanPastedChecklistItem(normalized);
+    return single?[single]:[];
+  }
+  if(mode==='paragraphs'){
+    return normalized.split(/\n\s*\n+/).map(cleanPastedChecklistItem).filter(Boolean);
+  }
+  return normalized.split('\n').map(cleanPastedChecklistItem).filter(Boolean);
+}
+function closeCMItemPastePreview(){
+  var overlay=document.getElementById('cm-paste-preview');
+  if(overlay)overlay.remove();
+}
+function cmPastePreviewList(items){
+  if(!items.length)return '<div style="font-size:12px;color:var(--txt-d);padding:8px 0">No checklist items detected.</div>';
+  return '<ol style="margin:0;padding-left:20px;max-height:180px;overflow:auto;font-size:12px;color:var(--txt-m);line-height:1.45">'+
+    items.slice(0,12).map(function(x){return '<li style="margin-bottom:4px">'+esc(x)+'</li>';}).join('')+
+    (items.length>12?'<li style="margin-bottom:4px;color:var(--txt-d)">...and '+(items.length-12)+' more</li>':'')+
+  '</ol>';
+}
+function applyCMItemPaste(colId,mode,text){
+  var items=parseChecklistPaste(text,mode);
+  if(!items.length)return;
+  EC.items=items.concat(EC.items);
+  var input=document.getElementById('cm-ni');
+  if(input)input.value='';
+  closeCMItemPastePreview();
+  saveCard(EC);refreshChk(colId);
+  notify('Added '+items.length+' checklist item'+(items.length===1?'':'s'));
+  setTimeout(function(){var ni=document.getElementById('cm-ni');if(ni)ni.focus();},0);
+}
+function showCMItemPastePreview(colId,text){
+  closeCMItemPastePreview();
+  var lineItems=parseChecklistPaste(text,'lines');
+  var paragraphItems=parseChecklistPaste(text,'paragraphs');
+  var overlay=document.createElement('div');
+  overlay.id='cm-paste-preview';
+  overlay.dataset.text=text;
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:260;display:flex;align-items:center;justify-content:center;padding:18px';
+  overlay.innerHTML=
+    '<div style="width:min(560px,100%);background:var(--modal);border:1px solid var(--bd-i);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px;color:var(--txt)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:10px">'+
+        '<div><div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:4px">Paste checklist items</div>'+
+        '<div style="font-size:12px;color:var(--txt-m)">Choose how FlowBoard should interpret the pasted line breaks.</div></div>'+
+        '<button class="btn btn-ghost" style="padding:5px 9px" onclick="closeCMItemPastePreview()">×</button>'+
+      '</div>'+
+      '<div style="display:grid;gap:10px">'+
+        '<div style="background:var(--surf2);border:1px solid var(--bd);border-radius:12px;padding:12px">'+
+          '<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px"><strong>One item per line</strong><span style="font-size:12px;color:var(--txt-d)">'+lineItems.length+' items</span></div>'+
+          cmPastePreviewList(lineItems)+
+          '<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="applyCMItemPaste(\''+colId+'\',\'lines\',this.closest(\'#cm-paste-preview\').dataset.text)">Add line items</button>'+
+        '</div>'+
+        '<div style="background:var(--surf2);border:1px solid var(--bd);border-radius:12px;padding:12px">'+
+          '<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px"><strong>One item per paragraph</strong><span style="font-size:12px;color:var(--txt-d)">'+paragraphItems.length+' items</span></div>'+
+          cmPastePreviewList(paragraphItems)+
+          '<button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="applyCMItemPaste(\''+colId+'\',\'paragraphs\',this.closest(\'#cm-paste-preview\').dataset.text)">Add paragraph items</button>'+
+        '</div>'+
+        '<button class="btn btn-ghost" onclick="applyCMItemPaste(\''+colId+'\',\'single\',this.closest(\'#cm-paste-preview\').dataset.text)">Paste as one checklist item</button>'+
+      '</div>'+
+    '</div>';
+  overlay.onclick=function(e){if(e.target===overlay)closeCMItemPastePreview();};
+  document.body.appendChild(overlay);
+}
+function handleCMItemPaste(e,colId){
+  var clip=e.clipboardData||window.clipboardData;
+  var text=clip?clip.getData('text/plain'):'';
+  if(!text||!/[\r\n]/.test(text))return;
+  e.preventDefault();
+  var input=e.target;
+  var before=input&&typeof input.selectionStart==='number'?input.value.slice(0,input.selectionStart):'';
+  var after=input&&typeof input.selectionEnd==='number'?input.value.slice(input.selectionEnd):'';
+  showCMItemPastePreview(colId,before+text+after);
 }
 function updateCMProgress(){
   var pct=EC.items.length?Math.round(EC.done.length/EC.items.length*100):null;
