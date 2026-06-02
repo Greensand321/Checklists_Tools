@@ -868,6 +868,20 @@ function initSync(){
   var savedKey=localStorage.getItem('fb4_active_key');
   if(savedKey)connectToKey(savedKey);
 
+  // Background-refresh labels for every inactive board so the keys modal
+  // always shows current names without requiring a board switch.
+  // Fetches only the prefs/boardName field — minimal bandwidth.
+  getKeys().forEach(function(ke){
+    if(ke.key===savedKey)return;
+    _db.ref('boards/'+ke.key+'/state/prefs/boardName').once('value').then(function(snap){
+      var remoteName=snap.val();
+      if(!remoteName)return;
+      var lk=getKeys();
+      var lke=lk.find(function(k){return k.key===ke.key;});
+      if(lke&&lke.label!==remoteName){lke.label=remoteName;setKeys(lk);window._keysModalRender&&window._keysModalRender();}
+    }).catch(function(){});
+  });
+
   // ── Background reconnect triggers ──
   // Fires when device regains network (e.g. wifi reconnected, browser reopen after sleep)
   window.addEventListener('online',function(){
@@ -942,7 +956,9 @@ function showKeysModal(){
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
-      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'">'
+      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'"'
+        +(isActive?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
+        +'>'
         +'<div style="flex:1;min-width:0">'
         +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
         +'<div class="key-val">'+esc(k.key)+'</div>'
@@ -976,6 +992,10 @@ function showKeysModal(){
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
     setModal(h);
+    // Override overlay click to close without going through the card-dirty guard —
+    // there is no editable card in this modal so the guard is irrelevant here.
+    var ov=document.querySelector('#modal-root .overlay');
+    if(ov)ov.onclick=function(){document.getElementById('modal-root').innerHTML='';};
   }
   window._keysModalRender=renderKeysModal;
   renderKeysModal();
@@ -1060,7 +1080,15 @@ function renameKey(key){
   var label=name.trim()||entry.label;
   entry.label=label;
   setKeys(keys);
-  if(S.prefs&&key===_activeKey){S.prefs.boardName=label;save();}
+  if(S.prefs&&key===_activeKey){
+    // Active board — update in-memory state and push through the normal save/sync pipeline
+    S.prefs.boardName=label;save();
+  } else if(FIREBASE_ENABLED&&_db){
+    // Inactive board — patch just the name fields in Firebase directly so every device
+    // sees the rename. Using update() (partial write) leaves the rest of the state untouched.
+    var _upd={};_upd['prefs/boardName']=label;_upd['lastModified']=Date.now();
+    _db.ref('boards/'+key+'/state').update(_upd).catch(function(){});
+  }
   window._keysModalRender&&window._keysModalRender();
 }
 function disconnectBtn(){
@@ -1403,7 +1431,10 @@ function load(){
         if(k.due===undefined)k.due='';
       });
     });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
-  S=defaultState();save();
+  // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
+  // Keeping lastModified=0 ensures the Firebase listener sees the cloud as newer on first connect
+  // and pulls the real board instead of overwriting it with this empty default.
+  S=defaultState();_skipFbWrite=true;save();_skipFbWrite=false;
 }
 
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
@@ -2574,6 +2605,7 @@ function showUnsavedWarning(){
   document.getElementById('uw-back').onclick=function(){b.remove();};
 }
 function cmSave(){
+  var ni=document.getElementById('cm-ni');if(ni&&ni.value.trim())addCMItem(EC);
   _cmDirty=false;document.getElementById('modal-banner')?.remove();
   saveCard(EC);notify('✅ Card saved!');
   document.getElementById('modal-root').innerHTML='';
@@ -2724,6 +2756,7 @@ function renderCM(colId){
         '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
         '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
         '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
+        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
       '</div>'+
       '<div style="display:flex;gap:9px">'+
         '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
@@ -2980,12 +3013,19 @@ function showReportModal(){
   '480px');
 }
 
-function openReport(type){
+function openReport(type, cardId){
   var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
   var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
   var cols=(S.cols||[]).filter(function(c){return !c.archived;});
+  // When called from a card modal, narrow to just that one card
+  if(cardId){
+    cols=cols.map(function(col){
+      var match=(col.cards||[]).filter(function(k){return k.id===cardId&&!k.archived;});
+      return match.length?{id:col.id,title:col.title,cards:match}:null;
+    }).filter(Boolean);
+  }
   var titles={overview:'Board Overview',tasks:'Full Task List',agenda:'Meeting Agenda'};
-  var reportTitle=titles[type]||'Report';
+  var reportTitle=cardId&&cols[0]&&cols[0].cards[0]?cols[0].cards[0].title:titles[type]||'Report';
   var PALETTE=['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
   var totalCards=cols.reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
 
@@ -3019,54 +3059,63 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Full Task List: explicit 2-col flex per section ──
-     Each board column becomes a full-width section header followed by its
-     cards packed into two explicit flex columns using a greedy (FFD-style)
-     height estimator. Avoids CSS columns:2 which causes blank first pages
-     in Chrome print and interacts badly with break-inside:avoid. ── */
+  /* ── Full Task List: global FFD into 2 columns ──
+     Same First Fit Decreasing approach as the Agenda: estimate each board
+     column's total height, sort largest-first, then greedily pack entire
+     sections into whichever display column is currently shorter. This avoids
+     the per-section packing problem where a section with one tall card leaves
+     the opposite display column entirely empty. ── */
   if(type==='tasks'){
-    var TL_HEAD=32,TL_TASK=18,TL_DESC=16,TL_GAP=6,TL_CHARS=45;
-    body='';
+    var TL_SEP=28,TL_HEAD=32,TL_TASK=18,TL_DESC=16,TL_GAP=6,TL_CHARS=45;
+    var tlGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
       if(!cards.length)return;
       var bg=hexToRgba(color,.06);
-      body+='<div class="tl-sep" style="border-left-color:'+color+';background:'+bg+'">';
-      body+='<span class="tl-sep-name">'+xe(col.title)+'</span><span class="tl-sep-ct">'+cards.length+' card'+(cards.length!==1?'s':'')+'</span>';
-      body+='</div>';
-      // Greedy pack cards into 2 display columns within this section
-      var tcols=[{html:'',h:0},{html:'',h:0}];
+      var h=TL_SEP;
       cards.forEach(function(card){
         var items=card.items||[];
-        var done_n=card.done?card.done.length:0;
-        var total_n=items.length;
-        // Character-based height estimate matches agenda approach
+        var descH=card.desc?Math.max(1,Math.ceil((card.desc||'').length/TL_CHARS))*TL_DESC:0;
         var tasksH=items.reduce(function(sum,item){
           return sum+Math.max(1,Math.ceil((item||'').length/TL_CHARS))*TL_TASK;
         },0);
-        var descH=card.desc?Math.max(1,Math.ceil((card.desc||'').length/TL_CHARS))*TL_DESC:0;
-        var h=TL_HEAD+descH+(total_n?tasksH:TL_TASK)+TL_GAP;
-        var side=tcols[0].h<=tcols[1].h?0:1;
-        var ch='<div class="tl-card" style="border-left-color:'+color+'">';
-        ch+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
-        if(total_n)ch+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
-        ch+='</div>';
-        if(card.desc)ch+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
+        h+=TL_HEAD+descH+(items.length?tasksH:TL_TASK)+TL_GAP;
+      });
+      tlGroups.push({col:col,color:color,cards:cards,h:h,bg:bg});
+    });
+    // Sort largest-first, then greedy assign to shorter column
+    tlGroups.sort(function(a,b){return b.h-a.h;});
+    var dcols=[{html:'',h:0},{html:'',h:0}];
+    tlGroups.forEach(function(g){
+      var side=dcols[0].h<=dcols[1].h?0:1;
+      var html='<div class="tl-sep" style="border-left-color:'+g.color+';background:'+g.bg+'">'+
+        '<span class="tl-sep-name">'+xe(g.col.title)+'</span>'+
+        '<span class="tl-sep-ct">'+g.cards.length+' card'+(g.cards.length!==1?'s':'')+'</span>'+
+        '</div>';
+      g.cards.forEach(function(card){
+        var items=card.items||[];
+        var done_n=card.done?card.done.length:0;
+        var total_n=items.length;
+        html+='<div class="tl-card" style="border-left-color:'+g.color+'">';
+        html+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
+        if(total_n)html+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
+        html+='</div>';
+        if(card.desc)html+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
         if(items.length){
           items.forEach(function(item){
             var done=card.done&&card.done.indexOf(item)>=0;
-            ch+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
+            html+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
           });
         }else{
-          ch+='<div class="tl-notasks">No tasks</div>';
+          html+='<div class="tl-notasks">No tasks</div>';
         }
-        ch+='</div>';
-        tcols[side].html+=ch;
-        tcols[side].h+=h;
+        html+='</div>';
       });
-      body+='<div class="tl-cols"><div class="tl-col">'+tcols[0].html+'</div><div class="tl-col">'+tcols[1].html+'</div></div>';
+      dcols[side].html+=html;
+      dcols[side].h+=g.h;
     });
+    body='<div class="tl-cols"><div class="tl-col">'+dcols[0].html+'</div><div class="tl-col">'+dcols[1].html+'</div></div>';
   }
 
   /* ── Meeting Agenda: First Fit Decreasing into 2 columns ──
@@ -3156,10 +3205,10 @@ function openReport(type){
     '.ov-empty{font-size:10.5px;color:#ccc;font-style:italic;padding:3px 0;}'+
     /* Task List — explicit flex columns per section (no CSS columns:2) */
     '.tl-sep{display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:14px 0 6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.tl-sep:first-of-type{margin-top:0;}'+
-    '.tl-cols{display:flex;gap:20px;align-items:flex-start;margin-bottom:4px;}'+
-    '.tl-col{flex:1;min-width:0;}'+
-    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-sep:first-child{margin-top:0;}'+
+    '.tl-cols{display:flex;gap:14px;align-items:flex-start;margin-bottom:4px;}'+
+    '.tl-col{flex:1;min-width:0;padding:12px 12px 8px;}'+
+    '.tl-card{border:2px solid #b0b8c4;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-chead{display:flex;align-items:center;justify-content:space-between;padding:7px 9px 6px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.tl-ctitle{font-size:12px;font-weight:700;color:#111;line-height:1.2;}'+
     '.tl-prog{font-size:9.5px;color:#bbb;margin-left:5px;flex-shrink:0;white-space:nowrap;}'+
@@ -3169,11 +3218,11 @@ function openReport(type){
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
     /* Agenda — row-by-row pairs */
-    '.ag-cols{display:flex;gap:20px;align-items:flex-start;}'+
-    '.ag-col{flex:1;min-width:0;}'+
+    '.ag-cols{display:flex;gap:14px;align-items:flex-start;}'+
+    '.ag-col{flex:1;min-width:0;padding:12px 12px 8px;}'+
     '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-sep:first-child{margin-top:0;}'+
-    '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-item{display:block;border:2px solid #b0b8c4;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
