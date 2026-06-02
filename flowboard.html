@@ -868,6 +868,20 @@ function initSync(){
   var savedKey=localStorage.getItem('fb4_active_key');
   if(savedKey)connectToKey(savedKey);
 
+  // Background-refresh labels for every inactive board so the keys modal
+  // always shows current names without requiring a board switch.
+  // Fetches only the prefs/boardName field — minimal bandwidth.
+  getKeys().forEach(function(ke){
+    if(ke.key===savedKey)return;
+    _db.ref('boards/'+ke.key+'/state/prefs/boardName').once('value').then(function(snap){
+      var remoteName=snap.val();
+      if(!remoteName)return;
+      var lk=getKeys();
+      var lke=lk.find(function(k){return k.key===ke.key;});
+      if(lke&&lke.label!==remoteName){lke.label=remoteName;setKeys(lk);window._keysModalRender&&window._keysModalRender();}
+    }).catch(function(){});
+  });
+
   // ── Background reconnect triggers ──
   // Fires when device regains network (e.g. wifi reconnected, browser reopen after sleep)
   window.addEventListener('online',function(){
