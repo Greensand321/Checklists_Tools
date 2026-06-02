@@ -2849,10 +2849,27 @@ function closeCMItemPastePreview(){
 }
 function cmPastePreviewList(items){
   if(!items.length)return '<div style="font-size:12px;color:var(--txt-d);padding:8px 0">No checklist items detected.</div>';
-  return '<ol style="margin:0;padding-left:20px;max-height:180px;overflow:auto;font-size:12px;color:var(--txt-m);line-height:1.45">'+
-    items.slice(0,12).map(function(x){return '<li style="margin-bottom:4px">'+esc(x)+'</li>';}).join('')+
-    (items.length>12?'<li style="margin-bottom:4px;color:var(--txt-d)">...and '+(items.length-12)+' more</li>':'')+
-  '</ol>';
+  return '<div style="max-height:168px;overflow:auto;border-top:1px solid var(--bd-s);margin-top:8px;padding-top:4px">'+
+    items.slice(0,12).map(function(x){
+      return '<div class="chk-row" style="padding:5px 0">'+
+        '<span class="checkbox" style="cursor:default"></span>'+
+        '<span style="flex:1;font-size:12px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(x)+'</span>'+
+      '</div>';
+    }).join('')+
+    (items.length>12?'<div class="bak-date" style="padding-top:6px">...and '+(items.length-12)+' more</div>':'')+
+  '</div>';
+}
+function cmPasteOptionHtml(colId,mode,title,desc,items,btnClass,btnText){
+  return '<div class="bak-item" style="display:block;padding:13px 14px">'+
+    '<div style="display:flex;align-items:flex-start;gap:12px">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div class="bak-name" style="cursor:default;margin-bottom:3px">'+title+'</div>'+
+        '<div class="bak-date">'+desc+' &middot; '+items.length+' item'+(items.length===1?'':'s')+'</div>'+
+      '</div>'+
+      '<button class="btn '+btnClass+'" style="padding:6px 11px;font-size:12px;flex-shrink:0" onclick="applyCMItemPaste(\''+colId+'\',\''+mode+'\',this.closest(\'#cm-paste-preview\').dataset.text)">'+btnText+'</button>'+
+    '</div>'+
+    cmPastePreviewList(items)+
+  '</div>';
 }
 function applyCMItemPaste(colId,mode,text){
   var items=parseChecklistPaste(text,mode);
@@ -2869,29 +2886,25 @@ function showCMItemPastePreview(colId,text){
   closeCMItemPastePreview();
   var lineItems=parseChecklistPaste(text,'lines');
   var paragraphItems=parseChecklistPaste(text,'paragraphs');
+  var singleItems=parseChecklistPaste(text,'single');
   var overlay=document.createElement('div');
   overlay.id='cm-paste-preview';
+  overlay.className='overlay';
   overlay.dataset.text=text;
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:260;display:flex;align-items:center;justify-content:center;padding:18px';
+  overlay.style.zIndex='260';
   overlay.innerHTML=
-    '<div style="width:min(560px,100%);background:var(--modal);border:1px solid var(--bd-i);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px;color:var(--txt)">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:10px">'+
-        '<div><div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:4px">Paste checklist items</div>'+
-        '<div style="font-size:12px;color:var(--txt-m)">Choose how FlowBoard should interpret the pasted line breaks.</div></div>'+
-        '<button class="btn btn-ghost" style="padding:5px 9px" onclick="closeCMItemPastePreview()">×</button>'+
+    '<div class="modal" style="width:560px;padding:22px">'+
+      '<button class="icon-btn" style="position:absolute;top:14px;right:16px;color:var(--txt-d)" onclick="closeCMItemPastePreview()">×</button>'+
+      '<div class="modal-title" style="margin-bottom:6px">Paste checklist items</div>'+
+      '<div style="font-size:12px;color:var(--txt-m);line-height:1.5;margin-bottom:16px;max-width:460px">Choose how FlowBoard should interpret the pasted line breaks before adding them to this card.</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:14px;font-size:12px;color:var(--txt-m)">'+
+        '<span style="flex:1">Plain text preserves line breaks, but not whether the user meant lines or paragraphs.</span>'+
+        '<span class="auto-trigger-badge" style="background:rgba(96,165,250,.15);color:#60a5fa">Preview</span>'+
       '</div>'+
       '<div style="display:grid;gap:10px">'+
-        '<div style="background:var(--surf2);border:1px solid var(--bd);border-radius:12px;padding:12px">'+
-          '<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px"><strong>One item per line</strong><span style="font-size:12px;color:var(--txt-d)">'+lineItems.length+' items</span></div>'+
-          cmPastePreviewList(lineItems)+
-          '<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="applyCMItemPaste(\''+colId+'\',\'lines\',this.closest(\'#cm-paste-preview\').dataset.text)">Add line items</button>'+
-        '</div>'+
-        '<div style="background:var(--surf2);border:1px solid var(--bd);border-radius:12px;padding:12px">'+
-          '<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px"><strong>One item per paragraph</strong><span style="font-size:12px;color:var(--txt-d)">'+paragraphItems.length+' items</span></div>'+
-          cmPastePreviewList(paragraphItems)+
-          '<button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="applyCMItemPaste(\''+colId+'\',\'paragraphs\',this.closest(\'#cm-paste-preview\').dataset.text)">Add paragraph items</button>'+
-        '</div>'+
-        '<button class="btn btn-ghost" onclick="applyCMItemPaste(\''+colId+'\',\'single\',this.closest(\'#cm-paste-preview\').dataset.text)">Paste as one checklist item</button>'+
+        cmPasteOptionHtml(colId,'lines','One item per line','Best for pasted task lists',lineItems,'btn-primary','Add')+
+        cmPasteOptionHtml(colId,'paragraphs','One item per paragraph','Best when each task has wrapped notes',paragraphItems,'btn-ghost','Add')+
+        cmPasteOptionHtml(colId,'single','Paste as one checklist item','Best for one long item or copied notes',singleItems,'btn-ghost','Add')+
       '</div>'+
     '</div>';
   overlay.onclick=function(e){if(e.target===overlay)closeCMItemPastePreview();};
