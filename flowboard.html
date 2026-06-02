@@ -674,6 +674,14 @@ function connectToKey(key){
       return;
     }
     migrateRemote(remote);
+    // ── Board identity guard: if remote boardId doesn't match local, push local ──
+    // This prevents a stale or cross-contaminated Firebase record from overwriting
+    // a correctly renamed or freshly created local board.
+    if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId&&_isSafeWrite(S)){
+      _pendingWrites++;
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
+      return;
+    }
     // ── Conflict resolution: last-write-wins via lastModified timestamp ──
     // Set remote as the safety-gate baseline first so _isSafeWrite can compare
     // local S against the known cloud structure before any push.
@@ -765,7 +773,7 @@ function _applyRemote(remote){
   document.documentElement.setAttribute('data-theme',S.prefs.theme);
   if(S.prefs.modalW>=320)_modalW=S.prefs.modalW;
   _modalH=(S.prefs.modalH>=200?S.prefs.modalH:null);
-  if(S.prefs.boardName&&_activeKey){
+  if(S.prefs.boardName&&_activeKey&&(!remote.boardId||remote.boardId===S.boardId)){
     var lk=getKeys();var lke=lk.find(function(k){return k.key===_activeKey;});
     if(lke&&lke.label!==S.prefs.boardName){lke.label=S.prefs.boardName;setKeys(lk);window._keysModalRender&&window._keysModalRender();}
   }
@@ -834,8 +842,8 @@ function save(){
   try{
     var data=JSON.stringify(S);localStorage.setItem('fb4',data);
     var used=new Blob([data]).size
-      +new Blob([localStorage.getItem('fb4_baks')||'']).size
-      +new Blob([localStorage.getItem('fb4_auto')||'']).size;
+      +new Blob([localStorage.getItem(_bakKey())||'']).size
+      +new Blob([localStorage.getItem(_autoKey())||'']).size;
     if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full — export a backup soon!');}
     else if(used<=4*1024*1024){save._warned=false;}
   }catch(e){notify('❌ Save failed — storage may be full!');}
@@ -938,16 +946,11 @@ function newKeyBtn(){
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:6px">New Board</div>'+
       '<div style="font-size:13px;color:var(--txt-m)">How would you like to start?</div>'+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">'+
+    '<div style="margin-bottom:18px">'+
       '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',true)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
         '<div style="font-size:26px;margin-bottom:9px">🌱</div>'+
-        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Start Fresh</div>'+
-        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Begin with the default demo layout — columns, cards and all</div>'+
-      '</div>'+
-      '<div class="usb-conflict-opt" onclick="confirmNewBoard(\''+key+'\',\''+escA(label)+'\',false)" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:20px 16px;cursor:pointer;text-align:center;transition:border-color .18s,background .18s">'+
-        '<div style="font-size:26px;margin-bottom:9px">📋</div>'+
-        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">Copy Current Board</div>'+
-        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Duplicate all your existing columns and cards into the new board</div>'+
+        '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:6px">New Board</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);line-height:1.7">Starts with the default layout — each board gets its own unique identity</div>'+
       '</div>'+
     '</div>'+
     '<div style="display:flex;justify-content:flex-end">'+
@@ -960,19 +963,16 @@ function confirmNewBoard(key,label,startFresh){
   var keys=getKeys();
   keys.push({key:key,label:label,lastUsed:Date.now()});
   setKeys(keys);
-  if(startFresh){
-    S=defaultState();
-    S.prefs.boardName=label;
-    // boardId already set by defaultState() via uid()
-  }else{
-    _pushUndo();
-    S.boardId=uid(); // new board identity even though content is copied
-    if(S.prefs)S.prefs.boardName=label;
-  }
+  // Always start from the default template — never copy the current board.
+  // Copying the current board causes the system to treat the new board as the
+  // same board (shared structure/timestamps) which leads to sync collisions.
+  S=defaultState();
+  S.prefs.boardName=label;
+  S.lastModified=Date.now(); // ensure local wins the Firebase timestamp race
   save();render();
   connectToKey(key);
   window._keysModalRender&&window._keysModalRender();
-  notify('✅ New board created — '+(startFresh?'fresh layout loaded!':'current board copied!'));
+  notify('✅ New board created — fresh layout loaded!');
 }
 function joinKeyBtn(){
   var input=document.getElementById('key-input');
@@ -1358,8 +1358,9 @@ function load(){
   S=defaultState();save();
 }
 
-function getBaks(){try{return JSON.parse(localStorage.getItem('fb4_baks')||'[]');}catch(e){return[];}}
-function setBaks(a){localStorage.setItem('fb4_baks',JSON.stringify(a));}
+function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
+function getBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
+function setBaks(a){localStorage.setItem(_bakKey(),JSON.stringify(a));}
 function createBak(name){
   var a=getBaks(),tc=S.cols.reduce(function(n,c){return n+c.cards.length;},0);
   a.unshift({id:uid(),name:name||'Snapshot '+new Date().toLocaleString(),ts:Date.now(),cards:tc,data:JSON.stringify(S)});
@@ -1414,8 +1415,9 @@ function importBak(){
 }
 
 // ── AUTO-SNAPSHOT STORE ──
-function getAutoBaks(){try{return JSON.parse(localStorage.getItem('fb4_auto')||'[]');}catch(e){return[];}}
-function setAutoBaks(a){try{localStorage.setItem('fb4_auto',JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+function _autoKey(){return 'fb4_auto_'+(_activeKey||'local');}
+function getAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
+function setAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
 
 function _createAutoSnap(name,trigger){
   var tc=_syncCardCount(S);
@@ -3037,10 +3039,10 @@ function openReport(type){
     '.hdr-sub{width:100%;display:flex;justify-content:space-between;padding-top:4px;font-size:10px;color:#bbb;}'+
     '.hdr-fb{font-size:8.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#ddd;}'+
     /* Section separators */
-    '.tl-sep{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-sep{column-span:all;display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-sep-name{}'+
     '.tl-sep-ct{font-size:9.5px;color:#999;font-weight:400;text-transform:none;letter-spacing:0;}'+
-    '.ag-sep{grid-column:1/-1;display:block;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-sep{column-span:all;display:block;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     /* Overview */
     '.ov-grid{display:grid;gap:14px 20px;}'+
     '.ov-col{border-top-width:3px;border-top-style:solid;padding-top:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
@@ -3054,8 +3056,8 @@ function openReport(type){
     '.ov-due{font-size:10px;color:#bbb;white-space:nowrap;}'+
     '.ov-empty{font-size:10.5px;color:#ccc;font-style:italic;padding:3px 0;}'+
     /* Task List grid */
-    '.tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;align-items:start;}'+
-    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-grid{columns:2;column-gap:20px;}'+
+    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;display:inline-block;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-chead{display:flex;align-items:center;justify-content:space-between;padding:7px 9px 6px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.tl-ctitle{font-size:12px;font-weight:700;color:#111;line-height:1.2;}'+
     '.tl-prog{font-size:9.5px;color:#bbb;margin-left:5px;flex-shrink:0;white-space:nowrap;}'+
@@ -3065,8 +3067,8 @@ function openReport(type){
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
     /* Agenda */
-    '.ag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;align-items:start;}'+
-    '.ag-item{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-grid{columns:2;column-gap:20px;}'+
+    '.ag-item{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:7px;display:inline-block;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
