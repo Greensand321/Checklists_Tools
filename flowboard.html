@@ -3089,7 +3089,9 @@ function openReport(type){
             h+='<div class="ag-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="ag-ttext">'+xe(item)+'</span></div>';
           });
         }
-        h+='<div class="ag-notes"><div class="ag-nline"></div><div class="ag-nline"></div></div>';
+        var _nl=card.items&&card.items.length;var _nLines=_nl<=3?1:_nl<=8?2:3;
+        var _nHtml='';for(var _ni=0;_ni<_nLines;_ni++)_nHtml+='<div class="ag-nline"></div>';
+        h+='<div class="ag-notes">'+_nHtml+'</div>';
         h+='</div>';
       });
       dcols[side].html+=h;
@@ -3149,14 +3151,14 @@ function openReport(type){
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
     '.ag-task{display:flex;align-items:flex-start;gap:7px;padding:3px 9px;border-bottom:1px solid #f5f5f5;font-size:11px;color:#333;line-height:1.4;}'+
-    '.ag-task:last-of-type{border-bottom:none;}'+
+    '.ag-notes{border-top:1px solid #f5f5f5;}'+
     '.ag-task.done .ag-ttext{color:#bbb;text-decoration:line-through;}'+
     '.ag-notes{padding:3px 9px 6px;}'+
     '.ag-nline{border-bottom:1px solid #d4d4d4;height:22px;}'+
     /* Continued header — hidden on screen, injected before print for cards that bleed across pages */
     '.ag-cont-hdr{display:none;}'+
     '@media print{'+
-      '.ag-cont-hdr{display:flex;align-items:center;gap:7px;padding:4px 9px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;break-before:page;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+      '.ag-cont-hdr{display:flex;align-items:center;gap:7px;padding:4px 9px;background:#f5f5f5;border-top:1px solid #e4e4e4;border-bottom:1px solid #e8e8e8;break-before:page;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
       '.ag-cont-ttl{font-size:11px;font-weight:700;color:#555;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'+
       '.ag-cont-lbl{font-size:9px;color:#aaa;font-style:italic;white-space:nowrap;}'+
     '}'+
@@ -3196,22 +3198,26 @@ function openReport(type){
         'document.body.appendChild(r);'+
         'var d=r.offsetWidth||96;'+
         'document.body.removeChild(r);'+
-        'return(11-1.2)*d;'+
+        // Scale by 0.85: print columns are ~20% narrower than screen (340px vs 424px),
+        // so text wraps more and card heights are taller in print. Injecting earlier
+        // (smaller effective page) prevents the cont-hdr landing after the real break.
+        'return(11-1.2)*d*0.85;'+
       '}'+
       'function inject(){'+
         // Remove previously injected elements
         '_inj.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e);});_inj=[];'+
         'var ph=pageH();'+
+        'var sy=window.pageYOffset||0;'+
         '[].forEach.call(document.querySelectorAll(".ag-item"),function(item){'+
-          'var iTop=item.getBoundingClientRect().top;'+
+          'var iTop=item.getBoundingClientRect().top+sy;'+
           'var pg0=Math.floor(iTop/ph);'+
           'var pg1=Math.floor((iTop+item.offsetHeight-1)/ph);'+
           'if(pg1<=pg0)return;'+
-          // Find the first child (skip ag-ihead at index 0) that starts on a later page
-          'var kids=[].slice.call(item.children,1);'+
+          // Skip ag-ihead (index 0) and any previously injected cont-hdrs
+          'var kids=[].slice.call(item.children).filter(function(k){return!k.classList.contains("ag-cont-hdr")&&!k.classList.contains("ag-ihead");});'+
           'var target=null;'+
           'for(var i=0;i<kids.length;i++){'+
-            'if(Math.floor(kids[i].getBoundingClientRect().top/ph)>pg0){target=kids[i];break;}'+
+            'if(Math.floor((kids[i].getBoundingClientRect().top+sy)/ph)>pg0){target=kids[i];break;}'+
           '}'+
           'if(!target)return;'+
           'var te=item.querySelector(".ag-title");'+
