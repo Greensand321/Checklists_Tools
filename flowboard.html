@@ -103,7 +103,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .col-body.drag-over{border-color:#60a5fa !important;box-shadow:inset 0 0 20px var(--dnd)}
 
 .anim-card-fill{animation:cardFill .34s cubic-bezier(.34,1.2,.64,1) both}
-.col-body.limited{transition:height .32s cubic-bezier(.4,0,.2,1)}
+.col-body.limited{transition:height .32s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .limit-btn{background:none;border:1px solid var(--bd-i);border-radius:7px;color:var(--txt-d);padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:border-color .18s,color .18s,background .18s;flex-shrink:0}
 .limit-btn:hover{border-color:#60a5fa;color:#60a5fa}
 .limit-btn.active{background:rgba(96,165,250,.12);border-color:#60a5fa;color:#60a5fa}
@@ -2338,9 +2338,10 @@ function mkGroup(g,gcols,q,fake){
       var pb=document.createElement('button');
       pb.style.cssText='min-width:56px;height:42px;background:var(--surf2);border:2px dashed var(--bd);border-radius:12px;color:var(--txt-d);cursor:pointer;font-size:20px;flex-shrink:0;transition:all .2s,transform .15s;align-self:flex-start';
       pb.textContent='+';pb.title='Add column';
-      pb.onmouseenter=function(){pb.style.borderColor=P.a;pb.style.color=P.a;pb.style.background=hexToRgba(P.a,.06);pb.style.transform='scale(1.08)';};
-      pb.onmouseleave=function(){pb.style.borderColor='var(--bd)';pb.style.color='var(--txt-d)';pb.style.background='var(--surf2)';pb.style.transform='scale(1)';};
-      pb.onmousedown=function(){pb.style.transform='scale(.96)';};
+      pb.onmouseenter=function(){pb.style.borderColor=P.a;pb.style.color=P.a;pb.style.background=hexToRgba(P.a,.06);pb.style.boxShadow='inset 0 0 0 1px '+P.a;};
+      pb.onmouseleave=function(){pb.style.borderColor='var(--bd)';pb.style.color='var(--txt-d)';pb.style.background='var(--surf2)';pb.style.boxShadow='none';pb.style.transform='scale(1)';};
+      pb.onmousedown=function(){pb.style.transform='scale(.96)';pb.style.boxShadow='none';};
+      pb.onmouseup=function(){pb.style.transform='scale(1)';pb.style.boxShadow='inset 0 0 0 1px '+P.a;};
       pb.onclick=function(){showAddColModal(g.id);};crow.appendChild(pb);
     }
     wrap.appendChild(crow);
