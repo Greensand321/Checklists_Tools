@@ -3037,10 +3037,10 @@ function openReport(type){
     '.hdr-sub{width:100%;display:flex;justify-content:space-between;padding-top:4px;font-size:10px;color:#bbb;}'+
     '.hdr-fb{font-size:8.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#ddd;}'+
     /* Section separators */
-    '.tl-sep{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-sep{column-span:all;display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-sep-name{}'+
     '.tl-sep-ct{font-size:9.5px;color:#999;font-weight:400;text-transform:none;letter-spacing:0;}'+
-    '.ag-sep{grid-column:1/-1;display:block;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-sep{column-span:all;display:block;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     /* Overview */
     '.ov-grid{display:grid;gap:14px 20px;}'+
     '.ov-col{border-top-width:3px;border-top-style:solid;padding-top:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
@@ -3054,8 +3054,8 @@ function openReport(type){
     '.ov-due{font-size:10px;color:#bbb;white-space:nowrap;}'+
     '.ov-empty{font-size:10.5px;color:#ccc;font-style:italic;padding:3px 0;}'+
     /* Task List grid */
-    '.tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;align-items:start;}'+
-    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-grid{columns:2;column-gap:20px;}'+
+    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;display:inline-block;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-chead{display:flex;align-items:center;justify-content:space-between;padding:7px 9px 6px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.tl-ctitle{font-size:12px;font-weight:700;color:#111;line-height:1.2;}'+
     '.tl-prog{font-size:9.5px;color:#bbb;margin-left:5px;flex-shrink:0;white-space:nowrap;}'+
@@ -3065,8 +3065,8 @@ function openReport(type){
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
     /* Agenda */
-    '.ag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;align-items:start;}'+
-    '.ag-item{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag-grid{columns:2;column-gap:20px;}'+
+    '.ag-item{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:7px;display:inline-block;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
