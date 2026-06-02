@@ -2599,6 +2599,7 @@ function showUnsavedWarning(){
   document.getElementById('uw-back').onclick=function(){b.remove();};
 }
 function cmSave(){
+  var ni=document.getElementById('cm-ni');if(ni&&ni.value.trim())addCMItem(EC);
   _cmDirty=false;document.getElementById('modal-banner')?.remove();
   saveCard(EC);notify('✅ Card saved!');
   document.getElementById('modal-root').innerHTML='';
