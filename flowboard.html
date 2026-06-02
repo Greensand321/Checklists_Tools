@@ -3019,9 +3019,14 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Full Task List: 2-col grid, section headers span both ── */
+  /* ── Full Task List: explicit 2-col flex per section ──
+     Each board column becomes a full-width section header followed by its
+     cards packed into two explicit flex columns using a greedy (FFD-style)
+     height estimator. Avoids CSS columns:2 which causes blank first pages
+     in Chrome print and interacts badly with break-inside:avoid. ── */
   if(type==='tasks'){
-    body='<div class="tl-grid">';
+    var TL_HEAD=32,TL_TASK=18,TL_DESC=16,TL_GAP=6,TL_CHARS=45;
+    body='';
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
@@ -3030,26 +3035,38 @@ function openReport(type){
       body+='<div class="tl-sep" style="border-left-color:'+color+';background:'+bg+'">';
       body+='<span class="tl-sep-name">'+xe(col.title)+'</span><span class="tl-sep-ct">'+cards.length+' card'+(cards.length!==1?'s':'')+'</span>';
       body+='</div>';
+      // Greedy pack cards into 2 display columns within this section
+      var tcols=[{html:'',h:0},{html:'',h:0}];
       cards.forEach(function(card){
+        var items=card.items||[];
         var done_n=card.done?card.done.length:0;
-        var total_n=card.items?card.items.length:0;
-        body+='<div class="tl-card" style="border-left-color:'+color+'">';
-        body+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
-        if(total_n)body+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
-        body+='</div>';
-        if(card.desc)body+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
-        if(card.items&&card.items.length){
-          card.items.forEach(function(item){
+        var total_n=items.length;
+        // Character-based height estimate matches agenda approach
+        var tasksH=items.reduce(function(sum,item){
+          return sum+Math.max(1,Math.ceil((item||'').length/TL_CHARS))*TL_TASK;
+        },0);
+        var descH=card.desc?Math.max(1,Math.ceil((card.desc||'').length/TL_CHARS))*TL_DESC:0;
+        var h=TL_HEAD+descH+(total_n?tasksH:TL_TASK)+TL_GAP;
+        var side=tcols[0].h<=tcols[1].h?0:1;
+        var ch='<div class="tl-card" style="border-left-color:'+color+'">';
+        ch+='<div class="tl-chead"><span class="tl-ctitle">'+xe(card.title)+'</span>';
+        if(total_n)ch+='<span class="tl-prog">'+done_n+'/'+total_n+'</span>';
+        ch+='</div>';
+        if(card.desc)ch+='<div class="tl-cdesc">'+xe(card.desc)+'</div>';
+        if(items.length){
+          items.forEach(function(item){
             var done=card.done&&card.done.indexOf(item)>=0;
-            body+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
+            ch+='<div class="tl-task'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="tl-ttext">'+xe(item)+'</span></div>';
           });
         }else{
-          body+='<div class="tl-notasks">No tasks</div>';
+          ch+='<div class="tl-notasks">No tasks</div>';
         }
-        body+='</div>';
+        ch+='</div>';
+        tcols[side].html+=ch;
+        tcols[side].h+=h;
       });
+      body+='<div class="tl-cols"><div class="tl-col">'+tcols[0].html+'</div><div class="tl-col">'+tcols[1].html+'</div></div>';
     });
-    body+='</div>';
   }
 
   /* ── Meeting Agenda: First Fit Decreasing into 2 columns ──
@@ -3123,8 +3140,6 @@ function openReport(type){
     '.hdr-date{font-size:11px;color:#888;padding-bottom:2px;}'+
     '.hdr-sub{width:100%;display:flex;justify-content:space-between;padding-top:4px;font-size:10px;color:#bbb;}'+
     '.hdr-fb{font-size:8.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#ddd;}'+
-    /* Section separators */
-    '.tl-sep{column-span:all;display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-sep-name{}'+
     '.tl-sep-ct{font-size:9.5px;color:#999;font-weight:400;text-transform:none;letter-spacing:0;}'+
     /* Overview */
@@ -3139,9 +3154,12 @@ function openReport(type){
     '.ov-ctitle{font-size:11.5px;color:#222;flex:1;line-height:1.3;}'+
     '.ov-due{font-size:10px;color:#bbb;white-space:nowrap;}'+
     '.ov-empty{font-size:10.5px;color:#ccc;font-style:italic;padding:3px 0;}'+
-    /* Task List grid */
-    '.tl-grid{columns:2;column-gap:20px;}'+
-    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;display:inline-block;width:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    /* Task List — explicit flex columns per section (no CSS columns:2) */
+    '.tl-sep{display:flex;align-items:center;justify-content:space-between;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:14px 0 6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.tl-sep:first-of-type{margin-top:0;}'+
+    '.tl-cols{display:flex;gap:20px;align-items:flex-start;margin-bottom:4px;}'+
+    '.tl-col{flex:1;min-width:0;}'+
+    '.tl-card{border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;overflow:hidden;break-inside:avoid;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.tl-chead{display:flex;align-items:center;justify-content:space-between;padding:7px 9px 6px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
     '.tl-ctitle{font-size:12px;font-weight:700;color:#111;line-height:1.2;}'+
     '.tl-prog{font-size:9.5px;color:#bbb;margin-left:5px;flex-shrink:0;white-space:nowrap;}'+
