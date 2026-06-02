@@ -3052,33 +3052,26 @@ function openReport(type){
     body+='</div>';
   }
 
-  /* ── Meeting Agenda: greedy height-balanced 2-col layout ──
-     Estimate each board-column group's height, then greedily assign it to
-     whichever display column is currently shorter (tetris-style packing).
-     Two explicit <div> columns avoid CSS grid's dumb left-to-right flow
-     and the blank-first-page bug caused by grid + break-inside:avoid. ── */
+  /* ── Meeting Agenda: row-by-row pair layout ──
+     Groups are paired in board order (1+2, 3+4, …) and each pair renders as
+     an independent flex row. This bounds empty space to at most one group's
+     height per row — a large last group can't leave multiple blank pages the
+     way a continuous two-column layout could. ── */
   if(type==='agenda'){
     var n=0;
-    // Height constants (approximate px values matching the CSS below)
-    var H_SEP=26,H_CARD_BASE=47,H_ITEM=20,H_NOTES=50,H_GAP=7;
-    // Pre-compute groups with their estimated heights
+    // Collect non-empty groups preserving board order
     var agGroups=[];
     cols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
       if(!cards.length)return;
-      var h=H_SEP;
-      cards.forEach(function(card){
-        h+=H_CARD_BASE+(card.items?card.items.length:0)*H_ITEM+H_NOTES+H_GAP;
-      });
-      agGroups.push({col:col,color:color,cards:cards,h:h,ci:ci});
+      agGroups.push({col:col,color:color,cards:cards,ci:ci});
     });
-    // Greedy bin-pack: assign each group to the shorter display column
-    var dcols=[{html:'',h:0},{html:'',h:0}];
-    agGroups.forEach(function(g){
-      var side=dcols[0].h<=dcols[1].h?0:1;
+    // Render each group as a cell; two cells per row
+    function renderCell(g){
       var bg=hexToRgba(g.color,.06);
-      var h='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
+      var h='<div class="ag-cell">';
+      h+='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
       g.cards.forEach(function(card){
         n++;
         h+='<div class="ag-item" style="border-left-color:'+g.color+'">';
@@ -3089,15 +3082,26 @@ function openReport(type){
             h+='<div class="ag-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="ag-ttext">'+xe(item)+'</span></div>';
           });
         }
-        var _nl=card.items&&card.items.length;var _nLines=_nl<=3?1:_nl<=8?2:3;
+        var _nl=card.items?card.items.length:0;var _nLines=_nl<=3?1:_nl<=8?2:3;
         var _nHtml='';for(var _ni=0;_ni<_nLines;_ni++)_nHtml+='<div class="ag-nline"></div>';
         h+='<div class="ag-notes">'+_nHtml+'</div>';
         h+='</div>';
       });
-      dcols[side].html+=h;
-      dcols[side].h+=g.h;
-    });
-    body='<div class="ag-cols"><div class="ag-col">'+dcols[0].html+'</div><div class="ag-col">'+dcols[1].html+'</div></div>';
+      h+='</div>';
+      return h;
+    }
+    var rowsHtml='';
+    for(var gi=0;gi<agGroups.length;gi+=2){
+      rowsHtml+='<div class="ag-row">';
+      rowsHtml+=renderCell(agGroups[gi]);
+      if(gi+1<agGroups.length){
+        rowsHtml+=renderCell(agGroups[gi+1]);
+      }else{
+        rowsHtml+='<div class="ag-cell"></div>'; // pad last odd row
+      }
+      rowsHtml+='</div>';
+    }
+    body='<div class="ag-rows">'+rowsHtml+'</div>';
   }
 
   var css=
@@ -3141,9 +3145,10 @@ function openReport(type){
     '.tl-task:last-child{border-bottom:none;}'+
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
-    /* Agenda — two explicit flex columns, greedy-packed by height */
-    '.ag-cols{display:flex;gap:20px;align-items:flex-start;}'+
-    '.ag-col{flex:1;min-width:0;}'+
+    /* Agenda — row-by-row pairs */
+    '.ag-rows{}'+
+    '.ag-row{display:flex;gap:20px;align-items:flex-start;margin-bottom:4px;}'+
+    '.ag-cell{flex:1;min-width:0;}'+
     '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     '.ag-sep:first-child{margin-top:0;}'+
     '.ag-item{display:block;border:1px solid #e8e8e8;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
