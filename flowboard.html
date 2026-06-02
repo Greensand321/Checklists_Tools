@@ -1060,7 +1060,15 @@ function renameKey(key){
   var label=name.trim()||entry.label;
   entry.label=label;
   setKeys(keys);
-  if(S.prefs&&key===_activeKey){S.prefs.boardName=label;save();}
+  if(S.prefs&&key===_activeKey){
+    // Active board — update in-memory state and push through the normal save/sync pipeline
+    S.prefs.boardName=label;save();
+  } else if(FIREBASE_ENABLED&&_db){
+    // Inactive board — patch just the name fields in Firebase directly so every device
+    // sees the rename. Using update() (partial write) leaves the rest of the state untouched.
+    var _upd={};_upd['prefs/boardName']=label;_upd['lastModified']=Date.now();
+    _db.ref('boards/'+key+'/state').update(_upd).catch(function(){});
+  }
   window._keysModalRender&&window._keysModalRender();
 }
 function disconnectBtn(){
