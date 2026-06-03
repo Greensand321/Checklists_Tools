@@ -465,6 +465,11 @@ function syncColoredColumns(themeId){
     body.style.background=lt?hexToRgba(P.a,.07):P.b;
     body.style.borderColor=lt?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
   });
+  document.querySelectorAll('.col-foot[data-pi]').forEach(function(foot){
+    var P=PAL[parseInt(foot.dataset.pi)%PAL.length];
+    foot.style.background=lt?hexToRgba(P.a,.07):P.b;
+    foot.style.borderColor=lt?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
+  });
   document.querySelectorAll('.col-pill[data-pi]').forEach(function(pill){
     var P=PAL[parseInt(pill.dataset.pi)%PAL.length];
     pill.style.background=lt?hexToRgba(P.a,.22):P.h;
@@ -2516,7 +2521,7 @@ function mkCol(col,q){
     if(light){ab.style.borderColor=hexToRgba(P.a,.3);ab.style.color=hexToRgba(P.a,.6);}
     ab.onclick=function(){addCardColor=null;addTo=col.id;render();};aa.appendChild(ab);
   }
-  var foot=document.createElement('div');foot.className='col-foot';
+  var foot=document.createElement('div');foot.className='col-foot';foot.dataset.pi=col.pi%PAL.length;
   foot.style.background=bodyBg;foot.style.borderColor=bodyBd;
   foot.appendChild(aa);
   wrap.appendChild(body);wrap.appendChild(foot);
