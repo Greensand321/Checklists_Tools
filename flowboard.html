@@ -107,7 +107,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 
 .anim-card-fill{animation:cardFill .34s cubic-bezier(.34,1.2,.64,1) both}
 .col-body.limited{transition:height .32s cubic-bezier(.4,0,.2,1);overflow:hidden}
-.limit-btn{background:none;border:1px solid var(--bd-i);border-radius:7px;color:var(--txt-d);padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:border-color .18s,color .18s,background .18s;flex-shrink:0}
+.limit-btn{background:none;border:1px solid var(--bd-i);border-radius:8px;color:var(--txt-d);padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:border-color .18s,color .18s,background .18s;flex-shrink:0}
 .limit-btn:hover{border-color:#60a5fa;color:#60a5fa}
 .limit-btn.active{background:rgba(96,165,250,.12);border-color:#60a5fa;color:#60a5fa}
 
@@ -2295,7 +2295,11 @@ function initPointerDrag(){
         moveColumn(pd.colId, pd.dropGroupId, pd.dropBeforeColId);
       }
     }else{
-      if(pd.dropColId){settleCardId=pd.cid;moveCard(pd.cid,pd.fromColId,pd.dropColId,pd.dropBeforeId||null);settleCardId=null;}
+      if(pd.dropColId){
+        var destCol=S.cols.find(function(c){return c.id===pd.dropColId;});
+        if(destCol&&destCol.sort){destCol.sort=false;notify('↕ Priority sort disabled');}
+        settleCardId=pd.cid;moveCard(pd.cid,pd.fromColId,pd.dropColId,pd.dropBeforeId||null);settleCardId=null;
+      }
     }
   });
 }
