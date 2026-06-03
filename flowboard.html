@@ -2465,9 +2465,8 @@ function mkCol(col,q){
   db.style.color=light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)';db.onclick=function(){delCol(col.id);};hdr.appendChild(db);
   wrap.appendChild(hdr);
   var body=document.createElement('div');body.className='col-body';body.dataset.pi=col.pi%PAL.length;body.style.background=bodyBg;body.style.borderColor=bodyBd;body.id='cb_'+col.id;
-  if(limit>0&&col.cards.length>0){
-    var slots=Math.min(col.cards.length,limit);
-    var targetH=slots*CARD_SLOT_H+COL_BODY_PAD;
+  if(limit>0&&fc.length>=limit){
+    var targetH=limit*CARD_SLOT_H+COL_BODY_PAD;
     body.classList.add('limited');
     body.style.flex='0 0 auto';
     var prevH=_colHeights[col.id];
@@ -2477,9 +2476,9 @@ function mkCol(col,q){
     }else{
       body.style.height=targetH+'px';
     }
-    if(col.cards.length>limit)body.style.overflowY='auto';
+    body.style.overflowY='auto';
   }
-  var fillId=(limit>0&&col.cards.length===limit)?newCardId:null;
+  var fillId=(limit>0&&fc.length===limit)?newCardId:null;
   fc.forEach(function(card){body.appendChild(mkCard(card,col,P,fillId,expanded));});
   if(fc.length===0&&addTo!==col.id){
     var empty=document.createElement('div');
