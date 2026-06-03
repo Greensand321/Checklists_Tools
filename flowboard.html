@@ -2910,8 +2910,9 @@ function showCMItemPastePreview(colId,text){
         cmPasteOptionHtml(colId,'single','Keep as one item','Paste everything as a single task',singleItems,false)+
       '</div>'+
     '</div>';
-  overlay.onclick=function(e){if(e.target===overlay)closeCMItemPastePreview();};
+  overlay.onclick=function(e){if(!e.target.closest('.modal'))closeCMItemPastePreview();};
   document.body.appendChild(overlay);
+  if(!isLight()){var pm=overlay.querySelector('.modal');if(pm)pm.style.background='#243650';}
 }
 function handleCMItemPaste(e,colId){
   var clip=e.clipboardData||window.clipboardData;
@@ -3480,6 +3481,7 @@ function notify(msg){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(_pd){if(_pd.ghost)_pd.ghost.remove();_pd.el.style.opacity='';var _i=document.getElementById('drop-ind');if(_i)_i.remove();document.body.style.userSelect='';_pd=null;return;}
+    if(document.getElementById('cm-paste-preview')){closeCMItemPastePreview();return;}
     closeModal();
   }
   if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();createBak('Quick Save '+new Date().toLocaleTimeString());}
