@@ -285,8 +285,8 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .key-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s,border-color .15s}
 .key-item:hover{background:var(--surf3)}
 .key-item.active-key{border-color:#60a5fa;background:rgba(96,165,250,.07)}
-.key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
-.key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:inherit}
+.key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;cursor:default}
 .key-actions{display:flex;gap:5px;flex-shrink:0}
 .key-actions button{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .12s}
 .key-actions button:hover{opacity:.82}
@@ -1026,7 +1026,6 @@ function showKeysModal(){
         )
         +'</div>'
         +'<div class="key-actions">'
-        +(isActive?'':'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="switchKey(\''+k.key+'\')">Switch</button>')
         +'<button class="btn '+(k.syncOff?'btn-ghost':'btn-green')+'" style="padding:4px 10px;font-size:11px" onclick="toggleBoardSync(\''+k.key+'\')" title="'+(k.syncOff?'Cloud sync OFF — click to enable':'Cloud sync ON — click to disable')+'">'+(k.syncOff?'⊘ Off':'☁')+'</button>'
         +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyKey(\''+k.key+'\')">Copy</button>'
         +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="emailKey(\''+k.key+'\')">Email</button>'
@@ -1054,7 +1053,7 @@ function showKeysModal(){
       +(_activeKey?'<button class="btn btn-danger" style="font-size:12px" onclick="disconnectBtn()">Disconnect</button>':'<button class="btn btn-green" style="font-size:12px" onclick="reconnectBtn()">↩ Reconnect</button>')
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
-    setModal(h);
+    setModal(h,'640px');
     // Override overlay click to close without going through the card-dirty guard —
     // there is no editable card in this modal so the guard is irrelevant here.
     var ov=document.querySelector('#modal-root .overlay');
