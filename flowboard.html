@@ -371,6 +371,37 @@ var _usbHeartbeatTimer=null;
 var _usbStatus='off';
 var _usbWasCloudActive=false;
 var USB_INDEX_FILENAME='flowboard-index.json';
+var _USB_IDB_NAME='fb4_usb';var _USB_IDB_STORE='handles';var _USB_IDB_KEY='dir';
+
+// ── IndexedDB helpers for persisting the USB directory handle across sessions ──
+function _usbIDB(cb){
+  var req=indexedDB.open(_USB_IDB_NAME,1);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore(_USB_IDB_STORE);};
+  req.onsuccess=function(e){cb(null,e.target.result);};
+  req.onerror=function(e){cb(e);};
+}
+function _usbSaveHandle(handle){
+  _usbIDB(function(err,db){
+    if(err)return;
+    var tx=db.transaction(_USB_IDB_STORE,'readwrite');
+    tx.objectStore(_USB_IDB_STORE).put(handle,_USB_IDB_KEY);
+  });
+}
+function _usbClearHandle(){
+  _usbIDB(function(err,db){
+    if(err)return;
+    var tx=db.transaction(_USB_IDB_STORE,'readwrite');
+    tx.objectStore(_USB_IDB_STORE).delete(_USB_IDB_KEY);
+  });
+}
+function _usbLoadStoredHandle(cb){
+  _usbIDB(function(err,db){
+    if(err){cb(null);return;}
+    var req=db.transaction(_USB_IDB_STORE,'readonly').objectStore(_USB_IDB_STORE).get(_USB_IDB_KEY);
+    req.onsuccess=function(e){cb(e.target.result||null);};
+    req.onerror=function(){cb(null);};
+  });
+}
 var _usbIndex=null;
 
 var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
@@ -1190,6 +1221,67 @@ function updateUSBStatus(state){
   el.onclick=(state==='lost')?function(){selectDriveFolder();}:null;
 }
 
+// On page load: check IndexedDB for a stored USB handle. If found, show a one-click reconnect
+// banner — the browser will prompt for permission, then USB sync resumes automatically.
+function _usbCheckStoredHandle(){
+  if(!window.showDirectoryPicker)return; // unsupported browser — skip silently
+  _usbLoadStoredHandle(function(handle){
+    if(!handle)return;
+    // Check if permission is already granted (drive still plugged in) or needs re-prompt
+    handle.queryPermission({mode:'readwrite'}).then(function(perm){
+      if(perm==='granted'){
+        // Drive is still accessible — reconnect silently
+        _usbWasCloudActive=!!_activeKey;
+        if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+        _usbMode=true;_usbHandle=handle;
+        updateUSBStatus('connecting');
+        connectUSB(handle);
+      }else if(perm==='prompt'){
+        // Drive may be there — show a banner so user can restore with one click
+        _usbShowReconnectBanner(handle);
+      }
+      // perm==='denied': stored handle is no longer accessible, leave it
+    }).catch(function(){
+      // queryPermission not supported or handle stale — show the banner anyway
+      _usbShowReconnectBanner(handle);
+    });
+  });
+}
+
+function _usbShowReconnectBanner(handle){
+  var banner=document.createElement('div');
+  banner.id='usb-reconnect-banner';
+  banner.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:8888;'+
+    'background:var(--surf);border:1px solid rgba(16,185,129,.35);border-radius:14px;'+
+    'padding:12px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.45);'+
+    'font-size:13px;color:var(--txt-m);max-width:420px;animation:usbPlugIn .3s cubic-bezier(.34,1.4,.64,1) both';
+  banner.innerHTML=
+    '<span style="font-size:20px">💾</span>'+
+    '<span style="flex:1;line-height:1.4"><strong style="color:var(--txt-b)">USB drive was connected last session.</strong><br>'+
+    '<span style="font-size:11px;color:var(--txt-d)">Same device only — for a new computer use Reconnect USB Board in Backups.</span></span>'+
+    '<button class="btn btn-green" style="font-size:12px;white-space:nowrap" id="usb-reconnect-btn">Reconnect</button>'+
+    '<button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" onclick="document.getElementById(\'usb-reconnect-banner\').remove();_usbClearHandle()">✕</button>';
+  document.body.appendChild(banner);
+  document.getElementById('usb-reconnect-btn').onclick=function(){
+    banner.remove();
+    handle.requestPermission({mode:'readwrite'}).then(function(perm){
+      if(perm==='granted'){
+        _usbWasCloudActive=!!_activeKey;
+        if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+        _usbMode=true;_usbHandle=handle;
+        updateUSBStatus('connecting');
+        connectUSB(handle);
+      }else{
+        notify('⚠️ Drive access was not granted. Select the folder manually in Backups → Reconnect USB Board.');
+        _usbClearHandle();
+      }
+    }).catch(function(){
+      notify('⚠️ Could not access drive. Try Reconnect USB Board in Backups.');
+      _usbClearHandle();
+    });
+  };
+}
+
 function enableUSBMode(){
   if(!window.showDirectoryPicker){
     notify('⚠️ USB sync requires Chrome or Edge — your browser does not support it.');return;
@@ -1215,6 +1307,7 @@ function disableUSBMode(){
   _stopUSBHeartbeat();
   clearTimeout(_usbSaveTimer);
   _usbHandle=null;_usbConnected=false;_usbMode=false;_usbIndex=null;
+  _usbClearHandle();
   updateUSBStatus('off');
   if(_usbWasCloudActive&&_activeKey){
     // Restore the Firebase listener that was paused when USB mode started
@@ -1454,7 +1547,7 @@ function _usbImportBoard(boardId){
         if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
         _usbWasCloudActive=!!_activeKey;
         _usbMode=true;_usbHandle=handle;_usbIndex=index;
-        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
         notify('💾 USB sync active — changes will save to the drive.');
       }
       showBackupModal();
@@ -1489,14 +1582,14 @@ function connectUSB(handle){
         var remote=JSON.parse(txt);
         var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
         if(remoteTs>localTs){
-          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
           _usbConfirmLoad(remote,'drive',function(){
             if(document.querySelector('#modal-root .overlay'))showBackupModal();
           });
         }else{
           _usbWriteState(S);
           notify('💾 Drive updated — your local board was newer.');
-          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
           if(document.querySelector('#modal-root .overlay'))showBackupModal();
         }
       });
@@ -1519,14 +1612,14 @@ function connectUSB(handle){
         if(legacy.boardId===S.boardId){
           var localTs=S.lastModified||0,remoteTs=legacy.lastModified||0;
           if(remoteTs>localTs){
-            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
             _usbConfirmLoad(legacy,'drive (legacy)',function(){
               if(document.querySelector('#modal-root .overlay'))showBackupModal();
             });
           }else{
             _usbWriteState(S);
             notify('💾 Drive migrated to new format — your local board was newer.');
-            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
             if(document.querySelector('#modal-root .overlay'))showBackupModal();
           }
         }else{
@@ -1535,7 +1628,7 @@ function connectUSB(handle){
       }).catch(function(le){
         if(le.name==='NotFoundError'){
           _usbWriteState(S).then(function(){
-            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
             notify('💾 Board saved to USB drive!');
             if(document.querySelector('#modal-root .overlay'))showBackupModal();
           });
@@ -1601,7 +1694,7 @@ function switchUSBBoard(boardId){
     var remote=JSON.parse(txt);
     document.getElementById('modal-root').innerHTML='';
     _applyFromUSB(remote);
-    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
     notify('💾 Board loaded from USB drive!');
     if(document.querySelector('#modal-root .overlay'))showBackupModal();
   }).catch(function(e){
@@ -1612,7 +1705,7 @@ function switchUSBBoard(boardId){
 function addCurrentBoardToUSB(){
   document.getElementById('modal-root').innerHTML='';
   _usbWriteState(S).then(function(){
-    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
     notify('💾 Your board has been added to the USB drive!');
     if(document.querySelector('#modal-root .overlay'))showBackupModal();
   }).catch(function(e){
@@ -3810,6 +3903,7 @@ document.addEventListener('keydown',function(e){
 load();loadTheme();loadModalSize();render();initPointerDrag();
 _sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
+_usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
 initSync();
 </script>
 </body>
