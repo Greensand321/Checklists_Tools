@@ -2732,7 +2732,6 @@ function mkGroup(g,gcols,q,fake){
     var picker=document.createElement('div');picker.className='cpicker';picker.id='gp_'+g.id;picker.style.display='none';
     PAL.forEach(function(p,i){var d=document.createElement('div');d.className='cdot'+(g.pi===i?' on':'');d.style.background=p.a;d.title=p.n;d.onclick=function(){setGroupPi(g.id,i);};picker.appendChild(d);});
     pp.appendChild(picker);hdr.appendChild(pp);
-    var ac=document.createElement('button');ac.className='icon-btn';ac.title='Add column';ac.textContent='+';ac.style.fontSize='19px';ac.onclick=function(){showAddColModal(g.id);};hdr.appendChild(ac);
     var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='\u00D7';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
   }
   wrap.appendChild(hdr);
