@@ -651,7 +651,6 @@ function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
 function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
 
 function updateSyncStatus(state){
-  if(_usbMode)return;
   _syncStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
@@ -685,6 +684,9 @@ function migrateRemote(remote){
 }
 
 function connectToKey(key){
+  // During USB mode cloud sync is paused — don't attach Firebase listeners.
+  // Board switching in USB mode is handled via switchKey's USB-aware path.
+  if(_usbMode){updateUSBStatus(_usbConnected?'synced':'connecting');return;}
   // ── reset auto-reconnect state for this new attempt ──
   clearTimeout(_retryTimer);_retryTimer=null;
   _userDisconnected=false;
@@ -1121,7 +1123,21 @@ function joinKeyBtn(){
 }
 function switchKey(key){
   var _sw=getKeys().find(function(k){return k.key===key;});
-  if(_sw&&_sw.syncOff){loadBoardOffline(key);}else{connectToKey(key);}
+  if(_usbMode&&_usbConnected){
+    // In USB mode: prefer loading from USB drive when the board is indexed there.
+    var targetId=_sw&&_sw.boardId;
+    if(targetId&&_usbIndex&&_usbIndex.some(function(e){return e.boardId===targetId;})){
+      switchUSBBoard(targetId);
+    }else{
+      // Board not on this drive yet — load offline (one-time Firebase read) then USB will
+      // pick it up on the first save via _usbUpdateIndex.
+      loadBoardOffline(key);
+    }
+  }else if(_sw&&_sw.syncOff){
+    loadBoardOffline(key);
+  }else{
+    connectToKey(key);
+  }
   window._keysModalRender&&window._keysModalRender();
 }
 function copyKey(key){
@@ -1394,7 +1410,7 @@ function _usbUpdateIndex(state){
     cards:(state.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)};
   var found=false;
   for(var i=0;i<idx.length;i++){if(idx[i].boardId===state.boardId){idx[i]=entry;found=true;break;}}
-  if(!found)idx.push(entry);
+  if(!found){idx.push(entry);updateUSBStatus('synced');}
   _usbIndex=idx;
   return _usbWriteIndex(idx);
 }
