@@ -1224,7 +1224,7 @@ function updateUSBStatus(state){
 // On page load: check IndexedDB for a stored USB handle. If found, show a one-click reconnect
 // banner — the browser will prompt for permission, then USB sync resumes automatically.
 function _usbCheckStoredHandle(){
-  if(!window.showDirectoryPicker)return; // unsupported browser — skip silently
+  if(!window.showDirectoryPicker)return; // not supported or blocked — skip silently; user will get guidance when they try to enable
   _usbLoadStoredHandle(function(handle){
     if(!handle)return;
     // Check if permission is already granted (drive still plugged in) or needs re-prompt
@@ -1282,9 +1282,19 @@ function _usbShowReconnectBanner(handle){
   };
 }
 
+// Returns true if running in Brave (navigator.brave is injected by Brave itself)
+function _isBrave(){return !!(window.navigator&&window.navigator.brave);}
+
+// Human-readable browser hint for File System API errors
+function _fsBrowserHint(){
+  if(_isBrave())
+    return 'You are using Brave. Go to Shields (lion icon) → turn off "Block fingerprinting" or set it to Standard, then try again.';
+  return 'USB sync requires Chrome, Edge, or Brave (Chrome/Edge with File System Access API support).';
+}
+
 function enableUSBMode(){
   if(!window.showDirectoryPicker){
-    notify('⚠️ USB sync requires Chrome or Edge — your browser does not support it.');return;
+    notify('⚠️ '+_fsBrowserHint());return;
   }
   var hasCloud=!!_activeKey;
   var msg='Enable USB Drive mode?\n\n';
@@ -1464,7 +1474,7 @@ function _usbConfirmApply(){
 // Entry point for cross-computer reconnect: pick a folder WITHOUT enabling full USB mode first.
 function importFromUSB(){
   if(!window.showDirectoryPicker){
-    notify('⚠️ Requires Chrome or Edge — your browser does not support the File System API.');return;
+    notify('⚠️ '+_fsBrowserHint());return;
   }
   window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'}).then(function(handle){
     // Read the index from the selected folder
@@ -3421,14 +3431,21 @@ function showBackupModal(){
     }
     usbDriveBoards+='</div>';
   }
+  var _braveApiBlocked=_isBrave()&&!window.showDirectoryPicker;
   var usbSection=
     '<label class="lbl" style="margin-top:4px">Sync Mode</label>'+
+    (_braveApiBlocked?
+      '<div style="margin-bottom:8px;padding:9px 13px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;font-size:12px;color:#f59e0b;line-height:1.6">'+
+        '&#x1F6E1; <strong>Brave Shields is blocking USB file access.</strong> '+
+        'To fix: click the Shields icon (lion) in the address bar → set <strong>Fingerprinting blocking</strong> to <strong>Standard</strong> or <em>Disabled</em>, then reload.'+
+      '</div>'
+    :'')+
     '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:8px">'+
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+(_usbMode?'&#x1F4BE; USB Drive Mode':'&#x2601;&#xFE0F; Cloud / Local Mode')+'</div>'+
-        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud — works in Chrome, Edge &amp; Brave')+'</div>'+
       '</div>'+
-      '<button class="btn '+(_usbMode?'btn-danger':'btn-green')+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
+      '<button class="btn '+(_usbMode?'btn-danger':(_braveApiBlocked?'btn-ghost':'btn-green'))+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
         (_usbMode?'Disable USB':'&#x1F50C; Enable USB')+
       '</button>'+
     '</div>'+
