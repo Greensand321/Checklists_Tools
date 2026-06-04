@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Board Data Model Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Board Data Model Snippets</h1><p class="lede">A reusable Kanban state structure with groups, columns, cards, nested checklist items, and archived flags.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Schema Shape</h2><pre><code>var S = {
+  prefs: { theme: 'midnight', boardName: 'My Board' },
+  lastModified: 0,
+  groups: [
+    { id: 'g1', title: 'Work', pi: 0, collapsed: false, limit: 0 }
+  ],
+  cols: [
+    {
+      id: 'c1', gid: 'g1', title: 'To Do', pi: 0,
+      collapsed: false, sort: false, archived: false,
+      cards: [
+        { id: 'k1', title: 'Task', desc: '', pri: 1, color: null, tags: [], due: '', items: [], done: [] }
+      ]
+    }
+  ]
+};</code></pre></section><section class="card"><h2>Find Helpers</h2><pre><code>function findGroup(gid) {
+  return S.groups.find(function(g) { return g.id === gid; });
+}
+
+function findColumn(cid) {
+  return S.cols.find(function(c) { return c.id === cid; });
+}
+
+function findCard(cid) {
+  for (var i = 0; i < S.cols.length; i++) {
+    var card = S.cols[i].cards.find(function(k) { return k.id === cid; });
+    if (card) return { card: card, col: S.cols[i] };
+  }
+  return null;
+}</code></pre></section><section class="card"><h2>Active Selectors</h2><pre><code>function activeColumns() {
+  return S.cols.filter(function(c) { return !c.archived; });
+}
+
+function activeCards(col) {
+  return col.cards.filter(function(k) { return !k.archived; });
+}
+
+function boardCounts() {
+  var cols = activeColumns();
+  var cards = cols.reduce(function(n, c) { return n + activeCards(c).length; }, 0);
+  return { groups: S.groups.length, cols: cols.length, cards: cards };
+}</code></pre></section><section class="card"><h2>Move Card Between Columns</h2><pre><code>function moveCard(cardId, targetColId, targetIndex) {
+  var found = findCard(cardId);
+  var target = findColumn(targetColId);
+  if (!found || !target) return;
+
+  pushUndo();
+  found.col.cards = found.col.cards.filter(function(k) { return k.id !== cardId; });
+  target.cards.splice(targetIndex, 0, found.card);
+  saveState();
+  render();
+}</code></pre></section></main></body></html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Organization & Limits Snippets</title><style>body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f6f8fb;color:#172033;line-height:1.55}.wrap{width:min(1080px,calc(100% - 32px));margin:0 auto}header{background:#fff;border-bottom:1px solid #d8deea}header .wrap{padding:30px 0 24px}main.wrap{padding:24px 0 56px}h1{margin:0 0 8px;font-size:clamp(30px,4vw,42px)}h2{margin:28px 0 10px}.lede{color:#5b667a}.back{display:inline-block;margin-bottom:18px;font-weight:700;color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #d8deea;border-radius:8px;padding:22px;margin-bottom:18px}pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:8px;padding:16px;font-size:13px;line-height:1.5}code{font-family:Consolas,"Courier New",monospace}:not(pre)>code{background:#e9eef7;color:#172033;padding:2px 5px;border-radius:4px}</style></head><body><header><div class="wrap"><h1>Organization & Limits Snippets</h1><p class="lede">Patterns for collapse states, WIP limits, active selectors, sorting, and board statistics.</p></div></header><main class="wrap"><a class="back" href="feature-groups.html">Back to Feature Groups</a><section class="card"><h2>Collapse Toggles</h2><pre><code>function toggleGroup(gid) {
+  var group = findGroup(gid);
+  if (!group) return;
+  pushUndo();
+  group.collapsed = !group.collapsed;
+  saveState(); render();
+}
+
+function toggleColumn(cid) {
+  var col = findColumn(cid);
+  if (!col) return;
+  pushUndo();
+  col.collapsed = !col.collapsed;
+  saveState(); render();
+}</code></pre></section><section class="card"><h2>WIP Limit Height</h2><pre><code>var CARD_SLOT_H = 86;
+
+function columnBodyHeight(group, cardCount) {
+  if (!group || !group.limit) return '';
+  return Math.max(1, group.limit) * CARD_SLOT_H + 'px';
+}</code></pre></section><section class="card"><h2>Priority Sort Toggle</h2><pre><code>function visibleCards(col) {
+  var cards = activeCards(col).slice();
+  if (col.sort) {
+    cards.sort(function(a, b) { return (b.pri || 0) - (a.pri || 0); });
+  }
+  return cards;
+}</code></pre></section><section class="card"><h2>Stats Chip</h2><pre><code>function statsText() {
+  var counts = boardCounts();
+  return counts.groups + ' groups · ' + counts.cols + ' cols · ' + counts.cards + ' cards';
+}</code></pre></section></main></body></html>

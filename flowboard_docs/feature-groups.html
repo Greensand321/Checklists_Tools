@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowBoard Feature Groups</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5b667a;
+      --border: #d8deea;
+      --accent: #2563eb;
+      --accent-soft: #e8f0ff;
+      --done: #047857;
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+    header .wrap { padding: 30px 0 26px; }
+    main.wrap { padding: 24px 0 64px; }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 4vw, 44px);
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .lede {
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .top-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+    nav {
+      position: sticky;
+      top: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    nav strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+    nav a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    nav a:hover { background: var(--accent-soft); color: var(--accent); }
+    .group {
+      margin-bottom: 20px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .summary { color: var(--muted); max-width: 820px; }
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eef3fb;
+      color: #334155;
+    }
+    .pill.first { background: #dcfce7; color: var(--done); }
+    .pill.later { background: #fef3c7; color: var(--warn); }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+    li { margin: 5px 0; }
+    .next {
+      margin-bottom: 20px;
+      padding: 18px;
+      border-left: 4px solid var(--accent);
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: #244066;
+    }
+    code {
+      background: #e9eef7;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #172033;
+    }
+    @media (max-width: 840px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; }
+      .group { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>FlowBoard Feature Groups</h1>
+      <p class="lede">A grouped inventory of FlowBoard features. Use this as the roadmap for creating focused snippet pages that can be reused across other browser-based apps.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <a class="top-link" href="index.html">Back to FlowBoard Docs</a>
+    <div class="layout">
+      <nav aria-label="Feature groups">
+        <strong>Groups</strong>
+        <a href="#state-persistence">State & Persistence</a>
+        <a href="#recovery-history">Recovery & History</a>
+        <a href="#board-model">Board Data Model</a>
+        <a href="#editing-workflows">Editing Workflows</a>
+        <a href="#drag-drop">Drag & Drop</a>
+        <a href="#task-metadata">Task Metadata</a>
+        <a href="#organization">Organization & Limits</a>
+        <a href="#search-filtering">Search & Filtering</a>
+        <a href="#theming-ui">Theming & UI</a>
+        <a href="#modals-panels">Modals & Panels</a>
+        <a href="#cloud-sync">Cloud Sync</a>
+        <a href="#exporting">Exporting & Transfer</a>
+        <a href="#quality-safety">Quality & Safety</a>
+      </nav>
+
+      <div>
+        <section class="next">
+          <strong>First snippet group to build:</strong> <code>State & Persistence</code>. It is the best starting point because undo, snapshots, import/export, archive, and sync all depend on a clean state shape plus reliable save/load helpers.
+        </section>
+
+        <section id="state-persistence" class="group">
+          <h2>1. State & Persistence</h2>
+          <p class="summary">The app foundation: state object shape, local persistence, state replacement, and schema checks.</p>
+          <div class="status-row">
+            <span class="pill first">Start here</span>
+            <span class="pill">Core dependency</span>
+          </div>
+          <h3>Features</h3>
+          <ul>
+            <li>Global app state object, currently <code>S</code></li>
+            <li>State load from <code>localStorage</code></li>
+            <li>State save to <code>localStorage</code></li>
+            <li>Last-modified timestamp updates</li>
+            <li>Default demo state seeding</li>
+            <li>Basic imported-state validation</li>
+            <li>Storage key naming conventions</li>
+            <li>Storage limit handling and warnings</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li><code>loadState()</code> and fallback defaults</li>
+            <li><code>saveState()</code> with <code>lastModified</code></li>
+            <li><code>validateState()</code> for app-specific schemas</li>
+            <li><code>replaceState()</code> for imports, restores, and remote sync</li>
+          </ul>
+        </section>
+
+        <section id="recovery-history" class="group">
+          <h2>2. Recovery & History</h2>
+          <p class="summary">Features that let users recover from mistakes or return to known-good states.</p>
+          <div class="status-row">
+            <span class="pill later">Next after state</span>
+            <span class="pill">User safety</span>
+          </div>
+          <h3>Features</h3>
+          <ul>
+            <li>Undo stack</li>
+            <li>Redo stack</li>
+            <li>Session undo restore after refresh</li>
+            <li>Manual snapshots</li>
+            <li>Auto-snapshots at session start</li>
+            <li>Idle auto-snapshots</li>
+            <li>Before-destructive-action snapshots</li>
+            <li>Snapshot restore</li>
+            <li>Snapshot rename and delete</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li><code>_pushUndo()</code>, <code>doUndo()</code>, and <code>doRedo()</code></li>
+            <li><code>createSnapshot()</code> and <code>restoreSnapshot()</code></li>
+            <li><code>createAutoSnapshot()</code> trigger helpers</li>
+            <li>Undo button and shortcut wiring</li>
+          </ul>
+        </section>
+
+        <section id="board-model" class="group">
+          <h2>3. Board Data Model</h2>
+          <p class="summary">The reusable Kanban structure: groups contain columns, columns contain cards, and cards contain nested details.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Groups</li>
+            <li>Columns</li>
+            <li>Cards</li>
+            <li>Card checklist items</li>
+            <li>Archived columns and cards</li>
+            <li>Ungrouped columns</li>
+            <li>Stable IDs with <code>uid()</code></li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Generic board state schema</li>
+            <li>ID generation</li>
+            <li>Find helpers for groups, columns, and cards</li>
+            <li>Counting helpers for stats and badges</li>
+          </ul>
+        </section>
+
+        <section id="editing-workflows" class="group">
+          <h2>4. Editing Workflows</h2>
+          <p class="summary">Common UI operations for creating, editing, duplicating, deleting, and restoring user content.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Add group</li>
+            <li>Rename group inline</li>
+            <li>Delete group</li>
+            <li>Add column</li>
+            <li>Rename column inline</li>
+            <li>Delete column</li>
+            <li>Add card inline</li>
+            <li>Edit card title and description</li>
+            <li>Duplicate card</li>
+            <li>Delete card</li>
+            <li>Checklist add, edit, reorder, check, uncheck, clear done</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Inline rename component pattern</li>
+            <li>Inline add form pattern</li>
+            <li>Confirm-before-delete wrapper</li>
+            <li>Checklist row editor</li>
+          </ul>
+        </section>
+
+        <section id="drag-drop" class="group">
+          <h2>5. Drag & Drop</h2>
+          <p class="summary">Pointer-based movement systems for cards and columns, plus visual drop indicators.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Card drag between columns</li>
+            <li>Card reorder within a column</li>
+            <li>Column drag between groups</li>
+            <li>Column reorder within a group</li>
+            <li>Ghost element creation</li>
+            <li>Drop indicator placement</li>
+            <li>Drag cancellation with Escape</li>
+            <li>Momentum scroll while dragging</li>
+            <li>Checklist item drag reorder inside modal</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Pointer drag controller</li>
+            <li>Drop target detection using <code>elementFromPoint()</code></li>
+            <li>Reusable drop indicator helpers</li>
+            <li>Move item between arrays</li>
+          </ul>
+        </section>
+
+        <section id="task-metadata" class="group">
+          <h2>6. Task Metadata</h2>
+          <p class="summary">Card-level attributes that make a task system useful beyond simple titles.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Priority levels</li>
+            <li>Color labels</li>
+            <li>Tags</li>
+            <li>Due dates</li>
+            <li>Due date status labels</li>
+            <li>Overdue styling</li>
+            <li>Description text</li>
+            <li>Checklist progress</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Priority badge renderer</li>
+            <li>Tag add/remove helpers</li>
+            <li>Due date classifier</li>
+            <li>Checklist progress calculator</li>
+          </ul>
+        </section>
+
+        <section id="organization" class="group">
+          <h2>7. Organization & Limits</h2>
+          <p class="summary">Features for keeping large boards readable and controlling work in progress.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Group collapse</li>
+            <li>Column collapse to vertical pill</li>
+            <li>Group-level card limits</li>
+            <li>Column priority sorting</li>
+            <li>Archived column hiding</li>
+            <li>Ungrouped fallback section</li>
+            <li>Stats chip for groups, columns, and cards</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Collapsed state toggles</li>
+            <li>WIP limit application</li>
+            <li>Sort toggle and comparator</li>
+            <li>Active-only board selectors</li>
+          </ul>
+        </section>
+
+        <section id="search-filtering" class="group">
+          <h2>8. Search & Filtering</h2>
+          <p class="summary">Fast filtering helpers for finding cards and narrowing visible work.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Search by card title</li>
+            <li>Search by tags</li>
+            <li>Active card filtering</li>
+            <li>Archived item filtering</li>
+            <li>Checklist remaining/done filtering pattern from related checklist tools</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Case-insensitive search helper</li>
+            <li>Tag-aware card matcher</li>
+            <li>Filter state object pattern</li>
+          </ul>
+        </section>
+
+        <section id="theming-ui" class="group">
+          <h2>9. Theming & UI System</h2>
+          <p class="summary">Reusable styling infrastructure for apps that need multiple visual modes without a build step.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>CSS custom property theme tokens</li>
+            <li>Dark themes</li>
+            <li>Light themes</li>
+            <li>Theme preview on hover</li>
+            <li>Theme persistence</li>
+            <li>Palette-based group and column colors</li>
+            <li>Card color picker</li>
+            <li>Button style variants</li>
+            <li>Toast notifications</li>
+            <li>Animations for new cards, columns, groups, and modals</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Theme token structure</li>
+            <li>Theme switcher with preview</li>
+            <li>Color picker pattern</li>
+            <li>Notification toast helper</li>
+          </ul>
+        </section>
+
+        <section id="modals-panels" class="group">
+          <h2>10. Modals & Panels</h2>
+          <p class="summary">Overlay and floating-panel systems used for focused editing, settings, and secondary workflows.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Card detail modal</li>
+            <li>Resizable modal dimensions</li>
+            <li>Unsaved changes banner</li>
+            <li>Unsaved draft item banner</li>
+            <li>Theme panel</li>
+            <li>Cloud sync modal</li>
+            <li>Backup and restore modal</li>
+            <li>Archive modal</li>
+            <li>Add group modal</li>
+            <li>Add column modal</li>
+            <li>Custom calendar dropdown</li>
+            <li>Tags dropdown</li>
+            <li>Column selector dropdown</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Generic <code>setModal()</code> and <code>closeModal()</code></li>
+            <li>Click-outside panel closer</li>
+            <li>Dirty-form close guard</li>
+            <li>Calendar dropdown component</li>
+          </ul>
+        </section>
+
+        <section id="cloud-sync" class="group">
+          <h2>11. Cloud Sync</h2>
+          <p class="summary">Optional Firebase Realtime Database sync for keeping the same board state across devices.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Local-only mode</li>
+            <li>Board key creation</li>
+            <li>Join existing board by key</li>
+            <li>Saved board key list</li>
+            <li>Switch board key</li>
+            <li>Copy, email, rename, and remove board keys</li>
+            <li>Realtime remote listener</li>
+            <li>Last-write-wins conflict handling</li>
+            <li>Safety gate before remote writes</li>
+            <li>Debounced cloud writes</li>
+            <li>Offline and reconnect status handling</li>
+            <li>Cloud auto-snapshot merge</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Sync status state machine</li>
+            <li>Debounced remote write helper</li>
+            <li>Safe-write guard</li>
+            <li>Board key manager</li>
+          </ul>
+        </section>
+
+        <section id="exporting" class="group">
+          <h2>12. Exporting & Transfer</h2>
+          <p class="summary">Features for moving board data or documentation outside the live app.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Export current board JSON</li>
+            <li>Export named snapshot JSON</li>
+            <li>Import board JSON</li>
+            <li>Download filename sanitization</li>
+            <li>Import confirmation</li>
+            <li>Pre-import auto-snapshot</li>
+            <li>Checklist PNG export pattern from checklist tools</li>
+            <li>Checklist PDF/print export pattern from checklist tools</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>JSON download helper</li>
+            <li>File picker and reader helper</li>
+            <li>State import pipeline</li>
+            <li>Print/export page setup</li>
+          </ul>
+        </section>
+
+        <section id="quality-safety" class="group">
+          <h2>13. Quality & Safety</h2>
+          <p class="summary">Defensive behaviors that prevent data loss and keep the app resilient.</p>
+          <h3>Features</h3>
+          <ul>
+            <li>Confirm dialogs before destructive actions</li>
+            <li>Auto-snapshot before destructive actions</li>
+            <li>Undo suppression during undo/redo</li>
+            <li>Undo reset after full-state replace</li>
+            <li>Remote write safety gate</li>
+            <li>Storage quota warning</li>
+            <li>Invalid import handling</li>
+            <li>Offline sync handling</li>
+            <li>Fallback behavior when Firebase is not configured</li>
+          </ul>
+          <h3>Snippet targets</h3>
+          <ul>
+            <li>Safe destructive action wrapper</li>
+            <li>State replacement guard</li>
+            <li>Storage quota check</li>
+            <li>Remote safety validator</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
