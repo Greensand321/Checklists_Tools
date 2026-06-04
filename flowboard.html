@@ -958,6 +958,9 @@ function save(){
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   try{
     var data=JSON.stringify(S);localStorage.setItem('fb4',data);
+    // Keep the key entry's boardId in sync so the modal can show it for sync-off boards
+    var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
+    if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
     var used=new Blob([data]).size
       +new Blob([localStorage.getItem(_bakKey())||'']).size
       +new Blob([localStorage.getItem(_autoKey())||'']).size;
@@ -1015,7 +1018,12 @@ function showKeysModal(){
         +'>'
         +'<div style="flex:1;min-width:0">'
         +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
-        +'<div class="key-val">'+esc(k.key)+'</div>'
+        +(k.syncOff
+          ? '<div class="key-val" title="Internal board ID — unique to this board, used for local storage and USB sync">'
+            +(k.boardId?'local id: '+esc(k.boardId):'cloud key (sync off): '+esc(k.key))
+            +'</div>'
+          : '<div class="key-val" title="Cloud sync key — share with other devices to join this board">'+esc(k.key)+'</div>'
+        )
         +'</div>'
         +'<div class="key-actions">'
         +(isActive?'':'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="switchKey(\''+k.key+'\')">Switch</button>')
