@@ -1037,6 +1037,12 @@ function showKeysModal(){
     setModal(h);return;
   }
   function renderKeysModal(){
+    // Preserve scroll position across re-renders — setModal() rebuilds the DOM entirely
+    // which resets scrollTop to 0, snapping the list back to the top after every action.
+    var _savedScroll=0;
+    var _existingList=document.getElementById('keys-board-list');
+    if(_existingList)_savedScroll=_existingList.scrollTop;
+
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
@@ -1078,7 +1084,10 @@ function showKeysModal(){
       :'<div style="margin-bottom:14px;padding:10px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;font-size:12px;color:var(--txt-m)">Running in local-only mode — no sync active.</div>';
     var h='<h2 style="margin-bottom:14px">☁ Cloud Sync — Board Keys</h2>'
       +statusBlock
-      +'<div style="max-height:240px;overflow-y:auto;margin-bottom:16px">'+rows+'</div>'
+      // Dynamic list height: grow with content up to 4 full rows, then cap and scroll.
+      // 60px ≈ one key-item row (padding + content + margin).  Cap at 4.7 rows so the
+      // partial fifth row acts as a natural scroll affordance.
+      +(function(){var rh=60,cap=Math.round(rh*4.7);var h=keys.length>0?Math.min(keys.length*rh+4,cap):rh;return '<div id="keys-board-list" style="max-height:'+h+'px;overflow-y:auto;margin-bottom:16px">';}())+rows+'</div>'
       +'<hr style="border:none;border-top:1px solid var(--bd);margin-bottom:16px">'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
       +'<div style="flex:1;min-width:160px">'
@@ -1093,6 +1102,8 @@ function showKeysModal(){
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
     setModal(h,'640px');
+    // Restore scroll position now that the new DOM is in place.
+    if(_savedScroll){var _rl=document.getElementById('keys-board-list');if(_rl)_rl.scrollTop=_savedScroll;}
     // Override overlay click to close without going through the card-dirty guard —
     // there is no editable card in this modal so the guard is irrelevant here.
     var ov=document.querySelector('#modal-root .overlay');
