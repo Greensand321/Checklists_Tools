@@ -285,6 +285,7 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .key-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s,border-color .15s}
 .key-item:hover{background:var(--surf3)}
 .key-item.active-key{border-color:#60a5fa;background:rgba(96,165,250,.07)}
+.key-item.open-key{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.07)}
 .key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:inherit}
 .key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;cursor:default}
 .key-actions{display:flex;gap:5px;flex-shrink:0}
@@ -353,6 +354,7 @@ var _skipFbWrite=false; // set true during remote-triggered render to prevent ec
 var _syncTimer=null;    // debounce handle
 var _connectTimeout=null; // 10s connection watchdog
 var _activeKey=null;
+var _openKey=null;      // key of the board currently loaded in memory (set regardless of sync state)
 var _remoteBaseline=null; // snapshot of last confirmed Firebase state for write safety checks
 var _retryTimer=null;     // auto-reconnect backoff handle
 var _retryStep=0;         // index into _RETRY_DELAYS — escalates with each failed attempt
@@ -713,7 +715,7 @@ function connectToKey(key){
   // leaving S stuck with board A's data while _activeKey is already pointing at B.
   _pendingWrites=0;
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
-  _activeKey=key;localStorage.setItem('fb4_active_key',key);
+  _activeKey=key;_openKey=key;localStorage.setItem('fb4_active_key',key);
   var _lk=getKeys();var _lke=_lk.find(function(k){return k.key===key;});if(_lke){_lke.lastUsed=Date.now();setKeys(_lk);}
   updateSyncStatus('syncing');
   clearTimeout(_connectTimeout);
@@ -941,6 +943,7 @@ function initSync(){
   });
   var savedKey=localStorage.getItem('fb4_active_key');
   if(savedKey){
+    _openKey=savedKey;
     var _savedEntry=getKeys().find(function(k){return k.key===savedKey;});
     if(_savedEntry&&_savedEntry.syncOff){_lastActiveKey=savedKey;_userDisconnected=true;localStorage.removeItem('fb4_active_key');}
     else{connectToKey(savedKey);}
@@ -1037,11 +1040,23 @@ function showKeysModal(){
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
-      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'"'
-        +(isActive?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
+      var isOpen=k.key===_openKey;
+      var rowClass='key-item'+(isActive?' active-key':(isOpen?' open-key':''));
+      var badge;
+      if(isOpen&&_usbMode&&_usbConnected){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">💾 USB Active</span>';
+      }else if(isActive){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>';
+      }else if(isOpen){
+        badge='<span style="font-size:10px;color:#f59e0b;font-weight:700">● Open</span>';
+      }else{
+        badge='<span style="font-size:10px;color:var(--txt-d)">● inactive</span>';
+      }
+      return '<div class="'+rowClass+'" data-k="'+k.key+'"'
+        +(isActive||isOpen?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
         +'>'
         +'<div style="flex:1;min-width:0">'
-        +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
+        +'<div class="key-label">'+esc(k.label||'Board')+' '+badge+'</div>'
         +(k.syncOff
           ? '<div class="key-val" title="Internal board ID — unique to this board, used for local storage and USB sync">'
             +(k.boardId?'local id: '+esc(k.boardId):'cloud key (sync off): '+esc(k.key))
@@ -1205,7 +1220,7 @@ function loadBoardOffline(key){
   clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
   _pendingWrites=0;_autoSnapsPending=0;_skipFbWrite=false;_remoteBaseline=null;
   if(_activeKey)_lastActiveKey=_activeKey;
-  _activeKey=null;localStorage.removeItem('fb4_active_key');
+  _activeKey=null;_openKey=key;localStorage.removeItem('fb4_active_key');
   _userDisconnected=true;_reconnecting=false;_retryStep=0;
   updateSyncStatus('local');
   if(!FIREBASE_ENABLED||!_db||!key)return;
