@@ -706,6 +706,12 @@ function connectToKey(key){
   _remoteBaseline=null; // clear baseline when switching — new board has different structure
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
   if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
+  // Fix A: reset pending-write counter after detaching the old board's listener.
+  // The flush above increments _pendingWrites using the OLD _syncRef (board A's path).
+  // That write's echo goes to A's now-detached listener — it can never reach B's listener.
+  // Leaving the counter > 0 would cause B's first listener fire to be silently skipped,
+  // leaving S stuck with board A's data while _activeKey is already pointing at B.
+  _pendingWrites=0;
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
   _activeKey=key;localStorage.setItem('fb4_active_key',key);
   var _lk=getKeys();var _lke=_lk.find(function(k){return k.key===key;});if(_lke){_lke.lastUsed=Date.now();setKeys(_lk);}
@@ -714,12 +720,22 @@ function connectToKey(key){
   _connectTimeout=setTimeout(function(){
     if(_activeKey){updateSyncStatus('error');_reconnecting=false;_scheduleRetry();}
   },10000);
+  // Fix A: capture the key at attach time so stale callbacks from a superseded
+  // connectToKey call can be identified and discarded immediately.
+  var capturedKey=key;
+  // Fix B: gate the local-newer push behind this flag so the FIRST listener fire
+  // for a newly connected board ALWAYS applies the remote state — it never pushes
+  // the previous board's S back to Firebase.  Only after the initial sync is
+  // established (first apply committed) does last-write-wins logic re-engage.
+  var _isInitialSync=true;
   _syncRef=_db.ref('boards/'+key+'/state');
   _syncListener=_syncRef.on('value',function(snap){
+    if(_activeKey!==capturedKey)return; // Fix A: stale callback — another board switch already happened
     if(_pendingWrites>0)return; // our own write in-flight — ignore echo
     var remote=snap.val();
     if(remote===null){
       // new board — push local up and establish baseline
+      _isInitialSync=false;
       _pendingWrites++;
       _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
       return;
@@ -745,10 +761,14 @@ function connectToKey(key){
     // On initial connect / board switch the remote boardId differs from the stale local S.
     // Always trust the remote — it IS the board we just switched to.
     if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId){
+      _isInitialSync=false;
       _applyRemote(remote);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');
       return;
     }
-    if(localTs>remoteTs&&_isSafeWrite(S)){
+    // Fix B: never push on the first listener fire — S still holds the previous board's
+    // data at this point.  Copied boards (same boardId) would otherwise pass the identity
+    // check above and overwrite the target with the source board's content.
+    if(!_isInitialSync&&localTs>remoteTs&&_isSafeWrite(S)){
       // Local is newer AND structurally consistent with cloud — push local up.
       _pendingWrites++;
       _syncRef.set(S).then(function(){
@@ -761,13 +781,15 @@ function connectToKey(key){
         // Push failed — safe fallback: adopt cloud state so nothing is left inconsistent.
         _pendingWrites=Math.max(0,_pendingWrites-1);
         console.warn('[Sync] Push-local failed, reverting to cloud state:',err);
+        _isInitialSync=false;
         _applyRemote(remote);
         _reconnecting=false;_retryStep=0;
         updateSyncStatus('synced');
       });
       return;
     }
-    // Remote is newer, tied, or safety gate blocked the local push — apply cloud state.
+    // Remote is newer, tied, initial connect, or safety gate blocked — apply cloud state.
+    _isInitialSync=false;
     _applyRemote(remote);
     _reconnecting=false;_retryStep=0;
     updateSyncStatus('synced');
