@@ -144,6 +144,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .due-ok{background:rgba(96,165,250,.15);color:#60a5fa}
 .due-soon{background:rgba(245,158,11,.15);color:#f59e0b}
 .due-over{background:rgba(225,29,72,.18);color:#e11d48}
+.due-done{background:rgba(16,185,129,.15);color:#10b981}
 
 /* ── CARD COLOR CIRCLE PICKER ── */
 .cm-color-wrap{position:relative;flex-shrink:0;display:flex;align-items:center}
@@ -285,6 +286,7 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .key-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s,border-color .15s}
 .key-item:hover{background:var(--surf3)}
 .key-item.active-key{border-color:#60a5fa;background:rgba(96,165,250,.07)}
+.key-item.open-key{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.07)}
 .key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:inherit}
 .key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;cursor:default}
 .key-actions{display:flex;gap:5px;flex-shrink:0}
@@ -302,6 +304,21 @@ input[type="date"]{color-scheme:dark}
 .auto-bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
 .auto-bak-item:hover{background:var(--surf3)}
 .auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+
+/* ── SNAPSHOT DIFF VIEWER ── */
+.diff-sheet-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-d);padding:10px 0 5px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+.diff-sheet-header:not(:first-child){margin-top:12px}
+.diff-row{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:3px;font-size:12px;line-height:1.45}
+.diff-add{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)}
+.diff-mod{background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.22)}
+.diff-del{background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.2)}
+.diff-type-badge{font-size:11px;font-weight:800;width:18px;text-align:center;flex-shrink:0;padding-top:1px}
+.diff-badge-add{color:#10b981}
+.diff-badge-mod{color:#f59e0b}
+.diff-badge-del{color:#e11d48}
+.diff-rownum{font-size:10px;color:var(--txt-dd);flex-shrink:0;padding-top:2px;min-width:24px}
+.diff-expand-btn{background:none;border:none;cursor:pointer;color:var(--txt-d);font-size:11px;padding:1px 4px;flex-shrink:0;border-radius:4px;margin-top:1px}
+.diff-expand-btn:hover{background:var(--surf3);color:var(--txt)}
 
 /* ── USB SYNC ── */
 @keyframes usbLostPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(225,29,72,.5)}55%{opacity:.55;box-shadow:0 0 0 7px rgba(225,29,72,0)}}
@@ -353,6 +370,7 @@ var _skipFbWrite=false; // set true during remote-triggered render to prevent ec
 var _syncTimer=null;    // debounce handle
 var _connectTimeout=null; // 10s connection watchdog
 var _activeKey=null;
+var _openKey=null;      // key of the board currently loaded in memory (set regardless of sync state)
 var _remoteBaseline=null; // snapshot of last confirmed Firebase state for write safety checks
 var _retryTimer=null;     // auto-reconnect backoff handle
 var _retryStep=0;         // index into _RETRY_DELAYS — escalates with each failed attempt
@@ -678,7 +696,7 @@ function migrateRemote(remote){
   remote.cols.forEach(function(c){
     if(c.wip===undefined)c.wip=0;if(c.collapsed===undefined)c.collapsed=false;if(c.sort===undefined)c.sort=false;
     if(!c.cards)c.cards=[];
-    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];});
+    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];if(k.completed===undefined)k.completed=false;});
   });
   return remote;
 }
@@ -706,20 +724,36 @@ function connectToKey(key){
   _remoteBaseline=null; // clear baseline when switching — new board has different structure
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
   if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
+  // Fix A: reset pending-write counter after detaching the old board's listener.
+  // The flush above increments _pendingWrites using the OLD _syncRef (board A's path).
+  // That write's echo goes to A's now-detached listener — it can never reach B's listener.
+  // Leaving the counter > 0 would cause B's first listener fire to be silently skipped,
+  // leaving S stuck with board A's data while _activeKey is already pointing at B.
+  _pendingWrites=0;
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
-  _activeKey=key;localStorage.setItem('fb4_active_key',key);
+  _activeKey=key;_openKey=key;localStorage.setItem('fb4_active_key',key);
   var _lk=getKeys();var _lke=_lk.find(function(k){return k.key===key;});if(_lke){_lke.lastUsed=Date.now();setKeys(_lk);}
   updateSyncStatus('syncing');
   clearTimeout(_connectTimeout);
   _connectTimeout=setTimeout(function(){
     if(_activeKey){updateSyncStatus('error');_reconnecting=false;_scheduleRetry();}
   },10000);
+  // Fix A: capture the key at attach time so stale callbacks from a superseded
+  // connectToKey call can be identified and discarded immediately.
+  var capturedKey=key;
+  // Fix B: gate the local-newer push behind this flag so the FIRST listener fire
+  // for a newly connected board ALWAYS applies the remote state — it never pushes
+  // the previous board's S back to Firebase.  Only after the initial sync is
+  // established (first apply committed) does last-write-wins logic re-engage.
+  var _isInitialSync=true;
   _syncRef=_db.ref('boards/'+key+'/state');
   _syncListener=_syncRef.on('value',function(snap){
+    if(_activeKey!==capturedKey)return; // Fix A: stale callback — another board switch already happened
     if(_pendingWrites>0)return; // our own write in-flight — ignore echo
     var remote=snap.val();
     if(remote===null){
       // new board — push local up and establish baseline
+      _isInitialSync=false;
       _pendingWrites++;
       _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
       return;
@@ -745,10 +779,14 @@ function connectToKey(key){
     // On initial connect / board switch the remote boardId differs from the stale local S.
     // Always trust the remote — it IS the board we just switched to.
     if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId){
+      _isInitialSync=false;
       _applyRemote(remote);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');
       return;
     }
-    if(localTs>remoteTs&&_isSafeWrite(S)){
+    // Fix B: never push on the first listener fire — S still holds the previous board's
+    // data at this point.  Copied boards (same boardId) would otherwise pass the identity
+    // check above and overwrite the target with the source board's content.
+    if(!_isInitialSync&&localTs>remoteTs&&_isSafeWrite(S)){
       // Local is newer AND structurally consistent with cloud — push local up.
       _pendingWrites++;
       _syncRef.set(S).then(function(){
@@ -761,13 +799,15 @@ function connectToKey(key){
         // Push failed — safe fallback: adopt cloud state so nothing is left inconsistent.
         _pendingWrites=Math.max(0,_pendingWrites-1);
         console.warn('[Sync] Push-local failed, reverting to cloud state:',err);
+        _isInitialSync=false;
         _applyRemote(remote);
         _reconnecting=false;_retryStep=0;
         updateSyncStatus('synced');
       });
       return;
     }
-    // Remote is newer, tied, or safety gate blocked the local push — apply cloud state.
+    // Remote is newer, tied, initial connect, or safety gate blocked — apply cloud state.
+    _isInitialSync=false;
     _applyRemote(remote);
     _reconnecting=false;_retryStep=0;
     updateSyncStatus('synced');
@@ -919,6 +959,7 @@ function initSync(){
   });
   var savedKey=localStorage.getItem('fb4_active_key');
   if(savedKey){
+    _openKey=savedKey;
     var _savedEntry=getKeys().find(function(k){return k.key===savedKey;});
     if(_savedEntry&&_savedEntry.syncOff){_lastActiveKey=savedKey;_userDisconnected=true;localStorage.removeItem('fb4_active_key');}
     else{connectToKey(savedKey);}
@@ -1012,14 +1053,32 @@ function showKeysModal(){
     setModal(h);return;
   }
   function renderKeysModal(){
+    // Preserve scroll position across re-renders — setModal() rebuilds the DOM entirely
+    // which resets scrollTop to 0, snapping the list back to the top after every action.
+    var _savedScroll=0;
+    var _existingList=document.getElementById('keys-board-list');
+    if(_existingList)_savedScroll=_existingList.scrollTop;
+
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
-      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'"'
-        +(isActive?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
+      var isOpen=k.key===_openKey;
+      var rowClass='key-item'+(isActive?' active-key':(isOpen?' open-key':''));
+      var badge;
+      if(isOpen&&_usbMode&&_usbConnected){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">💾 USB Active</span>';
+      }else if(isActive){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>';
+      }else if(isOpen){
+        badge='<span style="font-size:10px;color:#f59e0b;font-weight:700">● Open</span>';
+      }else{
+        badge='<span style="font-size:10px;color:var(--txt-d)">● inactive</span>';
+      }
+      return '<div class="'+rowClass+'" data-k="'+k.key+'"'
+        +(isActive||isOpen?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
         +'>'
         +'<div style="flex:1;min-width:0">'
-        +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
+        +'<div class="key-label">'+esc(k.label||'Board')+' '+badge+'</div>'
         +(k.syncOff
           ? '<div class="key-val" title="Internal board ID — unique to this board, used for local storage and USB sync">'
             +(k.boardId?'local id: '+esc(k.boardId):'cloud key (sync off): '+esc(k.key))
@@ -1041,7 +1100,10 @@ function showKeysModal(){
       :'<div style="margin-bottom:14px;padding:10px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;font-size:12px;color:var(--txt-m)">Running in local-only mode — no sync active.</div>';
     var h='<h2 style="margin-bottom:14px">☁ Cloud Sync — Board Keys</h2>'
       +statusBlock
-      +'<div style="max-height:240px;overflow-y:auto;margin-bottom:16px">'+rows+'</div>'
+      // Dynamic list height: grow with content up to 4 full rows, then cap and scroll.
+      // 60px ≈ one key-item row (padding + content + margin).  Cap at 4.7 rows so the
+      // partial fifth row acts as a natural scroll affordance.
+      +(function(){var rh=60,cap=Math.round(rh*4.7);var h=keys.length>0?Math.min(keys.length*rh+4,cap):rh;return '<div id="keys-board-list" style="max-height:'+h+'px;overflow-y:auto;margin-bottom:16px">';}())+rows+'</div>'
       +'<hr style="border:none;border-top:1px solid var(--bd);margin-bottom:16px">'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
       +'<div style="flex:1;min-width:160px">'
@@ -1056,6 +1118,8 @@ function showKeysModal(){
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
     setModal(h,'640px');
+    // Restore scroll position now that the new DOM is in place.
+    if(_savedScroll){var _rl=document.getElementById('keys-board-list');if(_rl)_rl.scrollTop=_savedScroll;}
     // Override overlay click to close without going through the card-dirty guard —
     // there is no editable card in this modal so the guard is irrelevant here.
     var ov=document.querySelector('#modal-root .overlay');
@@ -1183,7 +1247,7 @@ function loadBoardOffline(key){
   clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
   _pendingWrites=0;_autoSnapsPending=0;_skipFbWrite=false;_remoteBaseline=null;
   if(_activeKey)_lastActiveKey=_activeKey;
-  _activeKey=null;localStorage.removeItem('fb4_active_key');
+  _activeKey=null;_openKey=key;localStorage.removeItem('fb4_active_key');
   _userDisconnected=true;_reconnecting=false;_retryStep=0;
   updateSyncStatus('local');
   if(!FIREBASE_ENABLED||!_db||!key)return;
@@ -1985,6 +2049,190 @@ function deleteAutoBak(id){
   showBackupModal();
 }
 
+// ── SNAPSHOT DIFF VIEWER ──
+var _diffRows=null; // stores {type, textA, textB} keyed by row number
+
+function _computeSnapshotDiff(stateA,stateB){
+  var mapA={},mapB={};
+  (stateA.cols||[]).forEach(function(col){
+    (col.cards||[]).forEach(function(card){mapA[card.id]={card:card,col:col.title||'Untitled'};});
+  });
+  (stateB.cols||[]).forEach(function(col){
+    (col.cards||[]).forEach(function(card){mapB[card.id]={card:card,col:col.title||'Untitled'};});
+  });
+  var added=[],deleted=[],modified=[];
+  Object.keys(mapB).forEach(function(id){
+    if(!mapA[id]){added.push({card:mapB[id].card,col:mapB[id].col});}
+    else if(JSON.stringify(mapA[id].card)!==JSON.stringify(mapB[id].card)){
+      modified.push({cardA:mapA[id].card,colA:mapA[id].col,cardB:mapB[id].card,colB:mapB[id].col});
+    }
+  });
+  Object.keys(mapA).forEach(function(id){
+    if(!mapB[id])deleted.push({card:mapA[id].card,col:mapA[id].col});
+  });
+  return{added:added,modified:modified,deleted:deleted};
+}
+
+function showDiffPicker(){
+  var allSnaps=[];
+  getBaks().forEach(function(b){allSnaps.push({id:b.id,label:b.name,ts:b.ts,src:'m'});});
+  getAutoBaks().forEach(function(b){allSnaps.push({id:b.id,label:b.name,ts:b.ts,src:'a'});});
+  allSnaps.sort(function(a,b){return b.ts-a.ts;});
+  if(allSnaps.length<2){notify('⚠️ Need at least 2 snapshots to compare.');return;}
+  var opts=allSnaps.map(function(s){
+    return '<option value="'+s.id+'|'+s.src+'">'+esc(s.label)+' — '+new Date(s.ts).toLocaleString()+'</option>';
+  }).join('');
+  var opts2=allSnaps.map(function(s,i){
+    return '<option value="'+s.id+'|'+s.src+'"'+(i===1?' selected':'')+'>'+esc(s.label)+' — '+new Date(s.ts).toLocaleString()+'</option>';
+  }).join('');
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Compare Snapshots</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showBackupModal()">← Back</button>'+
+    '</div>'+
+    '<label class="lbl">Snapshot A <span style="font-weight:400;color:var(--txt-dd)">(older / before)</span></label>'+
+    '<select id="diff-sel-a" class="finput" style="width:100%;margin-bottom:14px">'+opts+'</select>'+
+    '<label class="lbl">Snapshot B <span style="font-weight:400;color:var(--txt-dd)">(newer / after)</span></label>'+
+    '<select id="diff-sel-b" class="finput" style="width:100%;margin-bottom:22px">'+opts2+'</select>'+
+    '<button class="btn btn-green" style="width:100%;font-size:13px" onclick="runSnapshotDiff()">⚡ Show Diff</button>',
+  '540px');
+}
+
+function runSnapshotDiff(){
+  var selA=document.getElementById('diff-sel-a');
+  var selB=document.getElementById('diff-sel-b');
+  if(!selA||!selB)return;
+  var partsA=selA.value.split('|'),partsB=selB.value.split('|');
+  var idA=partsA[0],srcA=partsA[1],idB=partsB[0],srcB=partsB[1];
+  if(idA===idB){notify('⚠️ Please select two different snapshots.');return;}
+  showSnapshotDiff(idA,srcA,idB,srcB);
+}
+
+function showSnapshotDiff(idA,srcA,idB,srcB){
+  var all=getBaks().concat(getAutoBaks());
+  var snapA=all.find(function(x){return x.id===idA;});
+  var snapB=all.find(function(x){return x.id===idB;});
+  if(!snapA||!snapB){notify('⚠️ Snapshot not found.');return;}
+  var stateA=JSON.parse(snapA.data),stateB=JSON.parse(snapB.data);
+  var diff=_computeSnapshotDiff(stateA,stateB);
+  var total=diff.added.length+diff.modified.length+diff.deleted.length;
+  var fmtTs=function(ts){var d=new Date(ts);return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});};
+  var trunc=function(s,n){s=String(s||'');return s.length>n?s.slice(0,n)+'…':s;};
+
+  var header=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Snapshot Diff</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showDiffPicker()">← Back</button>'+
+    '</div>'+
+    '<div style="font-size:12px;padding:8px 10px;background:var(--surf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;line-height:1.7">'+
+      '<span style="color:var(--txt-d)">A:</span> <strong>'+esc(snapA.name)+'</strong> <span style="color:var(--txt-dd)">'+fmtTs(snapA.ts)+'</span><br>'+
+      '<span style="color:var(--txt-d)">B:</span> <strong>'+esc(snapB.name)+'</strong> <span style="color:var(--txt-dd)">'+fmtTs(snapB.ts)+'</span>'+
+    '</div>';
+
+  var statsBar=
+    '<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap">'+
+      '<span style="background:rgba(16,185,129,.15);color:#10b981;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">+'+diff.added.length+' added</span>'+
+      '<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">~'+diff.modified.length+' modified</span>'+
+      '<span style="background:rgba(225,29,72,.12);color:#e11d48;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">–'+diff.deleted.length+' deleted</span>'+
+    '</div>';
+
+  if(total===0){
+    setModal(header+statsBar+'<div style="text-align:center;padding:28px;color:var(--txt-d);font-size:13px">✓ Snapshots are identical — no differences found.</div>','580px');
+    return;
+  }
+
+  // group by sheet
+  var sheets={};
+  var order=[];
+  function addToSheet(name,entry){
+    if(!sheets[name]){sheets[name]=[];order.push(name);}
+    sheets[name].push(entry);
+  }
+  diff.modified.forEach(function(item){addToSheet(item.colB||item.colA,{type:'mod',item:item});});
+  diff.added.forEach(function(item){addToSheet(item.col,{type:'add',item:item});});
+  diff.deleted.forEach(function(item){addToSheet(item.col,{type:'del',item:item});});
+
+  _diffRows={};
+  var rn=0;
+  var rows='';
+  order.forEach(function(sheet){
+    rows+='<div class="diff-sheet-header">Sheet: '+esc(sheet)+'</div>';
+    sheets[sheet].forEach(function(entry){
+      rn++;
+      var n=rn,type=entry.type,item=entry.item;
+      if(type==='add'){
+        var t=item.card.text||'(empty)';
+        _diffRows[n]={type:'add',textA:'',textB:t};
+        rows+='<div class="diff-row diff-add">'+
+          '<span class="diff-type-badge diff-badge-add">+</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+esc(trunc(t,80))+'</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }else if(type==='del'){
+        var t=item.card.text||'(empty)';
+        _diffRows[n]={type:'del',textA:t,textB:''};
+        rows+='<div class="diff-row diff-del">'+
+          '<span class="diff-type-badge diff-badge-del">–</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+esc(trunc(t,80))+'</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }else{
+        var tA=item.cardA.text||'(empty)',tB=item.cardB.text||'(empty)';
+        _diffRows[n]={type:'mod',textA:tA,textB:tB};
+        rows+='<div class="diff-row diff-mod">'+
+          '<span class="diff-type-badge diff-badge-mod">~</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+
+            '<span style="opacity:.55">was: </span>'+esc(trunc(tA,40))+'<br>'+
+            '<span style="opacity:.55">now: </span>'+esc(trunc(tB,40))+
+          '</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }
+    });
+  });
+
+  setModal(
+    header+statsBar+
+    '<div style="max-height:380px;overflow-y:auto;padding-right:2px">'+rows+'</div>',
+  '640px');
+}
+
+function diffExpand(n){
+  if(!_diffRows||!_diffRows[n])return;
+  var d=_diffRows[n];
+  var cnt=document.getElementById('dc-'+n);
+  var btn=cnt&&cnt.nextElementSibling;
+  if(!cnt)return;
+  if(cnt.dataset.exp){
+    // collapse
+    if(d.type==='mod'){
+      cnt.innerHTML='<span style="opacity:.55">was: </span>'+esc(d.textA.length>40?d.textA.slice(0,40)+'…':d.textA)+'<br><span style="opacity:.55">now: </span>'+esc(d.textB.length>40?d.textB.slice(0,40)+'…':d.textB);
+    }else{
+      var t=d.type==='add'?d.textB:d.textA;
+      cnt.textContent=t.length>80?t.slice(0,80)+'…':t;
+    }
+    delete cnt.dataset.exp;
+    if(btn)btn.textContent='▼';
+  }else{
+    // expand
+    if(d.type==='mod'){
+      cnt.innerHTML=
+        '<span style="display:block;margin-bottom:2px;opacity:.55;font-size:10px">BEFORE</span>'+
+        '<span style="display:block;padding:5px 7px;background:rgba(225,29,72,.12);border-radius:5px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px">'+esc(d.textA)+'</span>'+
+        '<span style="display:block;margin-bottom:2px;opacity:.55;font-size:10px">AFTER</span>'+
+        '<span style="display:block;padding:5px 7px;background:rgba(16,185,129,.12);border-radius:5px;white-space:pre-wrap;word-break:break-word">'+esc(d.textB)+'</span>';
+    }else{
+      var t=d.type==='add'?d.textB:d.textA;
+      cnt.innerHTML='<span style="display:block;padding:5px 7px;background:rgba(0,0,0,.06);border-radius:5px;white-space:pre-wrap;word-break:break-word">'+esc(t)+'</span>';
+    }
+    cnt.dataset.exp='1';
+    if(btn)btn.textContent='▲';
+  }
+}
+
 // Write the full auto-snaps array to Firebase. Debounced 2s so rapid snap creation
 // (e.g. session-start + before-destructive firing in quick succession) sends one write.
 // Uses the same in-flight counter pattern as the main board-state sync.
@@ -2102,7 +2350,7 @@ function delCol(id){
 function addCard(colId,t,color){
   var c=S.cols.find(function(x){return x.id===colId;});if(!c||!t.trim())return;
   _pushUndo();
-  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:''};
+  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:'',completed:false};
   c.cards.push(card);newCardId=card.id;save();render();newCardId=null;
 }
 function saveCard(card){
@@ -2961,7 +3209,7 @@ function mkCard(card,col,P,fillId,expanded){
   var pri=PRI[card.pri]||PRI[0];
   var borderColor=card.color||pri.d;
   var pct=card.items.length?Math.round(card.done.length/card.items.length*100):null;
-  var dc=dueClass(card.due);
+  var dc=card.completed?'done':dueClass(card.due);
   var div=document.createElement('div');div.className='card';div.dataset.cid=card.id;
   div.style.borderLeftColor=borderColor;
   if(card.color){div.dataset.color=card.color;div.style.background=hexToRgba(card.color,isLight()?.09:.13);}
@@ -2975,8 +3223,12 @@ function mkCard(card,col,P,fillId,expanded){
   }
   h+='<div class="card-meta"><span class="pri-badge" style="background:'+pri.b+';color:'+pri.d+'">'+pri.l+'</span>'+card.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join('');
   if(dc){
-    var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
-    h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    if(dc==='done'){
+      h+='<span class="due-badge due-done">✓ Done</span>';
+    }else{
+      var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
+      h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    }
   }
   h+='</div>';
   div.innerHTML=h;
@@ -3172,7 +3424,7 @@ function renderCM(colId){
   var c=EC,pri=PRI[c.pri]||PRI[0],light=isLight();
   var borderColor=c.color||pri.d;
   var pct=c.items.length?Math.round(c.done.length/c.items.length*100):null;
-  var dc=dueClass(c.due);
+  var dc=c.completed?'done':dueClass(c.due);
 
   var colorDropHtml=CARD_COLORS.map(function(cc){
     var sel=c.color===cc.c;
@@ -3193,7 +3445,9 @@ function renderCM(colId){
   var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">&times;</span></span>';}).join('');
 
   var dueLabelHtml='';
-  if(dc){
+  if(dc==='done'){
+    dueLabelHtml='<span style="font-size:12px;font-weight:800;flex-shrink:0;color:#10b981;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:5px 12px">✓ Done</span>';
+  }else if(dc){
     var dlColor=dc==='over'?'#e11d48':dc==='soon'?'#f59e0b':'#60a5fa';
     var dlBg=dc==='over'?'rgba(225,29,72,.15)':dc==='soon'?'rgba(245,158,11,.12)':'rgba(96,165,250,.12)';
     var dlBd=dc==='over'?'rgba(225,29,72,.4)':dc==='soon'?'rgba(245,158,11,.35)':'rgba(96,165,250,.25)';
@@ -3244,7 +3498,13 @@ function renderCM(colId){
         '</button>'+
         '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
       '</div>'+
-      (c.due?'<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';saveCard(EC);renderCM(\''+colId+'\')">✕</button>':'')+
+      (c.due?
+        (c.completed
+          ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
+          :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>'
+        )+
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
+      :'')+
     '</div>'+
     (c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>')+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
@@ -3283,6 +3543,7 @@ function renderCM(colId){
 }
 
 function setCMPri(p,cid){EC.pri=p;saveCard(EC);renderCM(cid);}
+function markCMDone(colId){EC.completed=true;if(EC.items.length)EC.done=EC.items.slice();saveCard(EC);renderCM(colId);}
 function addCMTag(cid){
   var i=document.getElementById('cm-nt'),t=i.value.trim();if(!t||EC.tags.includes(t))return;
   EC.tags.push(t);i.value='';saveCard(EC);
@@ -3551,10 +3812,14 @@ function showBackupModal(){
       '</div>'
     );
 
+  var _totalSnaps=baks.length+autos.length;
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup & Restore</div>'+
-      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
+      '<div style="display:flex;gap:6px">'+
+        (_totalSnaps>=2?'<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showDiffPicker()">⇄ Compare</button>':'')+
+        '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
+      '</div>'+
     '</div>'+
     usbSection+
     undoBar+
