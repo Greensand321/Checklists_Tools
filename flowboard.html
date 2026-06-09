@@ -63,7 +63,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:99px}
 
-#topbar{background:var(--topbar);border-bottom:1px solid var(--bd);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:10;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background .3s}
+#topbar{background:var(--topbar);border-bottom:1px solid var(--bd);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:10;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background .3s;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#topbar::-webkit-scrollbar{display:none}
 .logo{font-size:19px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa,#fb7185);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
 #search{background:var(--inp2);border:1px solid var(--bd-i);border-radius:10px;color:var(--txt);padding:7px 13px;font-size:13px;width:190px;outline:none;transition:border-color .18s,box-shadow .18s}
 #search::placeholder{color:var(--txt-d)}
@@ -2881,6 +2882,7 @@ function initPointerDrag(){
   document.addEventListener('pointerdown',function(e){
     if(e.button!==0||e.target.closest('input,textarea,button,select,a,.cpicker,.cm-col-drop,.cm-color-drop'))return;
     var st=e.target.closest('.group-cols');
+    if(!st)st=e.target.closest('#topbar');
     if(!st)st=document.getElementById('board');
     if(st){
       if(e.pointerType==='mouse'||e.pointerType==='touch'){
@@ -2929,7 +2931,8 @@ function initPointerDrag(){
       }
       if(_swipe.moved&&_swipe.target){
         if(_swipe.dir==='x'){
-          if(_swipe.target.classList&&_swipe.target.classList.contains('group-cols')) _swipe.target.scrollLeft-=dx;
+          var t=_swipe.target;
+          if((t.classList&&t.classList.contains('group-cols'))||t.id==='topbar') t.scrollLeft-=dx;
         }else{
           var board=document.getElementById('board');if(board)board.scrollTop-=dy;
         }
@@ -2954,7 +2957,7 @@ function initPointerDrag(){
           vx*=0.92;vy*=0.92;
           if(Math.abs(vx)<0.5&&Math.abs(vy)<0.5)return;
           if(_swipe.dir==='x'){
-            if(target.classList&&target.classList.contains('group-cols')) target.scrollLeft-=vx;
+            if((target.classList&&target.classList.contains('group-cols'))||target.id==='topbar') target.scrollLeft-=vx;
           }else{
             var board=document.getElementById('board');if(board)board.scrollTop-=vy;
           }
@@ -3516,17 +3519,14 @@ function renderCM(colId){
       '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
     '</div>'+
-    '<div style="display:flex;justify-content:space-between;margin-bottom:14px">'+
-      '<div style="display:flex;gap:6px">'+
-        '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
-        '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
-      '</div>'+
-      '<div style="display:flex;gap:9px">'+
-        '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
-        '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
-      '</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+      '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
+      '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
+      '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
     '</div>'+
     chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
 
