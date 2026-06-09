@@ -3519,17 +3519,14 @@ function renderCM(colId){
       '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
     '</div>'+
-    '<div style="display:flex;justify-content:space-between;margin-bottom:14px">'+
-      '<div style="display:flex;gap:6px">'+
-        '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
-        '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
-      '</div>'+
-      '<div style="display:flex;gap:9px">'+
-        '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
-        '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
-      '</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+      '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
+      '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
+      '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
     '</div>'+
     chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
 
