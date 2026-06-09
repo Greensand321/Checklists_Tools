@@ -144,6 +144,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .due-ok{background:rgba(96,165,250,.15);color:#60a5fa}
 .due-soon{background:rgba(245,158,11,.15);color:#f59e0b}
 .due-over{background:rgba(225,29,72,.18);color:#e11d48}
+.due-done{background:rgba(16,185,129,.15);color:#10b981}
 
 /* ── CARD COLOR CIRCLE PICKER ── */
 .cm-color-wrap{position:relative;flex-shrink:0;display:flex;align-items:center}
@@ -695,7 +696,7 @@ function migrateRemote(remote){
   remote.cols.forEach(function(c){
     if(c.wip===undefined)c.wip=0;if(c.collapsed===undefined)c.collapsed=false;if(c.sort===undefined)c.sort=false;
     if(!c.cards)c.cards=[];
-    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];});
+    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];if(k.completed===undefined)k.completed=false;});
   });
   return remote;
 }
@@ -2349,7 +2350,7 @@ function delCol(id){
 function addCard(colId,t,color){
   var c=S.cols.find(function(x){return x.id===colId;});if(!c||!t.trim())return;
   _pushUndo();
-  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:''};
+  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:'',completed:false};
   c.cards.push(card);newCardId=card.id;save();render();newCardId=null;
 }
 function saveCard(card){
@@ -3208,7 +3209,7 @@ function mkCard(card,col,P,fillId,expanded){
   var pri=PRI[card.pri]||PRI[0];
   var borderColor=card.color||pri.d;
   var pct=card.items.length?Math.round(card.done.length/card.items.length*100):null;
-  var dc=dueClass(card.due);
+  var dc=card.completed?'done':dueClass(card.due);
   var div=document.createElement('div');div.className='card';div.dataset.cid=card.id;
   div.style.borderLeftColor=borderColor;
   if(card.color){div.dataset.color=card.color;div.style.background=hexToRgba(card.color,isLight()?.09:.13);}
@@ -3222,8 +3223,12 @@ function mkCard(card,col,P,fillId,expanded){
   }
   h+='<div class="card-meta"><span class="pri-badge" style="background:'+pri.b+';color:'+pri.d+'">'+pri.l+'</span>'+card.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join('');
   if(dc){
-    var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
-    h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    if(dc==='done'){
+      h+='<span class="due-badge due-done">✓ Done</span>';
+    }else{
+      var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
+      h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    }
   }
   h+='</div>';
   div.innerHTML=h;
@@ -3419,7 +3424,7 @@ function renderCM(colId){
   var c=EC,pri=PRI[c.pri]||PRI[0],light=isLight();
   var borderColor=c.color||pri.d;
   var pct=c.items.length?Math.round(c.done.length/c.items.length*100):null;
-  var dc=dueClass(c.due);
+  var dc=c.completed?'done':dueClass(c.due);
 
   var colorDropHtml=CARD_COLORS.map(function(cc){
     var sel=c.color===cc.c;
@@ -3440,7 +3445,9 @@ function renderCM(colId){
   var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">&times;</span></span>';}).join('');
 
   var dueLabelHtml='';
-  if(dc){
+  if(dc==='done'){
+    dueLabelHtml='<span style="font-size:12px;font-weight:800;flex-shrink:0;color:#10b981;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:5px 12px">✓ Done</span>';
+  }else if(dc){
     var dlColor=dc==='over'?'#e11d48':dc==='soon'?'#f59e0b':'#60a5fa';
     var dlBg=dc==='over'?'rgba(225,29,72,.15)':dc==='soon'?'rgba(245,158,11,.12)':'rgba(96,165,250,.12)';
     var dlBd=dc==='over'?'rgba(225,29,72,.4)':dc==='soon'?'rgba(245,158,11,.35)':'rgba(96,165,250,.25)';
@@ -3491,7 +3498,13 @@ function renderCM(colId){
         '</button>'+
         '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
       '</div>'+
-      (c.due?'<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';saveCard(EC);renderCM(\''+colId+'\')">✕</button>':'')+
+      (c.due?
+        (c.completed
+          ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
+          :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>'
+        )+
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
+      :'')+
     '</div>'+
     (c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>')+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
@@ -3530,6 +3543,7 @@ function renderCM(colId){
 }
 
 function setCMPri(p,cid){EC.pri=p;saveCard(EC);renderCM(cid);}
+function markCMDone(colId){EC.completed=true;if(EC.items.length)EC.done=EC.items.slice();saveCard(EC);renderCM(colId);}
 function addCMTag(cid){
   var i=document.getElementById('cm-nt'),t=i.value.trim();if(!t||EC.tags.includes(t))return;
   EC.tags.push(t);i.value='';saveCard(EC);
