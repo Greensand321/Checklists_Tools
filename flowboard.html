@@ -2878,7 +2878,11 @@ function mkChkControls(colId){
     (hasDone?'<button class="chk-ctrl-btn" style="color:#e11d48" onclick="clearCompleted(\''+colId+'\')">🗑 Clear done</button>':'')+
     '</div>';
 }
+function _closeItemCal(){
+  var ip=document.getElementById('cm-item-cal-drop');if(ip)ip.remove();
+}
 function refreshChk(colId){
+  _closeItemCal();
   var chk=document.getElementById('cm-chk');if(chk)chk.innerHTML=mkChkHtml(colId);
   refreshChkControls(colId);updateCMProgress();
 }
@@ -3534,9 +3538,7 @@ document.addEventListener('click',function(e){
     var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');
     var cp2=document.getElementById('cm-cal-drop-created');if(cp2)cp2.classList.remove('open');
   }
-  if(!e.target.closest('.chk-due-wrap')&&!e.target.closest('#cm-item-cal-drop')){
-    var ip=document.getElementById('cm-item-cal-drop');if(ip)ip.remove();
-  }
+  if(!e.target.closest('.chk-due-wrap')&&!e.target.closest('#cm-item-cal-drop'))_closeItemCal();
 },true);
 
 // ── MODALS ──
@@ -3546,10 +3548,12 @@ function closeModal(){
   if(draft){showDraftWarning();return;}
   if(_cmDirty){showUnsavedWarning();return;}
   _cmDirty=false;
+  _closeItemCal();
   document.getElementById('modal-root').innerHTML='';
 }
 function forceCloseModal(){
   _cmDirty=false;
+  _closeItemCal();
   document.getElementById('modal-root').innerHTML='';
 }
 function showDraftWarning(){
@@ -3651,6 +3655,7 @@ function showCardModal(cardId,colId){
   EC=JSON.parse(JSON.stringify(card));renderCM(colId);
 }
 function renderCM(colId){
+  _closeItemCal();
   var prevScroll=document.querySelector('#modal-root .modal')?document.querySelector('#modal-root .modal').scrollTop:0;
   var c=EC,pri=PRI[c.pri]||PRI[0],light=isLight();
   var borderColor=c.color||pri.d;
