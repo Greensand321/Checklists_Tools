@@ -181,6 +181,24 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .cm-date-btn{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none;font-family:inherit;position:relative}
 .cm-date-btn:hover{border-color:#60a5fa;color:var(--txt)}
 .cm-cal-drop{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:14px;z-index:200;box-shadow:0 12px 40px rgba(0,0,0,.5);width:280px;max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;padding:0}
+.cm-cal-drop.left{right:auto;left:0}
+.cm-meta-label{font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.btn.toggled-on{border-color:rgba(96,165,250,.55);color:#60a5fa;background:rgba(96,165,250,.1)}
+
+/* ── ENHANCED CARD LAYOUT ── */
+.cm-enhanced{display:flex;gap:18px;align-items:flex-start}
+.cm-side{width:190px;flex-shrink:0;display:flex;flex-direction:column;gap:14px}
+.cm-side-block{display:flex;flex-direction:column;gap:6px}
+.cm-side .cm-cal{display:flex;width:100%}
+.cm-side .cm-date-btn{width:100%;justify-content:flex-start}
+.cm-side-pri{display:flex;gap:6px;flex-wrap:wrap}
+.cm-side-pri .pri-btn{flex:1}
+.cm-main{flex:1;min-width:0}
+@media (max-width:640px){
+  .cm-enhanced{flex-direction:column}
+  .cm-side{width:100%;flex-direction:row;flex-wrap:wrap;gap:10px}
+  .cm-side-block{flex:1;min-width:140px}
+}
 .cm-cal-drop.open{max-height:360px;opacity:1;pointer-events:auto;padding:14px}
 .cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-hdr-title{font-size:14px;font-weight:800;color:var(--txt-b)}
@@ -321,9 +339,9 @@ input[type="date"]{color-scheme:dark}
 .diff-expand-btn:hover{background:var(--surf3);color:var(--txt)}
 
 /* ── CHECKLIST ✕ / CARD DATES / TOPBAR FILTER ── */
-.chk-x{color:var(--txt-m);cursor:pointer;font-size:17px;font-weight:700;line-height:1;flex-shrink:0;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:1px solid transparent;transition:color .15s,background .15s,border-color .15s,box-shadow .15s}
+.chk-x{color:var(--txt-m);cursor:pointer;flex-shrink:0;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:1px solid transparent;transition:color .15s,background .15s,border-color .15s,box-shadow .15s}
+.chk-x svg{display:block;pointer-events:none}
 .chk-x:hover{color:#e11d48;background:rgba(225,29,72,.12);border-color:rgba(225,29,72,.4);box-shadow:0 1px 5px rgba(225,29,72,.3)}
-.card-dates{display:flex;gap:9px;flex-wrap:wrap;font-size:10px;color:var(--txt-d);margin-top:7px;padding-top:6px;border-top:1px dashed var(--bd)}
 #filter-drop{position:fixed;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:500;box-shadow:0 10px 32px rgba(0,0,0,.45);padding:5px;min-width:210px}
 .filter-opt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;transition:background .12s;font-family:inherit}
 .filter-opt:hover{background:var(--surf3)}
@@ -345,7 +363,6 @@ input[type="date"]{color-scheme:dark}
   <div style="flex:1"></div>
   <input id="search" placeholder="🔍 Search…" oninput="render()">
   <button class="btn btn-ghost" id="filter-btn" onclick="toggleFilterDrop(event)">📅 Filter</button>
-  <button class="btn btn-ghost" id="detail-btn" onclick="toggleDetailView()">🗂 Detail</button>
   <span id="sync-status" class="sync-pill">💾 Local</span>
   <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
   <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">🎨 Theme</button>
@@ -639,6 +656,12 @@ var S={groups:[],cols:[]};
 var drag=null,addTo=null,EC=null,openLimitGid=null,_pd=null;
 var addCardColor=null;
 var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false,_cmTagsOpen=false;
+var _cmLayout=localStorage.getItem('fb4_cm_layout')||'simple';
+function toggleCMLayout(colId){
+  _cmLayout=_cmLayout==='enhanced'?'simple':'enhanced';
+  localStorage.setItem('fb4_cm_layout',_cmLayout);
+  renderCM(colId);
+}
 var _chkSorted=false,_chkOrigItems=null;
 
 function defaultState(){return{
@@ -2669,22 +2692,27 @@ function setCMColor(color){
 }
 
 // ── CUSTOM CALENDAR ──
-var _calMonth=null,_calYear=null,_calColId=null;
-function openCMCal(e,colId){
+var _calMonth=null,_calYear=null,_calColId=null,_calField='due';
+function _isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _calDropId(field){return field==='created'?'cm-cal-drop-created':'cm-cal-drop';}
+function openCMCal(e,colId,field){
   e.stopPropagation();
-  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  field=field||'due';
+  _calField=field;
+  var other=document.getElementById(_calDropId(field==='created'?'due':'created'));if(other)other.classList.remove('open');
+  var drop=document.getElementById(_calDropId(field));if(!drop)return;
   _calColId=colId;
-  var d=EC.due?new Date(EC.due+'T00:00:00'):new Date();
+  var d=field==='created'?(EC.createdAt?new Date(EC.createdAt):new Date()):(EC.due?new Date(EC.due+'T00:00:00'):new Date());
   _calMonth=d.getMonth();_calYear=d.getFullYear();
   drop.classList.add('open');
   renderCal();
 }
 function renderCal(){
-  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  var drop=document.getElementById(_calDropId(_calField));if(!drop)return;
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var DAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   var today=new Date();today.setHours(0,0,0,0);
-  var selStr=EC.due||'';
+  var selStr=_calField==='created'?(EC.createdAt?_isoDate(new Date(EC.createdAt)):''):(EC.due||'');
   var first=new Date(_calYear,_calMonth,1);
   var startDay=first.getDay();
   var daysInMonth=new Date(_calYear,_calMonth+1,0).getDate();
@@ -2720,8 +2748,13 @@ function renderCal(){
 }
 function calNav(dir){_calMonth+=dir;if(_calMonth>11){_calMonth=0;_calYear++;}if(_calMonth<0){_calMonth=11;_calYear--;}renderCal();}
 function pickCalDay(iso){
-  EC.due=iso;saveCard(EC);
-  var drop=document.getElementById('cm-cal-drop');if(drop)drop.classList.remove('open');
+  if(_calField==='created'){
+    EC.createdAt=iso?new Date(iso+'T12:00:00').getTime():0;
+  }else{
+    EC.due=iso;
+  }
+  saveCard(EC);
+  var drop=document.getElementById(_calDropId(_calField));if(drop)drop.classList.remove('open');
   renderCM(_calColId);
 }
 function pickCalToday(){var t=new Date();pickCalDay(t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));}
@@ -2772,7 +2805,7 @@ function mkChkHtml(colId){
       '<span class="chk-handle">⠿</span>'+
       '<div class="checkbox '+(done?'on':'')+'" onclick="toggleCMItem('+i+',\''+colId+'\')">'+(done?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'')+' </div>'+
       '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" onmouseenter="showTip(event,\''+escA(it)+'\')" onmouseleave="hideTip()" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
-      '<span class="chk-x" onclick="removeCMItem('+i+',\''+colId+'\')" title="Remove item">&times;</span>'+
+      '<span class="chk-x" onclick="removeCMItem('+i+',\''+colId+'\')" title="Remove item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 5L19 19M19 5L5 19"/></svg></span>'+
       '</div>';
   }).join('');
 }
@@ -3019,9 +3052,8 @@ function initPointerDrag(){
     document.querySelectorAll('.col-body.drag-over').forEach(function(x){x.classList.remove('drag-over');});
   });
 }
-// ── CARD DATE FILTER + DETAIL VIEW ──
+// ── CARD DATE FILTER ──
 var _cardFilter=localStorage.getItem('fb4_filter')||'all';
-var _detailView=localStorage.getItem('fb4_detail')==='1';
 var CARD_FILTERS=[
   {id:'all',          label:'All cards'},
   {id:'incomplete',   label:'☐ Incomplete only'},
@@ -3080,24 +3112,9 @@ function toggleFilterDrop(e){
     document.addEventListener('click',off);
   },0);
 }
-function updateDetailBtn(){
-  var b=document.getElementById('detail-btn');if(!b)return;
-  b.classList.toggle('toggled-on',_detailView);
-  b.title=_detailView?'Detail view ON — cards show dates':'Show creation/due/completion dates on cards';
-}
-function toggleDetailView(){
-  _detailView=!_detailView;
-  localStorage.setItem('fb4_detail',_detailView?'1':'0');
-  updateDetailBtn();render();
-}
 function _dateOnly(ts){
   return ts?new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
 }
-function setCMCreated(v,colId){
-  EC.createdAt=v?new Date(v+'T12:00:00').getTime():0;
-  saveCard(EC);renderCM(colId);
-}
-
 // ── MOVE COLLAPSED COLUMNS TO END (per group) ──
 function moveCollapsedToEnd(gid){
   var open=[],closed=[];
@@ -3113,7 +3130,7 @@ function moveCollapsedToEnd(gid){
   S.cols=rest;
   save();render();notify('⇥ Collapsed columns moved to the end.');
 }
-updateFilterBtn();updateDetailBtn();
+updateFilterBtn();
 
 function render(){
   var q=document.getElementById('search').value.toLowerCase().trim();
@@ -3372,13 +3389,6 @@ function mkCard(card,col,P,fillId,expanded){
     }
   }
   h+='</div>';
-  if(_detailView){
-    h+='<div class="card-dates">'+
-      '<span title="Created">🛠 '+_dateOnly(card.createdAt)+'</span>'+
-      (card.due?'<span title="Due date">📅 '+esc(dueLabel(card.due))+'</span>':'')+
-      (card.completedAt?'<span title="Completed" style="color:#10b981">✓ '+_dateOnly(card.completedAt)+'</span>':'')+
-    '</div>';
-  }
   div.innerHTML=h;
   if(expanded&&card.items&&card.items.length){
     var incomplete=card.items.filter(function(it){return !card.done.includes(it);});
@@ -3453,7 +3463,10 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('.cm-color-wrap')){_cmColorOpen=false;var cd=document.getElementById('cm-color-drop');if(cd)cd.classList.remove('open');}
   if(!e.target.closest('.cm-col-wrap')){_cmColOpen=false;var cc=document.getElementById('cm-col-drop');if(cc)cc.classList.remove('open');}
   if(!e.target.closest('.cm-tags-wrap')){_cmTagsOpen=false;var ct=document.getElementById('cm-tags-drop');if(ct)ct.classList.remove('open');}
-  if(!e.target.closest('.cm-cal')){var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');}
+  if(!e.target.closest('.cm-cal')){
+    var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');
+    var cp2=document.getElementById('cm-cal-drop-created');if(cp2)cp2.classList.remove('open');
+  }
 },true);
 
 // ── MODALS ──
@@ -3606,8 +3619,11 @@ function renderCM(colId){
 
   var tagsBadge=c.tags.length?'<span id="cm-tags-badge" style="background:rgba(96,165,250,.2);color:#60a5fa;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:2px">'+c.tags.length+'</span>':'';
 
-  var html=
-    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
+  var enhanced=_cmLayout==='enhanced';
+
+  var layoutToggleHtml='<button class="btn btn-ghost'+(enhanced?' toggled-on':'')+'" style="margin-left:auto;flex-shrink:0" onclick="toggleCMLayout(\''+colId+'\')" title="'+(enhanced?'Switch to simple card layout':'Switch to enhanced card layout (due/created date sidebar)')+'">'+(enhanced?'📋 Simple':'🗂 Enhanced')+'</button>';
+
+  var headerHtml='<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
       '<div id="cm-bar" style="width:5px;border-radius:99px;background:'+borderColor+';flex-shrink:0;align-self:stretch;min-height:36px;transition:background .2s"></div>'+
       '<div class="cm-color-wrap">'+
         '<div id="cm-color-circle" class="cm-color-circle" style="'+circleStyle+'" onclick="toggleCMColor(event)" title="Card color"></div>'+
@@ -3615,10 +3631,12 @@ function renderCM(colId){
       '</div>'+
       '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
       dueLabelHtml+
-    '</div>'+
-    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
-      '<div class="cm-tags-wrap">'+
+      layoutToggleHtml+
+    '</div>';
+
+  var descHtml='<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>';
+
+  var tagsTriggerHtml='<div class="cm-tags-wrap">'+
         '<div class="cm-tags-trigger" onclick="toggleCMTags(event)">'+
           '🏷 Tags'+tagsBadge+
         '</div>'+
@@ -3628,45 +3646,57 @@ function renderCM(colId){
             '<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="addCMTag(\''+colId+'\')">+</button>'+
           '</div>'+
         '</div>'+
-      '</div>'+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Priority</span>'+
-      PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('')+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Column</span>'+
-      '<div class="cm-col-wrap">'+
+      '</div>';
+
+  var priInlineHtml=PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('');
+
+  var colDropdownHtml='<div class="cm-col-wrap">'+
         '<div class="cm-col-trigger" onclick="toggleCMCol(event)">'+
           '<span style="overflow:hidden;text-overflow:ellipsis">'+currentColTitle+'</span>'+
           '<span style="opacity:.5;font-size:10px;flex-shrink:0">'+(_cmColOpen?'▴':'▾')+'</span>'+
         '</div>'+
         '<div id="cm-col-drop" class="cm-col-drop'+(_cmColOpen?' open':'')+'">'+colDropHtml+'</div>'+
-      '</div>'+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Deadline</span>'+
-      '<div class="cm-cal">'+
-        '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
-          (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
-        '</button>'+
-        '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
-      '</div>'+
-      (c.due?
+      '</div>';
+
+  var dueActionsHtml=(c.due?
         (c.completed
           ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
           :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>'
         )+
         '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
-      :'')+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Created</span>'+
-      '<input type="date" value="'+(c.createdAt?(function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})(new Date(c.createdAt)):'')+'" style="background:var(--inp);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:4px 8px;font-size:11px;outline:none;font-family:inherit;flex-shrink:0" onchange="setCMCreated(this.value,\''+colId+'\')" title="Card creation date — edit to override">'+
-    '</div>'+
-    (c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>')+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
+      :'');
+
+  function dueCalHtml(left){
+    return '<div class="cm-cal">'+
+      '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
+        (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
+      '</button>'+
+      '<div id="cm-cal-drop" class="cm-cal-drop'+(left?' left':'')+'"></div>'+
+    '</div>';
+  }
+  function createdCalHtml(left){
+    return '<div class="cm-cal">'+
+      '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\',\'created\')" title="Card creation date — click to edit">'+
+        '🛠 '+(c.createdAt?_dateOnly(c.createdAt):'Set date')+
+      '</button>'+
+      '<div id="cm-cal-drop-created" class="cm-cal-drop'+(left?' left':'')+'"></div>'+
+    '</div>';
+  }
+
+  var tagsRowHtml=(c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>');
+
+  var progRowHtml='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
       '<label class="lbl" style="margin-bottom:0">Checklist</label>'+
       (pct!==null?'<span class="prog-label" style="font-size:12px;font-weight:700;color:'+(pct===100?'#10b981':'var(--txt-d)')+'">'+pct+'% done</span>':'')+
     '</div>'+
-    (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'')+
-    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+    (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'');
+
+  var addItemHtml='<div style="display:flex;gap:8px;margin-bottom:10px">'+
       '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
-    '</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+    '</div>';
+
+  var actionBtnsHtml='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
       '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
       '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
       '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
@@ -3674,8 +3704,54 @@ function renderCM(colId){
       '<div style="flex:1"></div>'+
       '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
       '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
-    '</div>'+
-    chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
+    '</div>';
+
+  var checklistHtml=chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
+
+  var html;
+  if(enhanced){
+    var sideHtml='<div class="cm-side">'+
+        '<div class="cm-side-block">'+
+          '<div class="cm-meta-label">Due Date</div>'+
+          dueCalHtml(true)+
+          (dueActionsHtml?'<div style="display:flex;flex-wrap:wrap;gap:6px">'+dueActionsHtml+'</div>':'')+
+        '</div>'+
+        '<div class="cm-side-block">'+
+          '<div class="cm-meta-label">Created</div>'+
+          createdCalHtml(true)+
+        '</div>'+
+        '<div class="cm-side-block">'+
+          '<div class="cm-meta-label">Priority</div>'+
+          '<div class="cm-side-pri">'+priInlineHtml+'</div>'+
+        '</div>'+
+        '<div class="cm-side-block">'+
+          '<div class="cm-meta-label">Column</div>'+
+          colDropdownHtml+
+        '</div>'+
+        '<div class="cm-side-block">'+
+          '<div class="cm-meta-label">Tags</div>'+
+          tagsTriggerHtml+
+          tagsRowHtml+
+        '</div>'+
+      '</div>';
+    var mainHtml='<div class="cm-main">'+
+        descHtml+
+        progRowHtml+
+        addItemHtml+
+        actionBtnsHtml+
+        checklistHtml+
+      '</div>';
+    html=headerHtml+'<div class="cm-enhanced">'+sideHtml+mainHtml+'</div>';
+  }else{
+    var metaRowHtml='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+        tagsTriggerHtml+
+        '<span class="cm-meta-label">Priority</span>'+priInlineHtml+
+        '<span class="cm-meta-label">Column</span>'+colDropdownHtml+
+        '<span class="cm-meta-label">Deadline</span>'+dueCalHtml(false)+dueActionsHtml+
+        '<span class="cm-meta-label">Created</span>'+createdCalHtml(false)+
+      '</div>';
+    html=headerHtml+descHtml+metaRowHtml+tagsRowHtml+progRowHtml+addItemHtml+actionBtnsHtml+checklistHtml;
+  }
 
   setModal(html,null,function(){
     var m=document.querySelector('#modal-root .modal');
