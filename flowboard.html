@@ -277,23 +277,29 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-chevron{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:none;color:var(--txt-d);cursor:pointer;border-radius:6px;font-size:16px;line-height:1;transition:transform .25s cubic-bezier(.4,0,.2,1),background .15s,color .15s;font-family:inherit}
 .chk-chevron:hover{background:var(--surf3);color:var(--txt-m)}
 .chk-chevron.open{transform:rotate(180deg)}
-.chk-panel{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s,margin .25s}
-#cm-chk.enh .chk-panel.open{max-height:300px;opacity:1;margin:2px 0 8px 31px}
-.chk-panel-inner{display:flex;flex-direction:column;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bd-s);border-radius:10px}
-.chk-panel-row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
-.chk-panel-field{display:flex;flex-direction:column;gap:4px}
-.chk-panel-val{font-size:12px;color:var(--txt-m);font-weight:600}
-.chk-pri-dots{display:flex;gap:4px}
-.chk-pri-btn{padding:3px 9px;font-size:10px;border-radius:6px}
-.chk-notes{width:100%;min-height:50px;background:var(--inp);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:6px 9px;font-size:12px;outline:none;font-family:inherit;resize:vertical;transition:border-color .15s}
+.chk-panel{max-height:0;overflow:hidden;opacity:0;margin-left:31px;padding-left:10px;border-left:2px solid var(--bd-s);transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s,margin .25s}
+#cm-chk.enh .chk-panel.open{max-height:120px;opacity:1;margin:2px 0 8px 31px}
+.chk-panel-inner{display:flex;flex-direction:column;gap:6px;padding:6px 0}
+.chk-meta-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--txt-d)}
+.chk-meta-item{white-space:nowrap}
+.chk-sep{color:var(--txt-dd);font-size:10px}
+.chk-pri-mini-group{display:flex;gap:3px}
+.chk-pri-mini{width:18px;height:18px;border-radius:50%;border:1px solid var(--bd-i);background:var(--inp);color:var(--txt-dd);font-size:9px;font-weight:800;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s,color .15s,background .15s;font-family:inherit}
+.chk-pri-mini:hover{border-color:#60a5fa;color:#60a5fa}
+.chk-note-toggle{border:none;background:none;color:var(--txt-dd);font-size:11px;cursor:pointer;padding:0;font-family:inherit;transition:color .15s}
+.chk-note-toggle:hover{color:#60a5fa}
+.chk-note-line{display:flex;align-items:flex-start;gap:6px}
+.chk-note-line.hidden{display:none}
+.chk-note-icon{font-size:11px;line-height:1.6;flex-shrink:0}
+.chk-notes{flex:1;min-height:30px;background:var(--inp);border:1px solid var(--bd-i);border-radius:6px;color:var(--txt);padding:4px 7px;font-size:11px;outline:none;font-family:inherit;resize:vertical;transition:border-color .15s}
 .chk-notes:focus{border-color:#60a5fa}
-.chk-due-btn{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;border-radius:6px;padding:3px 7px;border:1px solid var(--bd-i);background:var(--inp);color:var(--txt-d);cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s,background .15s;font-family:inherit}
-.chk-due-btn:hover{border-color:#60a5fa;color:#60a5fa}
-.chk-due-btn.over{color:#e11d48;border-color:rgba(225,29,72,.4);background:rgba(225,29,72,.1)}
-.chk-due-btn.soon{color:#f59e0b;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.1)}
-.chk-due-btn.set{color:#60a5fa;border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.08)}
-.chk-due-btn.completed{color:#10b981;border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.1)}
-.chk-due-btn.completed:hover{color:#10b981;border-color:rgba(16,185,129,.4)}
+.chk-due-btn{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;border:none;background:none;padding:0;color:var(--txt-d);cursor:pointer;white-space:nowrap;transition:color .15s;font-family:inherit}
+.chk-due-btn:hover{color:#60a5fa}
+.chk-due-btn.over{color:#e11d48}
+.chk-due-btn.soon{color:#f59e0b}
+.chk-due-btn.set{color:#60a5fa}
+.chk-due-btn.completed{color:#10b981}
+.chk-due-btn.completed:hover{color:#10b981}
 .item-cal-drop{position:fixed;right:auto;width:280px}
 .card-tasks{margin:6px 0 0;border-top:1px solid var(--bd-s);padding-top:5px;display:flex;flex-direction:column;gap:1px}
 .card-task{font-size:11px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 4px;border-radius:4px;cursor:default;line-height:1.5;transition:color .12s,background .12s;-webkit-user-select:none;user-select:none}
@@ -630,6 +636,7 @@ var PAL=[
   {n:"Orange", h:"#7c2d00",b:"#3d1500",a:"#ea580c"},
   {n:"Indigo", h:"#283895",b:"#131c50",a:"#4f46e5"},
 ];
+var PAL_CARD_COLOR=["#3b82f6","#8b5cf6","#f43f5e","#10b981","#f59e0b","#06b6d4","#d946ef","#f97316","#8b5cf6"];
 var PRI=[
   {l:"Low",  d:"#10b981",b:"rgba(16,185,129,.15)"},
   {l:"Med",  d:"#f59e0b",b:"rgba(245,158,11,.15)"},
@@ -2891,16 +2898,22 @@ function mkChkPanelHtml(i,colId,meta,done){
   var idc=meta.due?dueClass(meta.due):null;
   var dueBtnCls=done?'completed':(idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':''));
   var dueBtnLbl=done?'✓ Completed':(meta.due?'📅 '+dueLabel(meta.due):'+ Due');
-  var priHtml=PRI.map(function(p,pi){return '<button class="pri-btn chk-pri-btn" style="'+(meta.pri===pi?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setItemPri('+i+',\''+colId+'\','+pi+')">'+p.l+'</button>';}).join('');
+  var priHtml=PRI.map(function(p,pi){return '<button class="chk-pri-mini'+(meta.pri===pi?' on':'')+'" style="'+(meta.pri===pi?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setItemPri('+i+',\''+colId+'\','+pi+')" title="'+p.l+' priority">'+p.l.charAt(0)+'</button>';}).join('');
+  var hasNote=!!(meta.notes&&meta.notes.trim());
   return '<div class="chk-panel-inner">'+
-    '<div class="chk-panel-row">'+
-      '<div class="chk-panel-field"><span class="cm-meta-label">Created</span><span class="chk-panel-val">'+_dateOnly(meta.createdAt)+'</span></div>'+
-      '<div class="chk-panel-field"><span class="cm-meta-label">Completed</span><span class="chk-panel-val" id="chk-completed-'+i+'">'+(meta.completedAt?_dateOnly(meta.completedAt):'—')+'</span></div>'+
-      '<div class="chk-panel-field"><span class="cm-meta-label">Due</span><button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" id="chk-due-btn-'+i+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button></div>'+
-      '<div class="chk-panel-field"><span class="cm-meta-label">Priority</span><div class="chk-pri-dots">'+priHtml+'</div></div>'+
+    '<div class="chk-meta-line">'+
+      '<span class="chk-meta-item">Created '+_dateOnly(meta.createdAt)+'</span>'+
+      '<span class="chk-sep">·</span>'+
+      '<span class="chk-meta-item">Completed <span id="chk-completed-'+i+'">'+(meta.completedAt?_dateOnly(meta.completedAt):'—')+'</span></span>'+
+      '<span class="chk-sep">·</span>'+
+      '<button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" id="chk-due-btn-'+i+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button>'+
+      '<span class="chk-sep">·</span>'+
+      '<div class="chk-pri-mini-group">'+priHtml+'</div>'+
+      (hasNote?'':'<span class="chk-sep">·</span><button class="chk-note-toggle" id="chk-note-toggle-'+i+'" onclick="toggleChkNote('+i+')">+ Note</button>')+
     '</div>'+
-    '<div class="chk-panel-row">'+
-      '<div class="chk-panel-field" style="flex:1;min-width:160px"><span class="cm-meta-label">Notes</span><textarea class="chk-notes" placeholder="Add a note for this item…" onblur="setItemNotes('+i+',\''+colId+'\',this.value)">'+esc(meta.notes||'')+'</textarea></div>'+
+    '<div class="chk-note-line'+(hasNote?'':' hidden')+'" id="chk-note-line-'+i+'">'+
+      '<span class="chk-note-icon">📝</span>'+
+      '<textarea class="chk-notes" placeholder="Add a note for this item…" onblur="setItemNotes('+i+',\''+colId+'\',this.value)">'+esc(meta.notes||'')+'</textarea>'+
     '</div>'+
   '</div>';
 }
@@ -2935,6 +2948,14 @@ function setItemNotes(i,colId,val){
   if(EC.itemMeta[i].notes===val)return;
   EC.itemMeta[i].notes=val;
   saveCard(EC);
+}
+function toggleChkNote(i){
+  var line=document.getElementById('chk-note-line-'+i);
+  var btn=document.getElementById('chk-note-toggle-'+i);
+  if(!line)return;
+  line.classList.remove('hidden');
+  if(btn)btn.style.display='none';
+  var ta=line.querySelector('textarea');if(ta)ta.focus();
 }
 function refreshChk(colId){
   _closeItemCal();
@@ -3490,7 +3511,7 @@ function mkCol(col,q){
   }else{
     var ab=document.createElement('button');ab.className='add-card-btn';ab.textContent='+ Add card';
     if(light){ab.style.borderColor=hexToRgba(P.a,.3);ab.style.color=hexToRgba(P.a,.6);}
-    ab.onclick=function(){addCardColor=null;addTo=col.id;render();};aa.appendChild(ab);
+    ab.onclick=function(){addCardColor=PAL_CARD_COLOR[col.pi%PAL_CARD_COLOR.length];addTo=col.id;render();};aa.appendChild(ab);
   }
   var foot=document.createElement('div');foot.className='col-foot';foot.dataset.pi=col.pi%PAL.length;
   foot.style.background=bodyBg;foot.style.borderColor=bodyBd;
