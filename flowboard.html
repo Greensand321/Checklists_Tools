@@ -181,24 +181,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .cm-date-btn{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none;font-family:inherit;position:relative}
 .cm-date-btn:hover{border-color:#60a5fa;color:var(--txt)}
 .cm-cal-drop{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:14px;z-index:200;box-shadow:0 12px 40px rgba(0,0,0,.5);width:280px;max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;padding:0}
-.cm-cal-drop.left{right:auto;left:0}
 .cm-meta-label{font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px}
 .btn.toggled-on{border-color:rgba(96,165,250,.55);color:#60a5fa;background:rgba(96,165,250,.1)}
-
-/* ── ENHANCED CARD LAYOUT ── */
-.cm-enhanced{display:flex;gap:18px;align-items:flex-start}
-.cm-side{width:190px;flex-shrink:0;display:flex;flex-direction:column;gap:14px}
-.cm-side-block{display:flex;flex-direction:column;gap:6px}
-.cm-side .cm-cal{display:flex;width:100%}
-.cm-side .cm-date-btn{width:100%;justify-content:flex-start}
-.cm-side-pri{display:flex;gap:6px;flex-wrap:wrap}
-.cm-side-pri .pri-btn{flex:1}
-.cm-main{flex:1;min-width:0}
-@media (max-width:640px){
-  .cm-enhanced{flex-direction:column}
-  .cm-side{width:100%;flex-direction:row;flex-wrap:wrap;gap:10px}
-  .cm-side-block{flex:1;min-width:140px}
-}
 .cm-cal-drop.open{max-height:360px;opacity:1;pointer-events:auto;padding:14px}
 .cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-hdr-title{font-size:14px;font-weight:800;color:var(--txt-b)}
@@ -288,14 +272,12 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-badge-due.over{color:#e11d48}
 .chk-badge-due.soon{color:#f59e0b}
 .chk-badge-due.set{color:#60a5fa}
-.chk-badge-note{opacity:.55;font-size:11px}
-.chk-chevron-wrap{flex-shrink:0;max-width:0;opacity:0;overflow:hidden;transition:max-width .32s cubic-bezier(.4,0,.2,1),opacity .22s,margin-left .32s}
-#cm-chk.enh .chk-chevron-wrap{max-width:32px;opacity:1;margin-left:2px}
+.chk-chevron-wrap{flex-shrink:0;max-width:32px;opacity:1;margin-left:2px;overflow:hidden}
 .chk-chevron{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:none;color:var(--txt-d);cursor:pointer;border-radius:6px;font-size:16px;line-height:1;transition:transform .25s cubic-bezier(.4,0,.2,1),background .15s,color .15s;font-family:inherit}
 .chk-chevron:hover{background:var(--surf3);color:var(--txt-m)}
 .chk-chevron.open{transform:rotate(180deg)}
 .chk-panel{max-height:0;overflow:hidden;opacity:0;margin-left:31px;padding-left:10px;border-left:2px solid var(--bd-s);transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s,margin .25s}
-#cm-chk.enh .chk-panel.open{max-height:120px;opacity:1;margin:2px 0 8px 31px}
+.chk-panel.open{max-height:120px;opacity:1;margin:2px 0 8px 31px}
 .chk-panel-inner{display:flex;flex-direction:column;gap:6px;padding:6px 0}
 .chk-meta-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--txt-d)}
 .chk-meta-item{white-space:nowrap}
@@ -709,12 +691,13 @@ function dueLabel(due){
 }
 function _fmtDate(d){
   var fmt=(S.prefs&&S.prefs.dateFormat)||'short';
+  var showYear=d.getFullYear()!==new Date().getFullYear();
   if(fmt==='numeric'){
     var mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
-    return mm+'/'+dd+'/'+d.getFullYear();
+    return mm+'/'+dd+(showYear?'/'+d.getFullYear():'');
   }
-  if(fmt==='long')return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
-  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  if(fmt==='long')return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:showYear?'numeric':undefined});
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:showYear?'numeric':undefined});
 }
 function _ensureItemMeta(k){
   if(!Array.isArray(k.itemMeta))k.itemMeta=[];
@@ -731,14 +714,6 @@ var S={groups:[],cols:[]};
 var drag=null,addTo=null,EC=null,openLimitGid=null,_pd=null;
 var addCardColor=null;
 var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false,_cmTagsOpen=false;
-var _cmLayout=localStorage.getItem('fb4_cm_layout')||'simple';
-var _prevCmLayout=null;
-function toggleCMLayout(colId){
-  _prevCmLayout=_cmLayout;
-  _cmLayout=_cmLayout==='enhanced'?'simple':'enhanced';
-  localStorage.setItem('fb4_cm_layout',_cmLayout);
-  renderCM(colId);
-}
 var _chkSorted=false,_chkOrigItems=null,_chkOrigMeta=null,_chkSortMode=null;
 var _expandedChk=new Set();
 var _expandedChkByCard={};
@@ -3864,10 +3839,6 @@ function renderCM(colId){
 
   var tagsBadge=c.tags.length?'<span id="cm-tags-badge" style="background:rgba(96,165,250,.2);color:#60a5fa;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:2px">'+c.tags.length+'</span>':'';
 
-  var enhanced=_cmLayout==='enhanced';
-
-  var layoutToggleHtml='<button class="btn btn-ghost'+(enhanced?' toggled-on':'')+'" style="margin-left:auto;flex-shrink:0" onclick="toggleCMLayout(\''+colId+'\')" title="'+(enhanced?'Switch to simple card layout':'Switch to enhanced card layout (due/created date sidebar)')+'">'+(enhanced?'📋 Simple':'🗂 Enhanced')+'</button>';
-
   var headerHtml='<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
       '<div id="cm-bar" style="width:5px;border-radius:99px;background:'+borderColor+';flex-shrink:0;align-self:stretch;min-height:36px;transition:background .2s"></div>'+
       '<div class="cm-color-wrap">'+
@@ -3876,7 +3847,6 @@ function renderCM(colId){
       '</div>'+
       '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
       dueLabelHtml+
-      layoutToggleHtml+
     '</div>';
 
   var descHtml='<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>';
@@ -3911,20 +3881,20 @@ function renderCM(colId){
         '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
 
-  function dueCalHtml(left){
+  function dueCalHtml(){
     return '<div class="cm-cal">'+
       '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
         (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
       '</button>'+
-      '<div id="cm-cal-drop" class="cm-cal-drop'+(left?' left':'')+'"></div>'+
+      '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
     '</div>';
   }
-  function createdCalHtml(left){
+  function createdCalHtml(){
     return '<div class="cm-cal">'+
       '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\',\'created\')" title="Card creation date — click to edit">'+
         '🛠 '+(c.createdAt?_dateOnly(c.createdAt):'Set date')+
       '</button>'+
-      '<div id="cm-cal-drop-created" class="cm-cal-drop'+(left?' left':'')+'"></div>'+
+      '<div id="cm-cal-drop-created" class="cm-cal-drop"></div>'+
     '</div>';
   }
 
@@ -3951,53 +3921,16 @@ function renderCM(colId){
       '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
     '</div>';
 
-  var initEnh=(_prevCmLayout!==null?_prevCmLayout:_cmLayout)==='enhanced';
-  var checklistHtml=chkControls+'<div id="cm-chk"'+(initEnh?' class="enh"':'')+'>'+chkHtml+'</div>';
+  var checklistHtml=chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
 
-  var html;
-  if(enhanced){
-    var sideHtml='<div class="cm-side">'+
-        '<div class="cm-side-block">'+
-          '<div class="cm-meta-label">Due Date</div>'+
-          dueCalHtml(true)+
-          (dueActionsHtml?'<div style="display:flex;flex-wrap:wrap;gap:6px">'+dueActionsHtml+'</div>':'')+
-        '</div>'+
-        '<div class="cm-side-block">'+
-          '<div class="cm-meta-label">Created</div>'+
-          createdCalHtml(true)+
-        '</div>'+
-        '<div class="cm-side-block">'+
-          '<div class="cm-meta-label">Priority</div>'+
-          '<div class="cm-side-pri">'+priInlineHtml+'</div>'+
-        '</div>'+
-        '<div class="cm-side-block">'+
-          '<div class="cm-meta-label">Column</div>'+
-          colDropdownHtml+
-        '</div>'+
-        '<div class="cm-side-block">'+
-          '<div class="cm-meta-label">Tags</div>'+
-          tagsTriggerHtml+
-          tagsRowHtml+
-        '</div>'+
-      '</div>';
-    var mainHtml='<div class="cm-main">'+
-        descHtml+
-        progRowHtml+
-        addItemHtml+
-        actionBtnsHtml+
-        checklistHtml+
-      '</div>';
-    html=headerHtml+'<div class="cm-enhanced">'+sideHtml+mainHtml+'</div>';
-  }else{
-    var metaRowHtml='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
-        tagsTriggerHtml+
-        '<span class="cm-meta-label">Priority</span>'+priInlineHtml+
-        '<span class="cm-meta-label">Column</span>'+colDropdownHtml+
-        '<span class="cm-meta-label">Deadline</span>'+dueCalHtml(false)+dueActionsHtml+
-        '<span class="cm-meta-label">Created</span>'+createdCalHtml(false)+
-      '</div>';
-    html=headerHtml+descHtml+metaRowHtml+tagsRowHtml+progRowHtml+addItemHtml+actionBtnsHtml+checklistHtml;
-  }
+  var metaRowHtml='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+      tagsTriggerHtml+
+      '<span class="cm-meta-label">Priority</span>'+priInlineHtml+
+      '<span class="cm-meta-label">Column</span>'+colDropdownHtml+
+      '<span class="cm-meta-label">Deadline</span>'+dueCalHtml()+dueActionsHtml+
+      '<span class="cm-meta-label">Created</span>'+createdCalHtml()+
+    '</div>';
+  var html=headerHtml+descHtml+metaRowHtml+tagsRowHtml+progRowHtml+addItemHtml+actionBtnsHtml+checklistHtml;
 
   setModal(html,null,function(){
     var m=document.querySelector('#modal-root .modal');
@@ -4008,17 +3941,6 @@ function renderCM(colId){
         m.style.backdropFilter='none';
       }
     }
-    if(_prevCmLayout!==null&&_prevCmLayout!==_cmLayout){
-      var chk=document.getElementById('cm-chk');
-      if(chk){
-        requestAnimationFrame(function(){
-          requestAnimationFrame(function(){
-            chk.classList.toggle('enh',_cmLayout==='enhanced');
-          });
-        });
-      }
-    }
-    _prevCmLayout=null;
   },true);
 }
 
