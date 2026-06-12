@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html data-theme="default">
+<head>
+<meta charset="utf-8">
+<title>Topbar Mockup — Option A: Reordered</title>
+<style>
+:root{
+  --bg:#060d18;--topbar:rgba(6,13,24,.88);--bd:rgba(255,255,255,.07);
+  --bd-s:rgba(255,255,255,.06);--bd-i:rgba(255,255,255,.1);
+  --txt:#e2e8f0;--txt-b:#f1f5f9;--txt-m:#94a3b8;--txt-d:#475569;--txt-dd:#334155;
+  --surf:#1a2538;--surf2:rgba(255,255,255,.055);--surf3:rgba(255,255,255,.08);
+  --inp2:rgba(255,255,255,.06);
+  --ghost-bg:rgba(255,255,255,.07);--ghost-c:#94a3b8;--ghost-bd:rgba(255,255,255,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column}
+#topbar{background:var(--topbar);border-bottom:1px solid var(--bd);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;backdrop-filter:blur(18px)}
+.logo{font-size:19px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa,#fb7185);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+#search{background:var(--inp2);border:1px solid var(--bd-i);border-radius:10px;color:var(--txt);padding:7px 13px;font-size:13px;width:190px;outline:none}
+#search::placeholder{color:var(--txt-d)}
+.topbar-stats{font-size:11px;color:var(--txt-dd);white-space:nowrap}
+.btn{border:none;border-radius:9px;padding:0 15px;height:34px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;line-height:1;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff}
+.btn-ghost{background:var(--ghost-bg);color:var(--ghost-c);border:1px solid var(--ghost-bd)}
+.btn-green{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.btn[disabled]{opacity:.35;cursor:default}
+.sync-pill{font-size:11px;font-weight:700;color:var(--txt-dd);white-space:nowrap;padding:4px 8px;border-radius:20px;background:var(--surf2);border:1px solid var(--bd)}
+
+.btn-group{display:inline-flex;border-radius:9px;overflow:hidden;border:1px solid var(--ghost-bd)}
+.btn-group .btn{border-radius:0;border:none;border-right:1px solid var(--ghost-bd);background:var(--ghost-bg);color:var(--ghost-c)}
+.btn-group .btn:last-child{border-right:none}
+
+#board-ph{flex:1;padding:50px;color:var(--txt-d);font-size:13px;line-height:1.7}
+.note{position:fixed;top:14px;right:18px;background:#1a2538;border:1px solid rgba(96,165,250,.35);padding:10px 14px;border-radius:10px;font-size:12px;color:#cbd5e1;max-width:320px;line-height:1.6;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.note b{color:#60a5fa}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="logo">⚡ FlowBoard</div>
+  <div class="btn-group">
+    <button class="btn" disabled title="Nothing to undo">↩ Undo</button>
+    <button class="btn" disabled title="Nothing to redo">↪ Redo</button>
+  </div>
+  <div class="topbar-stats">3 groups · 9 cols · 42 cards</div>
+  <div style="flex:1"></div>
+  <input id="search" placeholder="🔍 Search…">
+  <button class="btn btn-ghost">📅 Filter</button>
+  <span class="sync-pill">💾 Local</span>
+  <button class="btn btn-ghost">☁ Sync</button>
+  <button class="btn btn-green">💾 Backups</button>
+  <button class="btn btn-ghost">📋 Report</button>
+  <button class="btn btn-ghost">⚙ Settings</button>
+</div>
+<div id="board-ph">
+  Board content here…
+</div>
+<div class="note">
+  <b>Option A — Reordered</b><br>
+  Smallest possible change. Undo/Redo move to the top-left as a segmented
+  pair next to the logo (standard convention). "🎨 Theme" becomes
+  "⚙ Settings" and absorbs the Archive section (see settings-panel.html).
+  "+ Group" / "+ Column" and the standalone "📦 Archive" button are removed —
+  everything else keeps its current position.
+</div>
+</body>
+</html>
