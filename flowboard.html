@@ -292,6 +292,8 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-due-btn.over{color:#e11d48;border-color:rgba(225,29,72,.4);background:rgba(225,29,72,.1)}
 .chk-due-btn.soon{color:#f59e0b;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.1)}
 .chk-due-btn.set{color:#60a5fa;border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.08)}
+.chk-due-btn.completed{color:#10b981;border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.1)}
+.chk-due-btn.completed:hover{color:#10b981;border-color:rgba(16,185,129,.4)}
 .item-cal-drop{position:fixed;right:auto;width:280px}
 .card-tasks{margin:6px 0 0;border-top:1px solid var(--bd-s);padding-top:5px;display:flex;flex-direction:column;gap:1px}
 .card-task{font-size:11px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 4px;border-radius:4px;cursor:default;line-height:1.5;transition:color .12s,background .12s;-webkit-user-select:none;user-select:none}
@@ -2881,20 +2883,20 @@ function mkChkHtml(colId){
       '<span class="chk-chevron-wrap"><button class="chk-chevron'+(expanded?' open':'')+'" onclick="toggleChkPanel('+i+',\''+colId+'\')" title="Item details">▾</button></span>'+
       '<span class="chk-x" onclick="removeCMItem('+i+',\''+colId+'\')" title="Remove item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 5L19 19M19 5L5 19"/></svg></span>'+
       '</div>'+
-      '<div class="chk-panel'+(expanded?' open':'')+'" id="chk-panel-'+i+'">'+mkChkPanelHtml(i,colId,meta)+'</div>'+
+      '<div class="chk-panel'+(expanded?' open':'')+'" id="chk-panel-'+i+'">'+mkChkPanelHtml(i,colId,meta,done)+'</div>'+
       '</div>';
   }).join('');
 }
-function mkChkPanelHtml(i,colId,meta){
+function mkChkPanelHtml(i,colId,meta,done){
   var idc=meta.due?dueClass(meta.due):null;
-  var dueBtnCls=idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':'');
-  var dueBtnLbl=meta.due?'📅 '+dueLabel(meta.due):'+ Due';
+  var dueBtnCls=done?'completed':(idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':''));
+  var dueBtnLbl=done?'✓ Completed':(meta.due?'📅 '+dueLabel(meta.due):'+ Due');
   var priHtml=PRI.map(function(p,pi){return '<button class="pri-btn chk-pri-btn" style="'+(meta.pri===pi?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setItemPri('+i+',\''+colId+'\','+pi+')">'+p.l+'</button>';}).join('');
   return '<div class="chk-panel-inner">'+
     '<div class="chk-panel-row">'+
       '<div class="chk-panel-field"><span class="cm-meta-label">Created</span><span class="chk-panel-val">'+_dateOnly(meta.createdAt)+'</span></div>'+
       '<div class="chk-panel-field"><span class="cm-meta-label">Completed</span><span class="chk-panel-val" id="chk-completed-'+i+'">'+(meta.completedAt?_dateOnly(meta.completedAt):'—')+'</span></div>'+
-      '<div class="chk-panel-field"><span class="cm-meta-label">Due</span><button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button></div>'+
+      '<div class="chk-panel-field"><span class="cm-meta-label">Due</span><button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" id="chk-due-btn-'+i+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button></div>'+
       '<div class="chk-panel-field"><span class="cm-meta-label">Priority</span><div class="chk-pri-dots">'+priHtml+'</div></div>'+
     '</div>'+
     '<div class="chk-panel-row">'+
@@ -4099,6 +4101,19 @@ function toggleCMItem(idx,cid){
     }
     var completedEl=document.getElementById('chk-completed-'+idx);
     if(completedEl)completedEl.textContent=nowDone?_dateOnly(EC.itemMeta[idx].completedAt):'—';
+    var dueBtn=document.getElementById('chk-due-btn-'+idx);
+    if(dueBtn){
+      var meta=EC.itemMeta[idx];
+      if(nowDone){
+        dueBtn.className='chk-due-btn completed';
+        dueBtn.textContent='✓ Completed';
+      }else{
+        var idc=meta.due?dueClass(meta.due):null;
+        var dueBtnCls=idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':'');
+        dueBtn.className='chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'');
+        dueBtn.textContent=meta.due?'📅 '+dueLabel(meta.due):'+ Due';
+      }
+    }
     refreshChkControls(cid);updateCMProgress();
   }else renderCM(cid);
 }
