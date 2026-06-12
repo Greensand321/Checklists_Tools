@@ -737,8 +737,11 @@ function _syncCardDueFromItems(card){
   });
   var before=card.due;
   if(card.dueAuto){
+    // Stay active even when no incomplete item currently has a due date
+    // (e.g. all items checked off) so re-opening an item with a due date
+    // resumes auto-sync instead of requiring a manual reset.
     if(earliest!==null)card.due=earliest;
-    else{card.due='';card.dueAuto=false;}
+    else card.due='';
   }
   return card.due!==before;
 }
