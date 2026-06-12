@@ -80,6 +80,10 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .btn-green{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
 .btn-amber{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.25)}
 #topbar .btn{display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0 15px;height:34px}
+.tb-sep{width:1px;height:20px;background:var(--bd);flex-shrink:0;margin:0 2px}
+.btn-group{display:inline-flex;border-radius:9px;overflow:hidden;border:1px solid var(--ghost-bd)}
+.btn-group .btn{border-radius:0;border:none;border-right:1px solid var(--ghost-bd)}
+.btn-group .btn:last-child{border-right:none}
 
 #board{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 22px 40px;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
 .group{margin-bottom:28px}
@@ -227,6 +231,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .date-fmt-opt.on{border-color:#60a5fa;background:rgba(96,165,250,.12);color:#60a5fa}
 .date-fmt-opt span:last-child{color:var(--txt-d);font-weight:500}
 .date-fmt-opt.on span:last-child{color:#60a5fa}
+.archive-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--bd-s);border-radius:8px;padding:7px 11px;font-size:12px;color:var(--txt-m)}
 .tswatch{border:2px solid var(--bd);border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s}
 .tswatch:hover{transform:scale(1.08);box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .tswatch:active{transform:scale(.97)}
@@ -380,22 +385,25 @@ input[type="date"]{color-scheme:dark}
 <body>
 <div id="topbar">
   <div class="logo">⚡ FlowBoard</div>
+  <div class="tb-sep"></div>
+  <div class="btn-group">
+    <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
+    <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
+  </div>
+  <div class="tb-sep"></div>
   <div id="stats" class="topbar-stats"></div>
   <div style="flex:1"></div>
   <input id="search" placeholder="🔍 Search…" oninput="render()">
   <button class="btn btn-ghost" id="filter-btn" onclick="toggleFilterDrop(event)">📅 Filter</button>
+  <div class="tb-sep"></div>
   <span id="sync-status" class="sync-pill">💾 Local</span>
   <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
-  <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">🎨 Theme</button>
-  <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
-  <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
+  <div class="tb-sep"></div>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
   <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
-  <button class="btn btn-ghost" onclick="showArchiveModal()">📦 Archive</button>
-  <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
-  <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
+  <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">⚙ Settings</button>
 </div>
-<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div></div>
+<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div><div class="tp-title" style="margin-top:12px">Archive</div><div class="archive-row" id="archive-row"></div></div>
 <div id="board"></div>
 <div id="modal-root"></div>
 <div id="notif"></div>
@@ -609,7 +617,14 @@ function toggleThemePanel(){
   var p=document.getElementById('theme-panel'),btn=document.getElementById('theme-btn');
   if(p.classList.contains('open')){p.classList.remove('open');return;}
   var r=btn.getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=(window.innerWidth-r.right)+'px';
-  p.classList.add('open');renderThemeGrid();renderDateFmtRow();
+  p.classList.add('open');renderThemeGrid();renderDateFmtRow();renderArchiveRow();
+}
+function renderArchiveRow(){
+  var row=document.getElementById('archive-row');if(!row)return;
+  var cols=S.cols.filter(function(c){return c.archived;}).length;
+  var cards=S.cols.reduce(function(n,c){return n+c.cards.filter(function(k){return k.archived;}).length;},0);
+  var label=(cols||cards)?('📦 '+cols+' column'+(cols!==1?'s':'')+' · '+cards+' card'+(cards!==1?'s':'')):'📦 Archive is empty';
+  row.innerHTML='<span>'+label+'</span><button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="showArchiveModal()">Open Archive</button>';
 }
 var DATE_FMTS=[
   {id:'short',label:'Short',sample:'Jun 12'},
