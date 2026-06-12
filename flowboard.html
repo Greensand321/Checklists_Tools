@@ -267,6 +267,8 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-row:hover .chk-handle{opacity:1}
 .chk-ctrl-btn{background:none;border:none;color:var(--txt-d);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;border-radius:6px;transition:background .15s,color .15s}
 .chk-ctrl-btn:hover{background:var(--surf3);color:var(--txt-m)}
+.chk-ctrl-btn.on{background:rgba(96,165,250,.15);color:#60a5fa}
+.chk-ctrl-btn.on:hover{background:rgba(96,165,250,.22);color:#60a5fa}
 .chk-sort-drop{position:fixed;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:500;box-shadow:0 10px 32px rgba(0,0,0,.45);padding:5px;min-width:150px}
 .chk-sort-opt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;transition:background .12s;font-family:inherit}
 .chk-sort-opt:hover{background:var(--surf3)}
@@ -731,9 +733,13 @@ var addCardColor=null;
 var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false,_cmTagsOpen=false;
 var _chkSorted=false,_chkOrigItems=null,_chkOrigMeta=null,_chkSortMode=null;
 var _expandedChk=new Set();
-var _expandedChkByCard={};
+var _expandedChkByCard=(function(){
+  try{return JSON.parse(localStorage.getItem('fb4_expanded_chk'))||{};}catch(e){return{};}
+})();
 function _persistExpandedChk(){
-  if(EC)_expandedChkByCard[EC.id]=new Set(_expandedChk);
+  if(!EC)return;
+  _expandedChkByCard[EC.id]=[..._expandedChk];
+  try{localStorage.setItem('fb4_expanded_chk',JSON.stringify(_expandedChkByCard));}catch(e){}
 }
 
 function defaultState(){return{
@@ -2965,11 +2971,44 @@ function mkChkControls(colId){
   if(!EC.items.length)return'';
   var allDone=EC.items.every(function(it){return EC.done.includes(it);});
   var hasDone=EC.done.length>0;
+  var pinned=!!(S.prefs&&S.prefs.chkAlwaysExpanded);
+  var allExpanded=EC.items.every(function(it,i){return _expandedChk.has(i);});
   return '<div id="cm-chk-ctrl" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:6px">'+
     '<button class="chk-ctrl-btn" onclick="toggleChkSortMenu(event,\''+colId+'\')">⇅ '+(_chkSortMode?CHK_SORT_LABELS[_chkSortMode]:'Sort')+'</button>'+
+    '<button class="chk-ctrl-btn'+(pinned?' on':'')+'" onclick="toggleChkAlwaysExpanded(\''+colId+'\')" onmouseenter="_chkTipShow(event,\''+(pinned?'Always-expand is ON — every card opens with all checklist items expanded. Click to turn off (all items will collapse).':'Pin checklists open — when on, every card opens with all checklist items expanded by default.')+'\')" onmouseleave="_chkTipHide()">📌</button>'+
+    '<button class="chk-ctrl-btn" onclick="toggleExpandAll(\''+colId+'\')">'+(allExpanded?'⊟ Collapse all':'⊞ Expand all')+'</button>'+
     '<button class="chk-ctrl-btn" onclick="toggleAllItems(\''+colId+'\')">'+(allDone?'☐ Uncheck all':'☑ Check all')+'</button>'+
     (hasDone?'<button class="chk-ctrl-btn" style="color:#e11d48" onclick="clearCompleted(\''+colId+'\')">🗑 Clear done</button>':'')+
     '</div>';
+}
+var _chkTipTimer=null;
+function _chkTipShow(e,text){
+  clearTimeout(_chkTipTimer);
+  _chkTipTimer=setTimeout(function(){showTipAlways(e,text);},700);
+}
+function _chkTipHide(){
+  clearTimeout(_chkTipTimer);hideTip();
+}
+function toggleExpandAll(colId){
+  var allExpanded=EC.items.every(function(it,i){return _expandedChk.has(i);});
+  _expandedChk=allExpanded?new Set():new Set(EC.items.map(function(it,i){return i;}));
+  _persistExpandedChk();
+  refreshChk(colId);
+}
+function toggleChkAlwaysExpanded(colId){
+  if(!S.prefs)S.prefs={};
+  var on=!S.prefs.chkAlwaysExpanded;
+  S.prefs.chkAlwaysExpanded=on;
+  if(on){
+    _expandedChk=new Set(EC.items.map(function(it,i){return i;}));
+    _persistExpandedChk();
+  }else{
+    _expandedChk=new Set();
+    _expandedChkByCard={};
+    try{localStorage.removeItem('fb4_expanded_chk');}catch(e){}
+  }
+  save();
+  refreshChk(colId);
 }
 function closeChkSortMenu(){var d=document.getElementById('chk-sort-drop');if(d)d.remove();}
 function toggleChkSortMenu(e,colId){
@@ -3811,7 +3850,9 @@ function showCardModal(cardId,colId){
   var card=S.cols.reduce(function(a,c){return a.concat(c.cards);},[]).find(function(x){return x.id===cardId;});
   if(!card)return;
   _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
-  _expandedChk=new Set(_expandedChkByCard[card.id]||[]);
+  _expandedChk=(S.prefs&&S.prefs.chkAlwaysExpanded)
+    ?new Set((card.items||[]).map(function(_,i){return i;}))
+    :new Set(_expandedChkByCard[card.id]||[]);
   EC=JSON.parse(JSON.stringify(card));renderCM(colId);
 }
 function renderCM(colId){
