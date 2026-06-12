@@ -725,6 +725,23 @@ function _ensureItemMeta(k){
     if(m.completedAt===undefined)m.completedAt=null;
   });
 }
+// Keeps card.due in sync with the earliest due date among incomplete subtasks,
+// once that auto-sync has been activated (card.dueAuto) by setting a subtask due date.
+// Returns true if card.due changed.
+function _syncCardDueFromItems(card){
+  _ensureItemMeta(card);
+  var earliest=null;
+  card.items.forEach(function(it,i){
+    var due=card.itemMeta[i]&&card.itemMeta[i].due;
+    if(due&&!card.done.includes(it)&&(earliest===null||due<earliest))earliest=due;
+  });
+  var before=card.due;
+  if(card.dueAuto){
+    if(earliest!==null)card.due=earliest;
+    else{card.due='';card.dueAuto=false;}
+  }
+  return card.due!==before;
+}
 
 var newCardId=null,newColId=null,newGroupId=null,settleCardId=null;
 var S={groups:[],cols:[]};
@@ -2838,14 +2855,16 @@ function pickCalDay(iso){
     _ensureItemMeta(EC);
     if(!EC.itemMeta[_calItemIdx])EC.itemMeta[_calItemIdx]={due:'',createdAt:Date.now(),pri:null,completedAt:null};
     EC.itemMeta[_calItemIdx].due=iso;
+    if(iso)EC.dueAuto=true; // setting a subtask due date (re)activates auto-sync of the card due date
   }else{
-    EC.due=iso;
+    EC.due=iso;EC.dueAuto=false; // manual edit overrides auto-sync until a subtask due date is set again
   }
+  var dueChanged=_syncCardDueFromItems(EC);
   saveCard(EC);
   var drop=document.getElementById(_calDropId(_calField));
   if(_calField==='item'){
     if(drop){drop.classList.remove('open');drop.remove();}
-    refreshChk(_calColId);
+    if(dueChanged)renderCM(_calColId);else refreshChk(_calColId);
   }else{
     if(drop)drop.classList.remove('open');
     renderCM(_calColId);
@@ -3107,14 +3126,20 @@ function toggleAllItems(colId){
     var now=Date.now();
     EC.itemMeta.forEach(function(m){if(!m.completedAt)m.completedAt=now;});
   }
-  _cmDirty=true;saveCard(EC);refreshChk(colId);
+  _cmDirty=true;
+  var dueChanged=_syncCardDueFromItems(EC);
+  saveCard(EC);
+  if(dueChanged)renderCM(colId);else refreshChk(colId);
 }
 function clearCompleted(colId){
   var origItems=EC.items,origMeta=EC.itemMeta;
   var keepIdx=origItems.map(function(it,i){return i;}).filter(function(i){return !EC.done.includes(origItems[i]);});
   EC.items=keepIdx.map(function(i){return origItems[i];});
   EC.itemMeta=keepIdx.map(function(i){return origMeta[i];});
-  EC.done=[];_expandedChk.clear();_persistExpandedChk();saveCard(EC);refreshChk(colId);
+  EC.done=[];_expandedChk.clear();_persistExpandedChk();
+  var dueChanged=_syncCardDueFromItems(EC);
+  saveCard(EC);
+  if(dueChanged)renderCM(colId);else refreshChk(colId);
 }
 function editCMItem(idx,colId){
   var rows=document.querySelectorAll('#cm-chk .chk-row');
@@ -3934,7 +3959,7 @@ function renderCM(colId){
           ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
           :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>'
         )+
-        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.dueAuto=false;EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
 
   function dueCalHtml(){
@@ -4009,6 +4034,7 @@ function markCMDone(colId){
     var now=Date.now();
     EC.itemMeta.forEach(function(m){if(!m.completedAt)m.completedAt=now;});
   }
+  _syncCardDueFromItems(EC);
   saveCard(EC);renderCM(colId);
 }
 function addCMTag(cid){
@@ -4162,6 +4188,8 @@ function removeCMItem(idx,cid){
   _expandedChk.forEach(function(x){if(x<idx)remapped.add(x);else if(x>idx)remapped.add(x-1);});
   _expandedChk=remapped;_persistExpandedChk();
   _closeItemCal();
+  var dueChanged=_syncCardDueFromItems(EC);
+  if(dueChanged){renderCM(cid);return;}
   var chk=document.getElementById('cm-chk');
   if(chk){
     var rows=chk.querySelectorAll('.chk-row');
@@ -4205,6 +4233,8 @@ function toggleCMItem(idx,cid){
   _ensureItemMeta(EC);
   var nowDone=!wasDone;
   EC.itemMeta[idx].completedAt=nowDone?Date.now():null;
+  var dueChanged=_syncCardDueFromItems(EC);
+  if(dueChanged){renderCM(cid);return;}
   if(!_chkSorted&&_autoResortDone(idx)!==null){refreshChk(cid);return;}
   var chk=document.getElementById('cm-chk');
   if(chk){
