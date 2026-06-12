@@ -3358,6 +3358,7 @@ var _cardFilter=localStorage.getItem('fb4_filter')||'all';
 var CARD_FILTERS=[
   {id:'all',          label:'All cards'},
   {id:'incomplete',   label:'☐ Incomplete only'},
+  {id:'hasDue',       label:'📅 Has due date'},
   {id:'createdToday', label:'Created today'},
   {id:'created7',     label:'Created — last 7 days'},
   {id:'worked7',      label:'Worked on — last 7 days'},
@@ -3372,6 +3373,7 @@ function cardPassesFilter(k){
   if(!f||f==='all')return true;
   var now=Date.now(),day=86400000;
   if(f==='incomplete')return !_cardIsComplete(k);
+  if(f==='hasDue')return !!k.due||(k.itemMeta||[]).some(function(m){return !!(m&&m.due);});
   if(f==='createdToday'){var t0=new Date();t0.setHours(0,0,0,0);return (k.createdAt||0)>=t0.getTime();}
   if(f==='created7')return (k.createdAt||0)>=now-7*day;
   if(f==='worked7')return (k.updatedAt||k.createdAt||0)>=now-7*day;
