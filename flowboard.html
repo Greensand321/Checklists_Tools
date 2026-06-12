@@ -2992,9 +2992,9 @@ function mkChkPanelHtml(i,colId,meta,done){
 var CHK_SORT_OPTS=[
   {id:'date',label:'By Due Date'},
   {id:'priority',label:'By Priority'},
-  {id:'done-top',label:'Done to Top'},
+  {id:'done-bottom',label:'Done to Bottom'},
 ];
-var CHK_SORT_LABELS={date:'Due Date',priority:'Priority','done-top':'Done to Top'};
+var CHK_SORT_LABELS={date:'Due Date',priority:'Priority','done-bottom':'Done to Bottom'};
 function mkChkControls(colId){
   if(!EC.items.length)return'';
   var allDone=EC.items.every(function(it){return EC.done.includes(it);});
@@ -3083,8 +3083,8 @@ function applyChkSort(mode,colId){
         if(va===vb)return a-b;
         return vb-va;
       });
-    }else if(mode==='done-top'){
-      order=idxs.filter(function(i){return EC.done.includes(EC.items[i]);}).concat(idxs.filter(function(i){return !EC.done.includes(EC.items[i]);}));
+    }else if(mode==='done-bottom'){
+      order=idxs.filter(function(i){return !EC.done.includes(EC.items[i]);}).concat(idxs.filter(function(i){return EC.done.includes(EC.items[i]);}));
     }
     var srcItems=EC.items,srcMeta=EC.itemMeta;
     EC.items=order.map(function(i){return srcItems[i];});
