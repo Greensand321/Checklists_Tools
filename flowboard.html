@@ -237,6 +237,12 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .tp-sec{font-size:9px;font-weight:700;color:var(--txt-dd);text-transform:uppercase;letter-spacing:.8px;grid-column:1/-1;padding-top:8px;padding-bottom:3px;border-top:1px solid var(--bd-s);margin-top:4px}
 .tp-sec:first-child{border-top:none;padding-top:0;margin-top:0}
 .theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.date-fmt-row{display:flex;flex-direction:column;gap:5px}
+.date-fmt-opt{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:1px solid var(--bd-s);color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;cursor:pointer;transition:background .12s,border-color .12s;font-family:inherit}
+.date-fmt-opt:hover{background:var(--surf3)}
+.date-fmt-opt.on{border-color:#60a5fa;background:rgba(96,165,250,.12);color:#60a5fa}
+.date-fmt-opt span:last-child{color:var(--txt-d);font-weight:500}
+.date-fmt-opt.on span:last-child{color:#60a5fa}
 .tswatch{border:2px solid var(--bd);border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s}
 .tswatch:hover{transform:scale(1.08);box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .tswatch:active{transform:scale(.97)}
@@ -297,13 +303,6 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-pri-mini-group{display:flex;gap:3px}
 .chk-pri-mini{width:18px;height:18px;border-radius:50%;border:1px solid var(--bd-i);background:var(--inp);color:var(--txt-dd);font-size:9px;font-weight:800;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s,color .15s,background .15s;font-family:inherit}
 .chk-pri-mini:hover{border-color:#60a5fa;color:#60a5fa}
-.chk-note-toggle{border:none;background:none;color:var(--txt-dd);font-size:11px;cursor:pointer;padding:0;font-family:inherit;transition:color .15s}
-.chk-note-toggle:hover{color:#60a5fa}
-.chk-note-line{display:flex;align-items:flex-start;gap:6px}
-.chk-note-line.hidden{display:none}
-.chk-note-icon{font-size:11px;line-height:1.6;flex-shrink:0}
-.chk-notes{flex:1;min-height:30px;background:var(--inp);border:1px solid var(--bd-i);border-radius:6px;color:var(--txt);padding:4px 7px;font-size:11px;outline:none;font-family:inherit;resize:vertical;transition:border-color .15s}
-.chk-notes:focus{border-color:#60a5fa}
 .chk-due-btn{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;border:none;background:none;padding:0;color:var(--txt-d);cursor:pointer;white-space:nowrap;transition:color .15s;font-family:inherit}
 .chk-due-btn:hover{color:#60a5fa}
 .chk-due-btn.over{color:#e11d48}
@@ -414,7 +413,7 @@ input[type="date"]{color-scheme:dark}
   <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
   <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
 </div>
-<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div></div>
+<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div></div>
 <div id="board"></div>
 <div id="modal-root"></div>
 <div id="notif"></div>
@@ -628,7 +627,24 @@ function toggleThemePanel(){
   var p=document.getElementById('theme-panel'),btn=document.getElementById('theme-btn');
   if(p.classList.contains('open')){p.classList.remove('open');return;}
   var r=btn.getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=(window.innerWidth-r.right)+'px';
-  p.classList.add('open');renderThemeGrid();
+  p.classList.add('open');renderThemeGrid();renderDateFmtRow();
+}
+var DATE_FMTS=[
+  {id:'short',label:'Short',sample:'Jun 12'},
+  {id:'numeric',label:'Numeric',sample:'06/12/2026'},
+  {id:'long',label:'Long',sample:'June 12, 2026'},
+];
+function renderDateFmtRow(){
+  var row=document.getElementById('date-fmt-row');if(!row)return;
+  var cur=(S.prefs&&S.prefs.dateFormat)||'short';
+  row.innerHTML=DATE_FMTS.map(function(f){
+    return '<button class="date-fmt-opt'+(cur===f.id?' on':'')+'" onclick="setDateFormat(\''+f.id+'\')"><span>'+f.label+'</span><span>'+f.sample+'</span></button>';
+  }).join('');
+}
+function setDateFormat(fmt){
+  if(!S.prefs)S.prefs={};
+  S.prefs.dateFormat=fmt;
+  save();render();renderDateFmtRow();
 }
 function closeThemePanel(){
   document.getElementById('theme-panel')?.classList.remove('open');
@@ -689,15 +705,23 @@ function dueLabel(due){
   var diff=Math.round((d-today)/(1000*60*60*24));
   if(diff===0)return'Today';if(diff===1)return'Tomorrow';if(diff===-1)return'Yesterday';
   if(diff<0)return Math.abs(diff)+'d overdue';
+  return _fmtDate(d);
+}
+function _fmtDate(d){
+  var fmt=(S.prefs&&S.prefs.dateFormat)||'short';
+  if(fmt==='numeric'){
+    var mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+    return mm+'/'+dd+'/'+d.getFullYear();
+  }
+  if(fmt==='long')return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
   return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
 }
 function _ensureItemMeta(k){
   if(!Array.isArray(k.itemMeta))k.itemMeta=[];
-  while(k.itemMeta.length<k.items.length)k.itemMeta.push({due:'',createdAt:k.createdAt||Date.now(),pri:null,notes:'',completedAt:null});
+  while(k.itemMeta.length<k.items.length)k.itemMeta.push({due:'',createdAt:k.createdAt||Date.now(),pri:null,completedAt:null});
   if(k.itemMeta.length>k.items.length)k.itemMeta.length=k.items.length;
   k.itemMeta.forEach(function(m){
     if(m.pri===undefined)m.pri=null;
-    if(m.notes===undefined)m.notes='';
     if(m.completedAt===undefined)m.completedAt=null;
   });
 }
@@ -723,7 +747,7 @@ function _persistExpandedChk(){
 }
 
 function defaultState(){return{
-  prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board'},
+  prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board',dateFormat:'short'},
   boardId:uid(),
   lastModified:0,
   groups:[
@@ -2012,6 +2036,7 @@ function load(){
       S.prefs={theme:localStorage.getItem('fb4_theme')||'midnight',modalW:(_lsm.w>=320?_lsm.w:510),modalH:(_lsm.h>=200?_lsm.h:null)};
     }
     if(S.prefs.theme===undefined)S.prefs.theme='midnight';
+    if(S.prefs.dateFormat===undefined)S.prefs.dateFormat='short';
     if(S.prefs.modalW===undefined)S.prefs.modalW=510;
     if(S.prefs.modalH===undefined)S.prefs.modalH=null;
     if(!S.prefs.boardName)S.prefs.boardName='My Board';
@@ -2815,7 +2840,7 @@ function pickCalDay(iso){
     EC.createdAt=iso?new Date(iso+'T12:00:00').getTime():0;
   }else if(_calField==='item'){
     _ensureItemMeta(EC);
-    if(!EC.itemMeta[_calItemIdx])EC.itemMeta[_calItemIdx]={due:'',createdAt:Date.now(),pri:null,notes:'',completedAt:null};
+    if(!EC.itemMeta[_calItemIdx])EC.itemMeta[_calItemIdx]={due:'',createdAt:Date.now(),pri:null,completedAt:null};
     EC.itemMeta[_calItemIdx].due=iso;
   }else{
     EC.due=iso;
@@ -2921,9 +2946,6 @@ function mkChkBadges(meta,done){
     var cls=idc==='over'?'over':idc==='soon'?'soon':'set';
     b+='<span class="chk-badge chk-badge-due '+cls+'" title="Due '+dueLabel(meta.due)+'">📅 '+dueLabel(meta.due)+'</span>';
   }
-  if(meta.notes&&meta.notes.trim()){
-    b+='<span class="chk-badge chk-badge-note" title="'+escA(meta.notes)+'">📝</span>';
-  }
   return b?'<span class="chk-badges">'+b+'</span>':'';
 }
 function mkChkPanelHtml(i,colId,meta,done){
@@ -2931,7 +2953,6 @@ function mkChkPanelHtml(i,colId,meta,done){
   var dueBtnCls=done?'completed':(idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':''));
   var dueBtnLbl=done?'✓ Completed':(meta.due?'📅 '+dueLabel(meta.due):'+ Due');
   var priHtml=PRI.map(function(p,pi){return '<button class="chk-pri-mini'+(meta.pri===pi?' on':'')+'" style="'+(meta.pri===pi?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setItemPri('+i+',\''+colId+'\','+pi+')" title="'+p.l+' priority">'+p.l.charAt(0)+'</button>';}).join('');
-  var hasNote=!!(meta.notes&&meta.notes.trim());
   return '<div class="chk-panel-inner">'+
     '<div class="chk-meta-line">'+
       '<span class="chk-meta-item">Created '+_dateOnly(meta.createdAt)+'</span>'+
@@ -2941,11 +2962,6 @@ function mkChkPanelHtml(i,colId,meta,done){
       '<button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" id="chk-due-btn-'+i+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button>'+
       '<span class="chk-sep">·</span>'+
       '<div class="chk-pri-mini-group">'+priHtml+'</div>'+
-      (hasNote?'':'<span class="chk-sep">·</span><button class="chk-note-toggle" id="chk-note-toggle-'+i+'" onclick="toggleChkNote('+i+')">+ Note</button>')+
-    '</div>'+
-    '<div class="chk-note-line'+(hasNote?'':' hidden')+'" id="chk-note-line-'+i+'">'+
-      '<span class="chk-note-icon">📝</span>'+
-      '<textarea class="chk-notes" placeholder="Add a note for this item…" onblur="setItemNotes('+i+',\''+colId+'\',this.value)">'+esc(meta.notes||'')+'</textarea>'+
     '</div>'+
   '</div>';
 }
@@ -3037,20 +3053,6 @@ function setItemPri(i,colId,p){
   _ensureItemMeta(EC);
   EC.itemMeta[i].pri=(EC.itemMeta[i].pri===p)?null:p;
   saveCard(EC);refreshChk(colId);
-}
-function setItemNotes(i,colId,val){
-  _ensureItemMeta(EC);
-  if(EC.itemMeta[i].notes===val)return;
-  EC.itemMeta[i].notes=val;
-  saveCard(EC);
-}
-function toggleChkNote(i){
-  var line=document.getElementById('chk-note-line-'+i);
-  var btn=document.getElementById('chk-note-toggle-'+i);
-  if(!line)return;
-  line.classList.remove('hidden');
-  if(btn)btn.style.display='none';
-  var ta=line.querySelector('textarea');if(ta)ta.focus();
 }
 function refreshChk(colId){
   _closeItemCal();closeChkSortMenu();
@@ -3351,7 +3353,7 @@ function toggleFilterDrop(e){
   },0);
 }
 function _dateOnly(ts){
-  return ts?new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
+  return ts?_fmtDate(new Date(ts)):'—';
 }
 // ── MOVE COLLAPSED COLUMNS TO END (per group) ──
 function moveCollapsedToEnd(gid){
@@ -3740,7 +3742,7 @@ function showDraftWarning(){
     '<button id="dw-cancel" style="flex:1;border:none;border-radius:7px;padding:6px 0;background:var(--inp);color:var(--txt-d);font-weight:700;cursor:pointer;font-size:12px">← Go Back</button>'+
     '</div>';
   m.insertBefore(w,m.firstChild);m.scrollTop=0;
-  document.getElementById('dw-add').onclick=function(){if(draft&&EC){_ensureItemMeta(EC);EC.items.unshift(draft);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,notes:'',completedAt:null});saveCard(EC);}document.getElementById('modal-root').innerHTML='';};
+  document.getElementById('dw-add').onclick=function(){if(draft&&EC){_ensureItemMeta(EC);EC.items.unshift(draft);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,completedAt:null});saveCard(EC);}document.getElementById('modal-root').innerHTML='';};
   document.getElementById('dw-discard').onclick=function(){if(ni)ni.value='';closeModal();};
   document.getElementById('dw-cancel').onclick=function(){w.remove();if(ni)ni.focus();};
 }
@@ -4058,7 +4060,7 @@ function removeCMTag(t,cid){
 
 function addCMItem(colId){
   var i=document.getElementById('cm-ni'),t=i.value.trim();if(!t)return;
-  _ensureItemMeta(EC);EC.items.unshift(t);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,notes:'',completedAt:null});i.value='';saveCard(EC);
+  _ensureItemMeta(EC);EC.items.unshift(t);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,completedAt:null});i.value='';saveCard(EC);
   _expandedChk=new Set([..._expandedChk].map(function(x){return x+1;}));
   _persistExpandedChk();
   refreshChk(colId);
@@ -4125,7 +4127,7 @@ function applyCMItemPaste(colId,mode,text){
   if(!items.length)return;
   _ensureItemMeta(EC);
   EC.items=EC.items.concat(items);
-  EC.itemMeta=EC.itemMeta.concat(items.map(function(){return {due:'',createdAt:Date.now(),pri:null,notes:'',completedAt:null};}));
+  EC.itemMeta=EC.itemMeta.concat(items.map(function(){return {due:'',createdAt:Date.now(),pri:null,completedAt:null};}));
   _cmDirty=true;
   var input=document.getElementById('cm-ni');
   if(input)input.value='';
