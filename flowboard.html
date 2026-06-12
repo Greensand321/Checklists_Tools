@@ -726,23 +726,24 @@ function _ensureItemMeta(k){
   });
 }
 // Keeps card.due in sync with the earliest due date among incomplete subtasks,
-// once that auto-sync has been activated (card.dueAuto) by setting a subtask due date.
-// Returns true if card.due changed.
+// for as long as at least one checklist item has a due date set (card.dueAuto
+// is recomputed fresh on every call, so it can't get "stuck"). When every
+// item with a due date is checked off, card.due is cleared but dueAuto stays
+// true so the UI can show "Due dates complete" and resume instantly if an
+// item is unchecked. Returns true if card.due changed.
 function _syncCardDueFromItems(card){
   _ensureItemMeta(card);
-  var earliest=null;
+  var earliest=null,anyDue=false;
   card.items.forEach(function(it,i){
     var due=card.itemMeta[i]&&card.itemMeta[i].due;
-    if(due&&!card.done.includes(it)&&(earliest===null||due<earliest))earliest=due;
+    if(due){
+      anyDue=true;
+      if(!card.done.includes(it)&&(earliest===null||due<earliest))earliest=due;
+    }
   });
   var before=card.due;
-  if(card.dueAuto){
-    // Stay active even when no incomplete item currently has a due date
-    // (e.g. all items checked off) so re-opening an item with a due date
-    // resumes auto-sync instead of requiring a manual reset.
-    if(earliest!==null)card.due=earliest;
-    else card.due='';
-  }
+  card.dueAuto=anyDue;
+  if(anyDue)card.due=earliest||'';
   return card.due!==before;
 }
 
@@ -829,7 +830,7 @@ function migrateRemote(remote){
   remote.cols.forEach(function(c){
     if(c.wip===undefined)c.wip=0;if(c.collapsed===undefined)c.collapsed=false;if(c.sort===undefined)c.sort=false;
     if(!c.cards)c.cards=[];
-    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];if(k.completed===undefined)k.completed=false;if(k.createdAt===undefined)k.createdAt=0;if(k.updatedAt===undefined)k.updatedAt=0;if(k.completedAt===undefined)k.completedAt=null;_ensureItemMeta(k);});
+    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];if(k.completed===undefined)k.completed=false;if(k.createdAt===undefined)k.createdAt=0;if(k.updatedAt===undefined)k.updatedAt=0;if(k.completedAt===undefined)k.completedAt=null;_ensureItemMeta(k);_syncCardDueFromItems(k);});
   });
   return remote;
 }
@@ -2076,6 +2077,7 @@ function load(){
         if(!k.done)k.done=[];
         if(!k.items)k.items=[];
         _ensureItemMeta(k);
+        _syncCardDueFromItems(k);
       });
     });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
   // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
@@ -2858,9 +2860,8 @@ function pickCalDay(iso){
     _ensureItemMeta(EC);
     if(!EC.itemMeta[_calItemIdx])EC.itemMeta[_calItemIdx]={due:'',createdAt:Date.now(),pri:null,completedAt:null};
     EC.itemMeta[_calItemIdx].due=iso;
-    if(iso)EC.dueAuto=true; // setting a subtask due date (re)activates auto-sync of the card due date
   }else{
-    EC.due=iso;EC.dueAuto=false; // manual edit overrides auto-sync until a subtask due date is set again
+    EC.due=iso;
   }
   var dueChanged=_syncCardDueFromItems(EC);
   saveCard(EC);
@@ -3884,7 +3885,7 @@ function showCardModal(cardId,colId){
   _expandedChk=(S.prefs&&S.prefs.chkAlwaysExpanded)
     ?new Set((card.items||[]).map(function(_,i){return i;}))
     :new Set(_expandedChkByCard[card.id]||[]);
-  EC=JSON.parse(JSON.stringify(card));renderCM(colId);
+  EC=JSON.parse(JSON.stringify(card));_syncCardDueFromItems(EC);renderCM(colId);
 }
 function _mkDueLabelHtml(c){
   var dc=c.completed?'done':dueClass(c.due);
@@ -3897,19 +3898,25 @@ function _mkDueLabelHtml(c){
     var dlGlow=dc==='over'?'0 0 12px rgba(225,29,72,.4),0 0 4px rgba(225,29,72,.2)':dc==='soon'?'0 0 12px rgba(245,158,11,.35),0 0 4px rgba(245,158,11,.15)':'none';
     var dlIcon=dc==='over'?'⚠ Overdue':dc==='soon'?'⏰ Due soon':'📅 '+dueLabel(c.due);
     return '<span style="font-size:12px;font-weight:800;flex-shrink:0;color:'+dlColor+';background:'+dlBg+';border:1px solid '+dlBd+';border-radius:10px;padding:5px 12px;box-shadow:'+dlGlow+';'+(dc==='over'?'animation:deadlinePulse 2s ease-in-out infinite':'')+'">'+dlIcon+'</span>';
+  }else if(c.dueAuto){
+    return '<span style="font-size:12px;font-weight:800;flex-shrink:0;color:#10b981;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:5px 12px">✅ Due dates complete</span>';
   }
   return '';
 }
 function _mkDueActionsHtml(c,colId){
+  var doneBtn=c.completed
+    ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
+    :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>';
+  if(c.dueAuto)return c.due?doneBtn:'';
   return (c.due?
-        (c.completed
-          ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
-          :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>'
-        )+
-        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.dueAuto=false;EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
+        doneBtn+
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
 }
 function _mkDueCalHtml(c,colId){
+  if(c.dueAuto){
+    return '<div class="cm-cal"><span class="cm-date-btn" style="opacity:.6;cursor:default" title="Due date is synced from checklist item due dates">🔗 '+(c.due?dueLabel(c.due):'Synced')+'</span></div>';
+  }
   return '<div class="cm-cal">'+
     '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
       (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
