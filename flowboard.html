@@ -49,12 +49,16 @@
 @keyframes groupIn    {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes btnPop     {0%{transform:scale(1)}50%{transform:scale(.92)}100%{transform:scale(1)}}
 @keyframes deadlinePulse{0%,100%{box-shadow:0 0 12px rgba(225,29,72,.4),0 0 4px rgba(225,29,72,.2)}50%{box-shadow:0 0 20px rgba(225,29,72,.6),0 0 8px rgba(225,29,72,.35)}}
+@keyframes filterOut  {from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.94)}}
+@keyframes filterIn   {from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
 .card.grab-fading{opacity:.35;transition:opacity .8s ease;cursor:grabbing}
 
 .anim-card-new    {animation:cardNew    .22s cubic-bezier(.34,1.4,.64,1) both}
 .anim-card-settle {animation:cardSettle .28s cubic-bezier(.34,1.3,.64,1) both}
 .anim-col-new     {animation:colNew     .24s cubic-bezier(.34,1.3,.64,1) both}
 .anim-group-new   {animation:groupIn    .22s cubic-bezier(.34,1.2,.64,1) both}
+.anim-filter-out  {animation:filterOut  .15s ease both}
+.anim-filter-in   {animation:filterIn   .22s cubic-bezier(.34,1.3,.64,1) both}
 
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -2988,9 +2992,9 @@ function mkChkPanelHtml(i,colId,meta,done){
 var CHK_SORT_OPTS=[
   {id:'date',label:'By Due Date'},
   {id:'priority',label:'By Priority'},
-  {id:'done-top',label:'Done to Top'},
+  {id:'done-bottom',label:'Done to Bottom'},
 ];
-var CHK_SORT_LABELS={date:'Due Date',priority:'Priority','done-top':'Done to Top'};
+var CHK_SORT_LABELS={date:'Due Date',priority:'Priority','done-bottom':'Done to Bottom'};
 function mkChkControls(colId){
   if(!EC.items.length)return'';
   var allDone=EC.items.every(function(it){return EC.done.includes(it);});
@@ -3079,8 +3083,8 @@ function applyChkSort(mode,colId){
         if(va===vb)return a-b;
         return vb-va;
       });
-    }else if(mode==='done-top'){
-      order=idxs.filter(function(i){return EC.done.includes(EC.items[i]);}).concat(idxs.filter(function(i){return !EC.done.includes(EC.items[i]);}));
+    }else if(mode==='done-bottom'){
+      order=idxs.filter(function(i){return !EC.done.includes(EC.items[i]);}).concat(idxs.filter(function(i){return EC.done.includes(EC.items[i]);}));
     }
     var srcItems=EC.items,srcMeta=EC.itemMeta;
     EC.items=order.map(function(i){return srcItems[i];});
@@ -3358,6 +3362,7 @@ var _cardFilter=localStorage.getItem('fb4_filter')||'all';
 var CARD_FILTERS=[
   {id:'all',          label:'All cards'},
   {id:'incomplete',   label:'☐ Incomplete only'},
+  {id:'hasDue',       label:'📅 Has due date'},
   {id:'createdToday', label:'Created today'},
   {id:'created7',     label:'Created — last 7 days'},
   {id:'worked7',      label:'Worked on — last 7 days'},
@@ -3367,11 +3372,12 @@ var CARD_FILTERS=[
 function _cardIsComplete(k){
   return !!k.completed||(k.items&&k.items.length>0&&k.items.every(function(it){return k.done.includes(it);}));
 }
-function cardPassesFilter(k){
-  var f=_cardFilter;
+function cardPassesFilter(k,f){
+  f=f||_cardFilter;
   if(!f||f==='all')return true;
   var now=Date.now(),day=86400000;
   if(f==='incomplete')return !_cardIsComplete(k);
+  if(f==='hasDue')return !!k.due||(k.itemMeta||[]).some(function(m){return !!(m&&m.due);});
   if(f==='createdToday'){var t0=new Date();t0.setHours(0,0,0,0);return (k.createdAt||0)>=t0.getTime();}
   if(f==='created7')return (k.createdAt||0)>=now-7*day;
   if(f==='worked7')return (k.updatedAt||k.createdAt||0)>=now-7*day;
@@ -3383,6 +3389,12 @@ function cardPassesFilter(k){
   if(f==='completed7')return !!k.completedAt&&k.completedAt>=now-7*day;
   return true;
 }
+// returns true if at least one (non-archived) card in this column passes the given filter
+function _colVisible(col,f){
+  f=f||_cardFilter;
+  if(!f||f==='all')return true;
+  return col.cards.some(function(k){return !k.archived&&cardPassesFilter(k,f);});
+}
 function updateFilterBtn(){
   var b=document.getElementById('filter-btn');if(!b)return;
   var f=CARD_FILTERS.find(function(x){return x.id===_cardFilter;});
@@ -3390,9 +3402,100 @@ function updateFilterBtn(){
   b.textContent=active?'📅 '+f.label:'📅 Filter';
   b.classList.toggle('toggled-on',active);
 }
+// returns the list of columns belonging to a group (or the synthetic Ungrouped group)
+function _gcolsFor(gid){
+  return S.cols.filter(function(c){
+    if(c.archived)return false;
+    if(gid==='__ug')return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});
+    return c.gid===gid;
+  });
+}
+// adds .anim-filter-in to col/group DOM nodes that became visible going oldFilter -> newFilter
+function _animateFilterIn(oldFilter,newFilter){
+  var board=document.getElementById('board');
+  S.cols.filter(function(c){return !c.archived;}).forEach(function(col){
+    if(!_colVisible(col,oldFilter)&&_colVisible(col,newFilter)){
+      var el=board.querySelector('[data-colid="'+col.id+'"]');
+      if(el)el.classList.add('anim-filter-in');
+    }
+  });
+  S.groups.concat([{id:'__ug'}]).forEach(function(g){
+    var gcols=_gcolsFor(g.id);
+    if(!gcols.length)return;
+    var wasVis=gcols.some(function(c){return _colVisible(c,oldFilter);});
+    var willVis=gcols.some(function(c){return _colVisible(c,newFilter);});
+    if(!wasVis&&willVis){
+      var gel=board.querySelector('.group[data-gid="'+g.id+'"]');
+      if(gel)gel.classList.add('anim-filter-in');
+    }
+  });
+}
+// FLIP-slides elements that stay visible into their new positions after a filter-driven reflow
+function _flipSurvivors(staying){
+  if(!staying.length)return;
+  var board=document.getElementById('board'),moves=[];
+  staying.forEach(function(s){
+    var sel=s.type==='col'?'[data-colid="'+s.id+'"]':'.group[data-gid="'+s.id+'"]';
+    var el=board.querySelector(sel);
+    if(!el)return;
+    var newRect=el.getBoundingClientRect();
+    var dx=s.rect.left-newRect.left,dy=s.rect.top-newRect.top;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;
+    el.style.transition='none';
+    el.style.transform='translate('+dx+'px,'+dy+'px)';
+    moves.push(el);
+  });
+  if(!moves.length)return;
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      moves.forEach(function(el){
+        el.style.transition='transform .25s ease';
+        el.style.transform='';
+      });
+      setTimeout(function(){
+        moves.forEach(function(el){el.style.transition='';el.style.transform='';});
+      },300);
+    });
+  });
+}
 function setCardFilter(id){
-  _cardFilter=id;localStorage.setItem('fb4_filter',id);
-  closeFilterDrop();updateFilterBtn();render();
+  if(id===_cardFilter){closeFilterDrop();return;}
+  var oldFilter=_cardFilter;
+  closeFilterDrop();
+  var board=document.getElementById('board'),goingHidden=[],staying=[];
+  S.cols.filter(function(c){return !c.archived;}).forEach(function(col){
+    var wasVis=_colVisible(col,oldFilter),willVis=_colVisible(col,id);
+    var el=board.querySelector('[data-colid="'+col.id+'"]');
+    if(wasVis&&!willVis){
+      if(el)goingHidden.push(el);
+    }else if(wasVis&&willVis&&el){
+      staying.push({type:'col',id:col.id,rect:el.getBoundingClientRect()});
+    }
+  });
+  S.groups.concat([{id:'__ug'}]).forEach(function(g){
+    var gcols=_gcolsFor(g.id);
+    if(!gcols.length)return;
+    var wasVis=gcols.some(function(c){return _colVisible(c,oldFilter);});
+    var willVis=gcols.some(function(c){return _colVisible(c,id);});
+    var gel=board.querySelector('.group[data-gid="'+g.id+'"]');
+    if(wasVis&&!willVis){
+      if(gel)goingHidden.push(gel);
+    }else if(wasVis&&willVis&&gel){
+      staying.push({type:'group',id:g.id,rect:gel.getBoundingClientRect()});
+    }
+  });
+  var apply=function(){
+    _cardFilter=id;localStorage.setItem('fb4_filter',id);
+    updateFilterBtn();render();
+    _animateFilterIn(oldFilter,id);
+    _flipSurvivors(staying);
+  };
+  if(goingHidden.length){
+    goingHidden.forEach(function(el){el.classList.add('anim-filter-out');});
+    setTimeout(apply,300);
+  }else{
+    apply();
+  }
 }
 function closeFilterDrop(){var d=document.getElementById('filter-drop');if(d)d.remove();}
 function toggleFilterDrop(e){
@@ -3441,9 +3544,23 @@ function render(){
   var activeCols=S.cols.filter(function(c){return !c.archived;});
   var tc=activeCols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
   document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' \u00B7 '+activeCols.length+' cols \u00B7 '+tc+' cards';
-  S.groups.forEach(function(g){board.appendChild(mkGroup(g,activeCols.filter(function(c){return c.gid===g.id;}),q,false));});
+  var anyVisible=false;
+  S.groups.forEach(function(g){
+    var gcols=activeCols.filter(function(c){return c.gid===g.id;});
+    var fcols=gcols.filter(function(c){return _colVisible(c);});
+    if(gcols.length>0&&fcols.length===0)return;
+    if(fcols.length)anyVisible=true;
+    board.appendChild(mkGroup(g,fcols,q,false));
+  });
   var ug=activeCols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
-  if(ug.length)board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},ug,q,true));
+  var fug=ug.filter(function(c){return _colVisible(c);});
+  if(fug.length){anyVisible=true;board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},fug,q,true));}
+  if(_cardFilter!=='all'&&!anyVisible&&activeCols.length>0){
+    var em=document.createElement('div');em.className='anim-filter-in';
+    em.style.cssText='padding:32px 12px;text-align:center;color:var(--txt-d);font-size:13px';
+    em.textContent='No cards match the current filter.';
+    board.appendChild(em);
+  }
   var r=document.createElement('div');r.style.cssText='padding:6px 0 20px';
   var b=document.createElement('button');b.className='btn btn-ghost';b.style.fontSize='12px';b.textContent='＋ Add Group';
   b.onclick=function(){showAddGroupModal();};r.appendChild(b);board.appendChild(r);
@@ -3452,7 +3569,7 @@ function render(){
 
 function mkGroup(g,gcols,q,fake){
   var P=PAL[g.pi%PAL.length],tc=gcols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
-  var wrap=document.createElement('div');wrap.className='group';
+  var wrap=document.createElement('div');wrap.className='group';wrap.dataset.gid=g.id;
   if(g.id===newGroupId)wrap.classList.add('anim-group-new');
   var hdr=document.createElement('div');hdr.className='group-hdr';hdr.style.borderBottomColor=P.a+'55';
   var dot=document.createElement('div');dot.className='group-accent';dot.style.cssText='background:'+P.a+';box-shadow:0 0 8px '+P.a+'80';
