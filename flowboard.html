@@ -3002,7 +3002,7 @@ function mkChkControls(colId){
   var pinned=!!(S.prefs&&S.prefs.chkAlwaysExpanded);
   var allExpanded=EC.items.every(function(it,i){return _expandedChk.has(i);});
   return '<div id="cm-chk-ctrl" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:6px">'+
-    '<button class="chk-ctrl-btn" onclick="toggleChkSortMenu(event,\''+colId+'\')">⇅ '+(_chkSortMode?CHK_SORT_LABELS[_chkSortMode]:'Sort')+'</button>'+
+    '<button class="chk-ctrl-btn" id="chk-sort-btn" onclick="toggleChkSortMenu(event,\''+colId+'\')">⇅ '+(_chkSortMode?CHK_SORT_LABELS[_chkSortMode]:'Sort')+'</button>'+
     '<button class="chk-ctrl-btn'+(pinned?' on':'')+'" onclick="toggleChkAlwaysExpanded(\''+colId+'\')" onmouseenter="_chkTipShow(event,\''+(pinned?'Always-expand is ON — every card opens with all checklist items expanded. Click to turn off (all items will collapse).':'Pin checklists open — when on, every card opens with all checklist items expanded by default.')+'\')" onmouseleave="_chkTipHide()">📌</button>'+
     '<button class="chk-ctrl-btn" onclick="toggleExpandAll(\''+colId+'\')">'+(allExpanded?'⊟ Collapse all':'⊞ Expand all')+'</button>'+
     '<button class="chk-ctrl-btn" onclick="toggleAllItems(\''+colId+'\')">'+(allDone?'☐ Uncheck all':'☑ Check all')+'</button>'+
@@ -3038,7 +3038,16 @@ function toggleChkAlwaysExpanded(colId){
   save();
   refreshChk(colId);
 }
-function closeChkSortMenu(){var d=document.getElementById('chk-sort-drop');if(d)d.remove();}
+var _chkSortDismiss=null;
+function closeChkSortMenu(){
+  var d=document.getElementById('chk-sort-drop');if(d)d.remove();
+  if(_chkSortDismiss){
+    document.removeEventListener('click',_chkSortDismiss,true);
+    document.removeEventListener('scroll',_chkSortDismiss,true);
+    window.removeEventListener('resize',_chkSortDismiss);
+    _chkSortDismiss=null;
+  }
+}
 function toggleChkSortMenu(e,colId){
   e.stopPropagation();
   if(document.getElementById('chk-sort-drop')){closeChkSortMenu();return;}
@@ -3053,9 +3062,19 @@ function toggleChkSortMenu(e,colId){
   document.body.appendChild(d);
   var dw=d.offsetWidth;
   d.style.left=Math.max(8,Math.min(r.right-dw,window.innerWidth-dw-8))+'px';
+  // Capture-phase dismissal: the card modal calls stopPropagation() on its own
+  // clicks, so a bubble-phase document listener would never see clicks inside
+  // the modal. Capturing runs top-down before that, so it catches every click.
+  // Clicks on the trigger button or inside the menu are ignored here — their
+  // own handlers (toggle / applyChkSort) manage those cases.
+  _chkSortDismiss=function(ev){
+    if(ev.type==='click'&&(d.contains(ev.target)||btn.contains(ev.target)))return;
+    closeChkSortMenu();
+  };
   setTimeout(function(){
-    var off=function(ev){if(!d.contains(ev.target)){closeChkSortMenu();document.removeEventListener('click',off);}};
-    document.addEventListener('click',off);
+    document.addEventListener('click',_chkSortDismiss,true);
+    document.addEventListener('scroll',_chkSortDismiss,true);
+    window.addEventListener('resize',_chkSortDismiss);
   },0);
 }
 function applyChkSort(mode,colId){
@@ -4947,6 +4966,7 @@ function notify(msg){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(_pd){if(_pd.ghost)_pd.ghost.remove();_pd.el.style.opacity='';var _i=document.getElementById('drop-ind');if(_i)_i.remove();document.body.style.userSelect='';_pd=null;return;}
+    if(document.getElementById('chk-sort-drop')){closeChkSortMenu();return;}
     if(document.getElementById('cm-paste-preview')){closeCMItemPastePreview();return;}
     closeModal();
   }
