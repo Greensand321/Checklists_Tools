@@ -4342,18 +4342,14 @@ function removeCMItem(idx,cid){
   }else renderCM(cid);
 }
 function _autoResortDone(idx){
-  var it=EC.items[idx];
-  var nowDone=EC.done.includes(it);
-  var n=EC.items.length,target;
-  if(nowDone){
-    target=n-1;
-  }else{
-    target=0;
-    for(var k=0;k<n;k++){
-      if(k===idx)continue;
-      if(EC.done.includes(EC.items[k]))break;
-      target++;
-    }
+  var n=EC.items.length,target=0;
+  // target = boundary between the not-done block and the done block
+  // (excluding this item). Checking an item moves it to the top of the
+  // done block; unchecking moves it to the bottom of the not-done block.
+  for(var k=0;k<n;k++){
+    if(k===idx)continue;
+    if(EC.done.includes(EC.items[k]))break;
+    target++;
   }
   if(target===idx)return null;
   var item=EC.items.splice(idx,1)[0];
