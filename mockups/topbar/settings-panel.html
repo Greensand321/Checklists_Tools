@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html data-theme="default">
+<head>
+<meta charset="utf-8">
+<title>Settings Panel Mockup — Archive section</title>
+<style>
+:root{
+  --bg:#060d18;--bd:rgba(255,255,255,.07);--bd-s:rgba(255,255,255,.06);--bd-i:rgba(255,255,255,.1);
+  --txt:#e2e8f0;--txt-m:#94a3b8;--txt-d:#475569;--txt-dd:#334155;
+  --surf:#1a2538;--surf2:rgba(255,255,255,.055);--surf3:rgba(255,255,255,.08);
+  --ghost-bg:rgba(255,255,255,.07);--ghost-c:#94a3b8;--ghost-bd:rgba(255,255,255,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.tp-title{font-size:11px;font-weight:800;color:var(--txt-m);text-transform:uppercase;letter-spacing:.9px;margin-bottom:10px}
+.tp-sec{font-size:9px;font-weight:700;color:var(--txt-dd);text-transform:uppercase;letter-spacing:.8px;padding-top:8px;padding-bottom:3px;border-top:1px solid var(--bd-s);margin-top:10px}
+#theme-panel{background:var(--surf);border:1px solid var(--bd-i);border-radius:16px;padding:16px;width:330px;box-shadow:0 16px 50px rgba(0,0,0,.45)}
+.theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:4px}
+.swatch{height:34px;border-radius:8px;background:linear-gradient(135deg,#1a3a6e,#2563eb)}
+.date-fmt-row{display:flex;flex-direction:column;gap:5px}
+.date-fmt-opt{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:1px solid var(--bd-s);color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;cursor:pointer;font-family:inherit}
+.date-fmt-opt.on{border-color:#60a5fa;background:rgba(96,165,250,.12);color:#60a5fa}
+.date-fmt-opt span:last-child{color:var(--txt-d);font-weight:500}
+.date-fmt-opt.on span:last-child{color:#60a5fa}
+.archive-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border:1px solid var(--bd-s);border-radius:8px;font-size:12px;color:var(--txt-m)}
+.btn{border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit}
+.btn-ghost{background:var(--ghost-bg);color:var(--ghost-c);border:1px solid var(--ghost-bd)}
+.note{position:fixed;top:14px;left:18px;background:#1a2538;border:1px solid rgba(96,165,250,.35);padding:10px 14px;border-radius:10px;font-size:12px;color:#cbd5e1;max-width:320px;line-height:1.6;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.note b{color:#60a5fa}
+</style>
+</head>
+<body>
+<div id="theme-panel">
+  <div class="tp-title">Board Theme</div>
+  <div class="theme-grid">
+    <div class="swatch"></div><div class="swatch" style="background:linear-gradient(135deg,#3b1580,#7c3aed)"></div>
+    <div class="swatch" style="background:linear-gradient(135deg,#7a1030,#e11d48)"></div><div class="swatch" style="background:linear-gradient(135deg,#065f3e,#059669)"></div>
+  </div>
+
+  <div class="tp-sec">Date Format</div>
+  <div class="date-fmt-row">
+    <button class="date-fmt-opt on"><span>Short</span><span>Jun 12</span></button>
+    <button class="date-fmt-opt"><span>Numeric</span><span>06/12</span></button>
+    <button class="date-fmt-opt"><span>Long</span><span>June 12</span></button>
+  </div>
+
+  <div class="tp-sec">Archived Columns</div>
+  <div class="archive-row">
+    <span>📦 4 archived columns</span>
+    <button class="btn btn-ghost">Open Archive</button>
+  </div>
+</div>
+<div class="note">
+  <b>Settings panel addition</b><br>
+  The "🎨 Theme" button becomes "⚙ Settings" and gains a new section showing
+  a count of archived columns plus a button that opens the existing Archive
+  modal — same modal, just relocated out of the main topbar.
+</div>
+</body>
+</html>
