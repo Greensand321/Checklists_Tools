@@ -49,12 +49,16 @@
 @keyframes groupIn    {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes btnPop     {0%{transform:scale(1)}50%{transform:scale(.92)}100%{transform:scale(1)}}
 @keyframes deadlinePulse{0%,100%{box-shadow:0 0 12px rgba(225,29,72,.4),0 0 4px rgba(225,29,72,.2)}50%{box-shadow:0 0 20px rgba(225,29,72,.6),0 0 8px rgba(225,29,72,.35)}}
+@keyframes filterOut  {from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.94)}}
+@keyframes filterIn   {from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
 .card.grab-fading{opacity:.35;transition:opacity .8s ease;cursor:grabbing}
 
 .anim-card-new    {animation:cardNew    .22s cubic-bezier(.34,1.4,.64,1) both}
 .anim-card-settle {animation:cardSettle .28s cubic-bezier(.34,1.3,.64,1) both}
 .anim-col-new     {animation:colNew     .24s cubic-bezier(.34,1.3,.64,1) both}
 .anim-group-new   {animation:groupIn    .22s cubic-bezier(.34,1.2,.64,1) both}
+.anim-filter-out  {animation:filterOut  .15s ease both}
+.anim-filter-in   {animation:filterIn   .22s cubic-bezier(.34,1.3,.64,1) both}
 
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -63,7 +67,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:99px}
 
-#topbar{background:var(--topbar);border-bottom:1px solid var(--bd);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:10;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background .3s}
+#topbar{background:var(--topbar);border-bottom:1px solid var(--bd);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:10;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background .3s;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#topbar::-webkit-scrollbar{display:none}
 .logo{font-size:19px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa,#fb7185);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
 #search{background:var(--inp2);border:1px solid var(--bd-i);border-radius:10px;color:var(--txt);padding:7px 13px;font-size:13px;width:190px;outline:none;transition:border-color .18s,box-shadow .18s}
 #search::placeholder{color:var(--txt-d)}
@@ -79,6 +84,10 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .btn-green{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
 .btn-amber{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.25)}
 #topbar .btn{display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0 15px;height:34px}
+.tb-sep{width:1px;height:20px;background:var(--bd);flex-shrink:0;margin:0 2px}
+.btn-group{display:inline-flex;border-radius:9px;overflow:hidden;border:1px solid var(--ghost-bd)}
+.btn-group .btn{border-radius:0;border:none;border-right:1px solid var(--ghost-bd)}
+.btn-group .btn:last-child{border-right:none}
 
 #board{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 22px 40px;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
 .group{margin-bottom:28px}
@@ -94,7 +103,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .icon-btn:active{transform:scale(.9)}
 .group-cols{display:flex;gap:12px;overflow-x:auto;align-items:flex-start;padding-bottom:6px;overscroll-behavior-x:none;touch-action:none}
 
-.col{min-width:268px;max-width:268px;flex-shrink:0;display:flex;flex-direction:column;border-radius:14px;max-height:calc(100vh - 150px)}
+.col{min-width:268px;max-width:268px;flex-shrink:0;display:flex;flex-direction:column;border-radius:14px}
 .col-hdr{border-radius:14px 14px 0 0;padding:10px 12px;display:flex;align-items:center;gap:7px;border:1px solid transparent;border-bottom:none;flex-shrink:0}
 .col-name{flex:1;font-weight:700;font-size:12px;color:var(--txt-b);cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .col-count{border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;background:rgba(0,0,0,.18);cursor:pointer;user-select:none;transition:background .18s,color .18s,transform .12s}
@@ -144,6 +153,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .due-ok{background:rgba(96,165,250,.15);color:#60a5fa}
 .due-soon{background:rgba(245,158,11,.15);color:#f59e0b}
 .due-over{background:rgba(225,29,72,.18);color:#e11d48}
+.due-done{background:rgba(16,185,129,.15);color:#10b981}
 
 /* ── CARD COLOR CIRCLE PICKER ── */
 .cm-color-wrap{position:relative;flex-shrink:0;display:flex;align-items:center}
@@ -179,6 +189,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .cm-date-btn{display:inline-flex;align-items:center;gap:6px;background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--txt-m);cursor:pointer;transition:border-color .18s,color .18s;white-space:nowrap;user-select:none;font-family:inherit;position:relative}
 .cm-date-btn:hover{border-color:#60a5fa;color:var(--txt)}
 .cm-cal-drop{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf);border:1px solid var(--bd-i);border-radius:14px;z-index:200;box-shadow:0 12px 40px rgba(0,0,0,.5);width:280px;max-height:0;overflow:hidden;opacity:0;pointer-events:none;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s;padding:0}
+.cm-meta-label{font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.btn.toggled-on{border-color:rgba(96,165,250,.55);color:#60a5fa;background:rgba(96,165,250,.1)}
 .cm-cal-drop.open{max-height:360px;opacity:1;pointer-events:auto;padding:14px}
 .cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-hdr-title{font-size:14px;font-weight:800;color:var(--txt-b)}
@@ -217,6 +229,13 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .tp-sec{font-size:9px;font-weight:700;color:var(--txt-dd);text-transform:uppercase;letter-spacing:.8px;grid-column:1/-1;padding-top:8px;padding-bottom:3px;border-top:1px solid var(--bd-s);margin-top:4px}
 .tp-sec:first-child{border-top:none;padding-top:0;margin-top:0}
 .theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.date-fmt-row{display:flex;flex-direction:column;gap:5px}
+.date-fmt-opt{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:1px solid var(--bd-s);color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;cursor:pointer;transition:background .12s,border-color .12s;font-family:inherit}
+.date-fmt-opt:hover{background:var(--surf3)}
+.date-fmt-opt.on{border-color:#60a5fa;background:rgba(96,165,250,.12);color:#60a5fa}
+.date-fmt-opt span:last-child{color:var(--txt-d);font-weight:500}
+.date-fmt-opt.on span:last-child{color:#60a5fa}
+.archive-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--bd-s);border-radius:8px;padding:7px 11px;font-size:12px;color:var(--txt-m)}
 .tswatch{border:2px solid var(--bd);border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s}
 .tswatch:hover{transform:scale(1.08);box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .tswatch:active{transform:scale(.97)}
@@ -231,9 +250,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:text}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal{background:var(--modal);border:1px solid var(--bd);border-radius:18px;padding:26px;width:510px;max-width:100%;max-height:92vh;overflow-y:auto;position:relative;user-select:text;-webkit-user-select:text}
-.modal-resize-handle{position:absolute;bottom:6px;right:6px;width:16px;height:16px;cursor:nwse-resize;background:none;border-right:2px solid var(--txt-m);border-bottom:2px solid var(--txt-m);border-radius:0 0 10px 0;opacity:.28;transition:opacity .18s;z-index:10;flex-shrink:0}
-.modal-resize-handle::before{content:'';position:absolute;bottom:4px;right:4px;width:9px;height:9px;border-right:2px solid var(--txt-m);border-bottom:2px solid var(--txt-m);border-radius:0 0 6px 0}
-.modal-resize-handle:hover{opacity:.72}
+.modal-resize-handle{position:absolute;bottom:5px;right:5px;width:17px;height:17px;cursor:nwse-resize;z-index:10;flex-shrink:0;opacity:.35;transition:opacity .18s;background-image:radial-gradient(var(--txt-m) 1.3px,transparent 1.4px);background-size:6px 6px;background-position:1px 1px;clip-path:polygon(100% 0,100% 100%,0 100%)}
+.modal-resize-handle:hover{opacity:.85}
 .modal-title{font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:18px}
 .lbl{display:block;font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
 .finput{background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none;width:100%;font-family:inherit;transition:border-color .18s,box-shadow .18s}
@@ -253,6 +271,39 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-row:hover .chk-handle{opacity:1}
 .chk-ctrl-btn{background:none;border:none;color:var(--txt-d);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;border-radius:6px;transition:background .15s,color .15s}
 .chk-ctrl-btn:hover{background:var(--surf3);color:var(--txt-m)}
+.chk-ctrl-btn.on{background:rgba(96,165,250,.15);color:#60a5fa}
+.chk-ctrl-btn.on:hover{background:rgba(96,165,250,.22);color:#60a5fa}
+.chk-sort-drop{position:fixed;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:500;box-shadow:0 10px 32px rgba(0,0,0,.45);padding:5px;min-width:150px}
+.chk-sort-opt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;transition:background .12s;font-family:inherit}
+.chk-sort-opt:hover{background:var(--surf3)}
+.chk-sort-opt.on{background:rgba(96,165,250,.15);color:#60a5fa}
+.chk-badges{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.chk-badge{display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--txt-dd);white-space:nowrap;line-height:1}
+.chk-badge-pri{width:7px;height:7px;border-radius:50%;padding:0}
+.chk-badge-due.over{color:#e11d48}
+.chk-badge-due.soon{color:#f59e0b}
+.chk-badge-due.set{color:#60a5fa}
+.chk-chevron-wrap{flex-shrink:0;max-width:32px;opacity:1;margin-left:2px;overflow:hidden}
+.chk-chevron{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:none;color:var(--txt-d);cursor:pointer;border-radius:6px;font-size:16px;line-height:1;transition:transform .25s cubic-bezier(.4,0,.2,1),background .15s,color .15s;font-family:inherit}
+.chk-chevron:hover{background:var(--surf3);color:var(--txt-m)}
+.chk-chevron.open{transform:rotate(180deg)}
+.chk-panel{max-height:0;overflow:hidden;opacity:0;margin-left:31px;padding-left:10px;border-left:2px solid var(--bd-s);transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s,margin .25s}
+.chk-panel.open{max-height:120px;opacity:1;margin:2px 0 8px 31px}
+.chk-panel-inner{display:flex;flex-direction:column;gap:6px;padding:6px 0}
+.chk-meta-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--txt-d)}
+.chk-meta-item{white-space:nowrap}
+.chk-sep{color:var(--txt-dd);font-size:10px}
+.chk-pri-mini-group{display:flex;gap:3px}
+.chk-pri-mini{width:18px;height:18px;border-radius:50%;border:1px solid var(--bd-i);background:var(--inp);color:var(--txt-dd);font-size:9px;font-weight:800;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s,color .15s,background .15s;font-family:inherit}
+.chk-pri-mini:hover{border-color:#60a5fa;color:#60a5fa}
+.chk-due-btn{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;border:none;background:none;padding:0;color:var(--txt-d);cursor:pointer;white-space:nowrap;transition:color .15s;font-family:inherit}
+.chk-due-btn:hover{color:#60a5fa}
+.chk-due-btn.over{color:#e11d48}
+.chk-due-btn.soon{color:#f59e0b}
+.chk-due-btn.set{color:#60a5fa}
+.chk-due-btn.completed{color:#10b981}
+.chk-due-btn.completed:hover{color:#10b981}
+.item-cal-drop{position:fixed;right:auto;width:280px}
 .card-tasks{margin:6px 0 0;border-top:1px solid var(--bd-s);padding-top:5px;display:flex;flex-direction:column;gap:1px}
 .card-task{font-size:11px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 4px;border-radius:4px;cursor:default;line-height:1.5;transition:color .12s,background .12s;-webkit-user-select:none;user-select:none}
 .card-task:hover{color:var(--txt-b);background:var(--surf3)}
@@ -285,8 +336,9 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .key-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s,border-color .15s}
 .key-item:hover{background:var(--surf3)}
 .key-item.active-key{border-color:#60a5fa;background:rgba(96,165,250,.07)}
-.key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
-.key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.key-item.open-key{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.07)}
+.key-label{font-weight:700;font-size:13px;color:var(--txt-b);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:inherit}
+.key-val{font-size:10px;color:var(--txt-d);font-family:monospace;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;cursor:default}
 .key-actions{display:flex;gap:5px;flex-shrink:0}
 .key-actions button{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .12s}
 .key-actions button:hover{opacity:.82}
@@ -303,6 +355,31 @@ input[type="date"]{color-scheme:dark}
 .auto-bak-item:hover{background:var(--surf3)}
 .auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
 
+/* ── SNAPSHOT DIFF VIEWER ── */
+.diff-sheet-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-d);padding:10px 0 5px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+.diff-sheet-header:not(:first-child){margin-top:12px}
+.diff-row{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:3px;font-size:12px;line-height:1.45}
+.diff-add{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)}
+.diff-mod{background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.22)}
+.diff-del{background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.2)}
+.diff-type-badge{font-size:11px;font-weight:800;width:18px;text-align:center;flex-shrink:0;padding-top:1px}
+.diff-badge-add{color:#10b981}
+.diff-badge-mod{color:#f59e0b}
+.diff-badge-del{color:#e11d48}
+.diff-rownum{font-size:10px;color:var(--txt-dd);flex-shrink:0;padding-top:2px;min-width:24px}
+.diff-expand-btn{background:none;border:none;cursor:pointer;color:var(--txt-d);font-size:11px;padding:1px 4px;flex-shrink:0;border-radius:4px;margin-top:1px}
+.diff-expand-btn:hover{background:var(--surf3);color:var(--txt)}
+
+/* ── CHECKLIST ✕ / CARD DATES / TOPBAR FILTER ── */
+.chk-x{color:var(--txt-m);cursor:pointer;flex-shrink:0;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:1px solid transparent;transition:color .15s,background .15s,border-color .15s,box-shadow .15s}
+.chk-x svg{display:block;pointer-events:none}
+.chk-x:hover{color:#e11d48;background:rgba(225,29,72,.12);border-color:rgba(225,29,72,.4);box-shadow:0 1px 5px rgba(225,29,72,.3)}
+#filter-drop{position:fixed;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;z-index:500;box-shadow:0 10px 32px rgba(0,0,0,.45);padding:5px;min-width:210px}
+.filter-opt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;transition:background .12s;font-family:inherit}
+.filter-opt:hover{background:var(--surf3)}
+.filter-opt.on{background:rgba(96,165,250,.15);color:#60a5fa}
+#topbar .btn.toggled-on{border-color:rgba(96,165,250,.55);color:#60a5fa;background:rgba(96,165,250,.1)}
+
 /* ── USB SYNC ── */
 @keyframes usbLostPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(225,29,72,.5)}55%{opacity:.55;box-shadow:0 0 0 7px rgba(225,29,72,0)}}
 @keyframes usbPlugIn{0%{transform:translateY(-4px) scale(.92);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
@@ -314,21 +391,25 @@ input[type="date"]{color-scheme:dark}
 <body>
 <div id="topbar">
   <div class="logo">⚡ FlowBoard</div>
+  <div class="tb-sep"></div>
+  <div class="btn-group">
+    <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
+    <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
+  </div>
+  <div class="tb-sep"></div>
   <div id="stats" class="topbar-stats"></div>
   <div style="flex:1"></div>
   <input id="search" placeholder="🔍 Search…" oninput="render()">
+  <button class="btn btn-ghost" id="filter-btn" onclick="toggleFilterDrop(event)">📅 Filter</button>
+  <div class="tb-sep"></div>
   <span id="sync-status" class="sync-pill">💾 Local</span>
   <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
-  <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">🎨 Theme</button>
-  <button class="btn btn-ghost" id="undo-btn" onclick="doUndo()" title="Nothing to undo" disabled>↩ Undo</button>
-  <button class="btn btn-ghost" id="redo-btn" onclick="doRedo()" title="Nothing to redo" disabled>↪ Redo</button>
+  <div class="tb-sep"></div>
   <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
   <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
-  <button class="btn btn-ghost" onclick="showArchiveModal()">📦 Archive</button>
-  <button class="btn btn-ghost" onclick="showAddGroupModal()">＋ Group</button>
-  <button class="btn btn-primary" onclick="showAddColModal(null)">＋ Column</button>
+  <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">⚙ Settings</button>
 </div>
-<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div></div>
+<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div><div class="tp-title" style="margin-top:12px">Archive</div><div class="archive-row" id="archive-row"></div></div>
 <div id="board"></div>
 <div id="modal-root"></div>
 <div id="notif"></div>
@@ -353,11 +434,13 @@ var _skipFbWrite=false; // set true during remote-triggered render to prevent ec
 var _syncTimer=null;    // debounce handle
 var _connectTimeout=null; // 10s connection watchdog
 var _activeKey=null;
+var _openKey=null;      // key of the board currently loaded in memory (set regardless of sync state)
 var _remoteBaseline=null; // snapshot of last confirmed Firebase state for write safety checks
 var _retryTimer=null;     // auto-reconnect backoff handle
 var _retryStep=0;         // index into _RETRY_DELAYS — escalates with each failed attempt
 var _reconnecting=false;  // true while a connectToKey attempt is in-flight (prevents stacked calls)
 var _userDisconnected=false; // true when user explicitly disconnected — suppresses auto-retry
+var _lastActiveKey=null; // remembers last connected key for the Reconnect button
 var _syncStatus='local';  // current sync state string — mirrors updateSyncStatus for programmatic checks
 var _RETRY_DELAYS=[5000,15000,30000,60000,300000]; // 5s → 15s → 30s → 1m → 5m
 
@@ -370,6 +453,37 @@ var _usbHeartbeatTimer=null;
 var _usbStatus='off';
 var _usbWasCloudActive=false;
 var USB_INDEX_FILENAME='flowboard-index.json';
+var _USB_IDB_NAME='fb4_usb';var _USB_IDB_STORE='handles';var _USB_IDB_KEY='dir';
+
+// ── IndexedDB helpers for persisting the USB directory handle across sessions ──
+function _usbIDB(cb){
+  var req=indexedDB.open(_USB_IDB_NAME,1);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore(_USB_IDB_STORE);};
+  req.onsuccess=function(e){cb(null,e.target.result);};
+  req.onerror=function(e){cb(e);};
+}
+function _usbSaveHandle(handle){
+  _usbIDB(function(err,db){
+    if(err)return;
+    var tx=db.transaction(_USB_IDB_STORE,'readwrite');
+    tx.objectStore(_USB_IDB_STORE).put(handle,_USB_IDB_KEY);
+  });
+}
+function _usbClearHandle(){
+  _usbIDB(function(err,db){
+    if(err)return;
+    var tx=db.transaction(_USB_IDB_STORE,'readwrite');
+    tx.objectStore(_USB_IDB_STORE).delete(_USB_IDB_KEY);
+  });
+}
+function _usbLoadStoredHandle(cb){
+  _usbIDB(function(err,db){
+    if(err){cb(null);return;}
+    var req=db.transaction(_USB_IDB_STORE,'readonly').objectStore(_USB_IDB_STORE).get(_USB_IDB_KEY);
+    req.onsuccess=function(e){cb(e.target.result||null);};
+    req.onerror=function(){cb(null);};
+  });
+}
 var _usbIndex=null;
 
 var _autoSnapsRef=null;        // Firebase ref for boards/{key}/autoSnaps
@@ -465,6 +579,11 @@ function syncColoredColumns(themeId){
     body.style.background=lt?hexToRgba(P.a,.07):P.b;
     body.style.borderColor=lt?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
   });
+  document.querySelectorAll('.col-foot[data-pi]').forEach(function(foot){
+    var P=PAL[parseInt(foot.dataset.pi)%PAL.length];
+    foot.style.background=lt?hexToRgba(P.a,.07):P.b;
+    foot.style.borderColor=lt?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
+  });
   document.querySelectorAll('.col-pill[data-pi]').forEach(function(pill){
     var P=PAL[parseInt(pill.dataset.pi)%PAL.length];
     pill.style.background=lt?hexToRgba(P.a,.22):P.h;
@@ -504,7 +623,31 @@ function toggleThemePanel(){
   var p=document.getElementById('theme-panel'),btn=document.getElementById('theme-btn');
   if(p.classList.contains('open')){p.classList.remove('open');return;}
   var r=btn.getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=(window.innerWidth-r.right)+'px';
-  p.classList.add('open');renderThemeGrid();
+  p.classList.add('open');renderThemeGrid();renderDateFmtRow();renderArchiveRow();
+}
+function renderArchiveRow(){
+  var row=document.getElementById('archive-row');if(!row)return;
+  var cols=S.cols.filter(function(c){return c.archived;}).length;
+  var cards=S.cols.reduce(function(n,c){return n+c.cards.filter(function(k){return k.archived;}).length;},0);
+  var label=(cols||cards)?('📦 '+cols+' column'+(cols!==1?'s':'')+' · '+cards+' card'+(cards!==1?'s':'')):'📦 Archive is empty';
+  row.innerHTML='<span>'+label+'</span><button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="showArchiveModal()">Open Archive</button>';
+}
+var DATE_FMTS=[
+  {id:'short',label:'Short',sample:'Jun 12'},
+  {id:'numeric',label:'Numeric',sample:'06/12/2026'},
+  {id:'long',label:'Long',sample:'June 12, 2026'},
+];
+function renderDateFmtRow(){
+  var row=document.getElementById('date-fmt-row');if(!row)return;
+  var cur=(S.prefs&&S.prefs.dateFormat)||'short';
+  row.innerHTML=DATE_FMTS.map(function(f){
+    return '<button class="date-fmt-opt'+(cur===f.id?' on':'')+'" onclick="setDateFormat(\''+f.id+'\')"><span>'+f.label+'</span><span>'+f.sample+'</span></button>';
+  }).join('');
+}
+function setDateFormat(fmt){
+  if(!S.prefs)S.prefs={};
+  S.prefs.dateFormat=fmt;
+  save();render();renderDateFmtRow();
 }
 function closeThemePanel(){
   document.getElementById('theme-panel')?.classList.remove('open');
@@ -523,6 +666,7 @@ var PAL=[
   {n:"Orange", h:"#7c2d00",b:"#3d1500",a:"#ea580c"},
   {n:"Indigo", h:"#283895",b:"#131c50",a:"#4f46e5"},
 ];
+var PAL_CARD_COLOR=["#3b82f6","#8b5cf6","#f43f5e","#10b981","#f59e0b","#06b6d4","#d946ef","#f97316","#8b5cf6"];
 var PRI=[
   {l:"Low",  d:"#10b981",b:"rgba(16,185,129,.15)"},
   {l:"Med",  d:"#f59e0b",b:"rgba(245,158,11,.15)"},
@@ -564,7 +708,47 @@ function dueLabel(due){
   var diff=Math.round((d-today)/(1000*60*60*24));
   if(diff===0)return'Today';if(diff===1)return'Tomorrow';if(diff===-1)return'Yesterday';
   if(diff<0)return Math.abs(diff)+'d overdue';
-  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  return _fmtDate(d);
+}
+function _fmtDate(d){
+  var fmt=(S.prefs&&S.prefs.dateFormat)||'short';
+  var showYear=d.getFullYear()!==new Date().getFullYear();
+  if(fmt==='numeric'){
+    var mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+    return mm+'/'+dd+(showYear?'/'+d.getFullYear():'');
+  }
+  if(fmt==='long')return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:showYear?'numeric':undefined});
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:showYear?'numeric':undefined});
+}
+function _ensureItemMeta(k){
+  if(!Array.isArray(k.itemMeta))k.itemMeta=[];
+  while(k.itemMeta.length<k.items.length)k.itemMeta.push({due:'',createdAt:k.createdAt||Date.now(),pri:null,completedAt:null});
+  if(k.itemMeta.length>k.items.length)k.itemMeta.length=k.items.length;
+  k.itemMeta.forEach(function(m){
+    if(m.pri===undefined)m.pri=null;
+    if(m.completedAt===undefined)m.completedAt=null;
+  });
+}
+// Keeps card.due in sync with the earliest due date among incomplete subtasks,
+// for as long as at least one checklist item has a due date set (card.dueAuto
+// is recomputed fresh on every call, so it can't get "stuck"). When every
+// item with a due date is checked off, card.due is cleared but dueAuto stays
+// true so the UI can show "Due dates complete" and resume instantly if an
+// item is unchecked. Returns true if card.due changed.
+function _syncCardDueFromItems(card){
+  _ensureItemMeta(card);
+  var earliest=null,anyDue=false;
+  card.items.forEach(function(it,i){
+    var due=card.itemMeta[i]&&card.itemMeta[i].due;
+    if(due){
+      anyDue=true;
+      if(!card.done.includes(it)&&(earliest===null||due<earliest))earliest=due;
+    }
+  });
+  var before=card.due;
+  card.dueAuto=anyDue;
+  if(anyDue)card.due=earliest||'';
+  return card.due!==before;
 }
 
 var newCardId=null,newColId=null,newGroupId=null,settleCardId=null;
@@ -572,10 +756,19 @@ var S={groups:[],cols:[]};
 var drag=null,addTo=null,EC=null,openLimitGid=null,_pd=null;
 var addCardColor=null;
 var _cmDirty=false,_cmColorOpen=false,_cmColOpen=false,_cmTagsOpen=false;
-var _chkSorted=false,_chkOrigItems=null;
+var _chkSorted=false,_chkOrigItems=null,_chkOrigMeta=null,_chkSortMode=null;
+var _expandedChk=new Set();
+var _expandedChkByCard=(function(){
+  try{return JSON.parse(localStorage.getItem('fb4_expanded_chk'))||{};}catch(e){return{};}
+})();
+function _persistExpandedChk(){
+  if(!EC)return;
+  _expandedChkByCard[EC.id]=[..._expandedChk];
+  try{localStorage.setItem('fb4_expanded_chk',JSON.stringify(_expandedChkByCard));}catch(e){}
+}
 
 function defaultState(){return{
-  prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board'},
+  prefs:{theme:'midnight',modalW:510,modalH:null,boardName:'My Board',dateFormat:'short'},
   boardId:uid(),
   lastModified:0,
   groups:[
@@ -614,7 +807,6 @@ function setKeys(a){localStorage.setItem('fb4_keys',JSON.stringify(a));}
 function generateKey(){var a=new Uint8Array(10);crypto.getRandomValues(a);return Array.from(a).map(function(b){return b.toString(16).padStart(2,'0');}).join('').match(/.{4}/g).join('-');}
 
 function updateSyncStatus(state){
-  if(_usbMode)return;
   _syncStatus=state;
   var el=document.getElementById('sync-status');if(!el)return;
   if(state==='synced'){clearTimeout(_connectTimeout);_connectTimeout=null;}
@@ -642,12 +834,15 @@ function migrateRemote(remote){
   remote.cols.forEach(function(c){
     if(c.wip===undefined)c.wip=0;if(c.collapsed===undefined)c.collapsed=false;if(c.sort===undefined)c.sort=false;
     if(!c.cards)c.cards=[];
-    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];});
+    c.cards.forEach(function(k){if(k.color===undefined)k.color=null;if(k.desc===undefined)k.desc='';if(k.due===undefined)k.due='';if(!k.done)k.done=[];if(!k.items)k.items=[];if(!k.tags)k.tags=[];if(k.completed===undefined)k.completed=false;if(k.createdAt===undefined)k.createdAt=0;if(k.updatedAt===undefined)k.updatedAt=0;if(k.completedAt===undefined)k.completedAt=null;_ensureItemMeta(k);_syncCardDueFromItems(k);});
   });
   return remote;
 }
 
 function connectToKey(key){
+  // During USB mode cloud sync is paused — don't attach Firebase listeners.
+  // Board switching in USB mode is handled via switchKey's USB-aware path.
+  if(_usbMode){updateUSBStatus(_usbConnected?'synced':'connecting');return;}
   // ── reset auto-reconnect state for this new attempt ──
   clearTimeout(_retryTimer);_retryTimer=null;
   _userDisconnected=false;
@@ -667,19 +862,36 @@ function connectToKey(key){
   _remoteBaseline=null; // clear baseline when switching — new board has different structure
   if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
   if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
+  // Fix A: reset pending-write counter after detaching the old board's listener.
+  // The flush above increments _pendingWrites using the OLD _syncRef (board A's path).
+  // That write's echo goes to A's now-detached listener — it can never reach B's listener.
+  // Leaving the counter > 0 would cause B's first listener fire to be silently skipped,
+  // leaving S stuck with board A's data while _activeKey is already pointing at B.
+  _pendingWrites=0;
   if(!FIREBASE_ENABLED||!key){updateSyncStatus('local');return;}
-  _activeKey=key;localStorage.setItem('fb4_active_key',key);
+  _activeKey=key;_openKey=key;localStorage.setItem('fb4_active_key',key);
+  var _lk=getKeys();var _lke=_lk.find(function(k){return k.key===key;});if(_lke){_lke.lastUsed=Date.now();setKeys(_lk);}
   updateSyncStatus('syncing');
   clearTimeout(_connectTimeout);
   _connectTimeout=setTimeout(function(){
     if(_activeKey){updateSyncStatus('error');_reconnecting=false;_scheduleRetry();}
   },10000);
+  // Fix A: capture the key at attach time so stale callbacks from a superseded
+  // connectToKey call can be identified and discarded immediately.
+  var capturedKey=key;
+  // Fix B: gate the local-newer push behind this flag so the FIRST listener fire
+  // for a newly connected board ALWAYS applies the remote state — it never pushes
+  // the previous board's S back to Firebase.  Only after the initial sync is
+  // established (first apply committed) does last-write-wins logic re-engage.
+  var _isInitialSync=true;
   _syncRef=_db.ref('boards/'+key+'/state');
   _syncListener=_syncRef.on('value',function(snap){
+    if(_activeKey!==capturedKey)return; // Fix A: stale callback — another board switch already happened
     if(_pendingWrites>0)return; // our own write in-flight — ignore echo
     var remote=snap.val();
     if(remote===null){
       // new board — push local up and establish baseline
+      _isInitialSync=false;
       _pendingWrites++;
       _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_reconnecting=false;updateSyncStatus('error');_scheduleRetry();});
       return;
@@ -705,10 +917,14 @@ function connectToKey(key){
     // On initial connect / board switch the remote boardId differs from the stale local S.
     // Always trust the remote — it IS the board we just switched to.
     if(remote.boardId&&S.boardId&&remote.boardId!==S.boardId){
+      _isInitialSync=false;
       _applyRemote(remote);_reconnecting=false;_retryStep=0;updateSyncStatus('synced');
       return;
     }
-    if(localTs>remoteTs&&_isSafeWrite(S)){
+    // Fix B: never push on the first listener fire — S still holds the previous board's
+    // data at this point.  Copied boards (same boardId) would otherwise pass the identity
+    // check above and overwrite the target with the source board's content.
+    if(!_isInitialSync&&localTs>remoteTs&&_isSafeWrite(S)){
       // Local is newer AND structurally consistent with cloud — push local up.
       _pendingWrites++;
       _syncRef.set(S).then(function(){
@@ -721,13 +937,15 @@ function connectToKey(key){
         // Push failed — safe fallback: adopt cloud state so nothing is left inconsistent.
         _pendingWrites=Math.max(0,_pendingWrites-1);
         console.warn('[Sync] Push-local failed, reverting to cloud state:',err);
+        _isInitialSync=false;
         _applyRemote(remote);
         _reconnecting=false;_retryStep=0;
         updateSyncStatus('synced');
       });
       return;
     }
-    // Remote is newer, tied, or safety gate blocked the local push — apply cloud state.
+    // Remote is newer, tied, initial connect, or safety gate blocked — apply cloud state.
+    _isInitialSync=false;
     _applyRemote(remote);
     _reconnecting=false;_retryStep=0;
     updateSyncStatus('synced');
@@ -816,6 +1034,7 @@ function disconnectSync(){
   clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
   _pendingWrites=0;_autoSnapsPending=0;_skipFbWrite=false;_remoteBaseline=null;
   _userDisconnected=true;_reconnecting=false;_retryStep=0;
+  if(_activeKey)_lastActiveKey=_activeKey;
   _activeKey=null;localStorage.removeItem('fb4_active_key');updateSyncStatus('local');
 }
 
@@ -877,7 +1096,12 @@ function initSync(){
     }
   });
   var savedKey=localStorage.getItem('fb4_active_key');
-  if(savedKey)connectToKey(savedKey);
+  if(savedKey){
+    _openKey=savedKey;
+    var _savedEntry=getKeys().find(function(k){return k.key===savedKey;});
+    if(_savedEntry&&_savedEntry.syncOff){_lastActiveKey=savedKey;_userDisconnected=true;localStorage.removeItem('fb4_active_key');}
+    else{connectToKey(savedKey);}
+  }
 
   // Background-refresh labels for every inactive board so the keys modal
   // always shows current names without requiring a board switch.
@@ -915,6 +1139,9 @@ function save(){
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   try{
     var data=JSON.stringify(S);localStorage.setItem('fb4',data);
+    // Keep the key entry's boardId in sync so the modal can show it for sync-off boards
+    var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
+    if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
     var used=new Blob([data]).size
       +new Blob([localStorage.getItem(_bakKey())||'']).size
       +new Blob([localStorage.getItem(_autoKey())||'']).size;
@@ -964,18 +1191,41 @@ function showKeysModal(){
     setModal(h);return;
   }
   function renderKeysModal(){
+    // Preserve scroll position across re-renders — setModal() rebuilds the DOM entirely
+    // which resets scrollTop to 0, snapping the list back to the top after every action.
+    var _savedScroll=0;
+    var _existingList=document.getElementById('keys-board-list');
+    if(_existingList)_savedScroll=_existingList.scrollTop;
+
     var keys=getKeys();
     var rows=keys.length?keys.map(function(k){
       var isActive=k.key===_activeKey;
-      return '<div class="key-item'+(isActive?' active-key':'')+'" data-k="'+k.key+'"'
-        +(isActive?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
+      var isOpen=k.key===_openKey;
+      var rowClass='key-item'+(isActive?' active-key':(isOpen?' open-key':''));
+      var badge;
+      if(isOpen&&_usbMode&&_usbConnected){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">💾 USB Active</span>';
+      }else if(isActive){
+        badge='<span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>';
+      }else if(isOpen){
+        badge='<span style="font-size:10px;color:#f59e0b;font-weight:700">● Open</span>';
+      }else{
+        badge='<span style="font-size:10px;color:var(--txt-d)">● inactive</span>';
+      }
+      return '<div class="'+rowClass+'" data-k="'+k.key+'"'
+        +(isActive||isOpen?'':' style="cursor:pointer" onclick="if(!event.target.closest(\'button\'))switchKey(\''+k.key+'\')"')
         +'>'
         +'<div style="flex:1;min-width:0">'
-        +'<div class="key-label">'+esc(k.label||'Board')+(isActive?' <span style="font-size:10px;color:#10b981;font-weight:700">● ACTIVE</span>':' <span style="font-size:10px;color:var(--txt-d)">● inactive</span>')+'</div>'
-        +'<div class="key-val">'+esc(k.key)+'</div>'
+        +'<div class="key-label">'+esc(k.label||'Board')+' '+badge+'</div>'
+        +(k.syncOff
+          ? '<div class="key-val" title="Internal board ID — unique to this board, used for local storage and USB sync">'
+            +(k.boardId?'local id: '+esc(k.boardId):'cloud key (sync off): '+esc(k.key))
+            +'</div>'
+          : '<div class="key-val" title="Cloud sync key — share with other devices to join this board">'+esc(k.key)+'</div>'
+        )
         +'</div>'
         +'<div class="key-actions">'
-        +(isActive?'':'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="switchKey(\''+k.key+'\')">Switch</button>')
+        +'<button class="btn '+(k.syncOff?'btn-ghost':'btn-green')+'" style="padding:4px 10px;font-size:11px" onclick="toggleBoardSync(\''+k.key+'\')" title="'+(k.syncOff?'Cloud sync OFF — click to enable':'Cloud sync ON — click to disable')+'">'+(k.syncOff?'⊘ Off':'☁')+'</button>'
         +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyKey(\''+k.key+'\')">Copy</button>'
         +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="emailKey(\''+k.key+'\')">Email</button>'
         +'<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="renameKey(\''+k.key+'\')">Rename</button>'
@@ -988,7 +1238,10 @@ function showKeysModal(){
       :'<div style="margin-bottom:14px;padding:10px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;font-size:12px;color:var(--txt-m)">Running in local-only mode — no sync active.</div>';
     var h='<h2 style="margin-bottom:14px">☁ Cloud Sync — Board Keys</h2>'
       +statusBlock
-      +'<div style="max-height:240px;overflow-y:auto;margin-bottom:16px">'+rows+'</div>'
+      // Dynamic list height: grow with content up to 4 full rows, then cap and scroll.
+      // 60px ≈ one key-item row (padding + content + margin).  Cap at 4.7 rows so the
+      // partial fifth row acts as a natural scroll affordance.
+      +(function(){var rh=60,cap=Math.round(rh*4.7);var h=keys.length>0?Math.min(keys.length*rh+4,cap):rh;return '<div id="keys-board-list" style="max-height:'+h+'px;overflow-y:auto;margin-bottom:16px">';}())+rows+'</div>'
       +'<hr style="border:none;border-top:1px solid var(--bd);margin-bottom:16px">'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
       +'<div style="flex:1;min-width:160px">'
@@ -999,10 +1252,12 @@ function showKeysModal(){
       +'<button class="btn btn-green" style="flex-shrink:0" onclick="newKeyBtn()">+ New Board</button>'
       +'</div>'
       +'<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">'
-      +(_activeKey?'<button class="btn btn-danger" style="font-size:12px" onclick="disconnectBtn()">Disconnect</button>':'<span></span>')
+      +(_activeKey?'<button class="btn btn-danger" style="font-size:12px" onclick="disconnectBtn()">Disconnect</button>':'<button class="btn btn-green" style="font-size:12px" onclick="reconnectBtn()">↩ Reconnect</button>')
       +'<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
       +'</div>';
-    setModal(h);
+    setModal(h,'640px');
+    // Restore scroll position now that the new DOM is in place.
+    if(_savedScroll){var _rl=document.getElementById('keys-board-list');if(_rl)_rl.scrollTop=_savedScroll;}
     // Override overlay click to close without going through the card-dirty guard —
     // there is no editable card in this modal so the guard is irrelevant here.
     var ov=document.querySelector('#modal-root .overlay');
@@ -1069,7 +1324,22 @@ function joinKeyBtn(){
   window._keysModalRender&&window._keysModalRender();
 }
 function switchKey(key){
-  connectToKey(key);
+  var _sw=getKeys().find(function(k){return k.key===key;});
+  if(_usbMode&&_usbConnected){
+    // In USB mode: prefer loading from USB drive when the board is indexed there.
+    var targetId=_sw&&_sw.boardId;
+    if(targetId&&_usbIndex&&_usbIndex.some(function(e){return e.boardId===targetId;})){
+      switchUSBBoard(targetId);
+    }else{
+      // Board not on this drive yet — load offline (one-time Firebase read) then USB will
+      // pick it up on the first save via _usbUpdateIndex.
+      loadBoardOffline(key);
+    }
+  }else if(_sw&&_sw.syncOff){
+    loadBoardOffline(key);
+  }else{
+    connectToKey(key);
+  }
   window._keysModalRender&&window._keysModalRender();
 }
 function copyKey(key){
@@ -1103,9 +1373,114 @@ function renameKey(key){
   window._keysModalRender&&window._keysModalRender();
 }
 function disconnectBtn(){
-  if(!confirm('Disconnect from sync? Your local data stays intact and you can reconnect anytime.'))return;
+  if(!confirm('Disconnect all boards from cloud sync? Your local data stays intact and you can reconnect anytime.'))return;
   disconnectSync();
   window._keysModalRender&&window._keysModalRender();
+}
+function loadBoardOffline(key){
+  clearTimeout(_retryTimer);_retryTimer=null;
+  if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncRef=null;_syncListener=null;}
+  if(_autoSnapsRef&&_autoSnapsListener){_autoSnapsRef.off('value',_autoSnapsListener);_autoSnapsRef=null;_autoSnapsListener=null;}
+  clearTimeout(_syncTimer);clearTimeout(_connectTimeout);_connectTimeout=null;
+  clearTimeout(_autoSnapsWriteTimer);_autoSnapsWriteTimer=null;
+  _pendingWrites=0;_autoSnapsPending=0;_skipFbWrite=false;_remoteBaseline=null;
+  if(_activeKey)_lastActiveKey=_activeKey;
+  _activeKey=null;_openKey=key;localStorage.removeItem('fb4_active_key');
+  _userDisconnected=true;_reconnecting=false;_retryStep=0;
+  updateSyncStatus('local');
+  if(!FIREBASE_ENABLED||!_db||!key)return;
+  _db.ref('boards/'+key+'/state').once('value').then(function(snap){
+    var remote=snap.val();
+    if(remote){migrateRemote(remote);_applyRemote(remote);}
+    notify('📴 Offline mode — changes stay local until you re-enable sync.');
+    window._keysModalRender&&window._keysModalRender();
+  }).catch(function(){
+    notify('⚠️ Could not reach cloud. Using current local data.');
+    window._keysModalRender&&window._keysModalRender();
+  });
+}
+function toggleBoardSync(key){
+  var keys=getKeys();
+  var entry=keys.find(function(k){return k.key===key;});
+  if(!entry)return;
+  entry.syncOff=!entry.syncOff;
+  setKeys(keys);
+  if(key===_activeKey){
+    if(entry.syncOff){disconnectSync();}
+    else{connectToKey(key);}
+  }
+  notify(entry.syncOff?'☁ Cloud sync disabled for this board':'☁ Cloud sync enabled');
+  window._keysModalRender&&window._keysModalRender();
+}
+function reconnectBtn(){
+  var keys=getKeys().filter(function(k){return !k.syncOff;});
+  if(!keys.length){notify('⚠️ All boards have sync disabled. Toggle ☁ on for a board first.');return;}
+  keys.sort(function(a,b){return (b.lastUsed||0)-(a.lastUsed||0);});
+  var target=_lastActiveKey?keys.find(function(k){return k.key===_lastActiveKey;})||keys[0]:keys[0];
+  if(_usbMode){_showReconnectUSBConflict(target);return;}
+  _userDisconnected=false;
+  connectToKey(target.key);
+  window._keysModalRender&&window._keysModalRender();
+}
+
+function _showReconnectUSBConflict(target){
+  var bn=esc(target.label||'Board');
+  setModal(
+    '<div style="text-align:center;margin-bottom:20px">'+
+      '<div style="font-size:36px;margin-bottom:10px">⚡</div>'+
+      '<div style="font-size:18px;font-weight:800;color:var(--txt-b);margin-bottom:8px">USB Mode Is Active</div>'+
+      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">'+
+        'Cloud sync is paused while USB drive mode is running.<br>'+
+        'Reconnecting <strong style="color:var(--txt-b)">'+bn+'</strong> to cloud requires one of the actions below.'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.28);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:12px;color:var(--txt-m);line-height:1.6">'+
+      '<strong style="color:#f59e0b">Why?</strong> USB mode saves every change directly to your drive. '+
+      'Cloud sync and USB mode cannot run simultaneously — USB takes priority while active.'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">'+
+      '<button class="btn btn-green" style="padding:13px 16px;font-size:13px;text-align:left;border-radius:10px" onclick="window._rcOverrideSafe()">'+
+        '<div style="font-weight:700;margin-bottom:3px">☁ Disable USB & Reconnect Cloud</div>'+
+        '<div style="font-size:11px;opacity:.75">Writes one final save to the drive, then switches to cloud sync for <em>'+bn+'</em></div>'+
+      '</button>'+
+      '<button class="btn btn-ghost" style="padding:13px 16px;font-size:13px;text-align:left;border-radius:10px" onclick="window._rcOverrideKeep()">'+
+        '<div style="font-weight:700;margin-bottom:3px">💾 Keep USB Mode Running</div>'+
+        '<div style="font-size:11px;opacity:.75">Stay on USB sync — cloud remains paused</div>'+
+      '</button>'+
+      '<button class="btn btn-ghost" style="padding:13px 16px;font-size:13px;text-align:left;border-radius:10px;border-color:rgba(244,63,94,.35);color:#f43f5e" onclick="window._rcOverrideForce()">'+
+        '<div style="font-weight:700;margin-bottom:3px">⚡ Force-Reconnect (Skip USB Save)</div>'+
+        '<div style="font-size:11px;opacity:.75">Disables USB immediately without a final save — use if the drive is already disconnected</div>'+
+      '</button>'+
+    '</div>'+
+    '<div style="text-align:right"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button></div>',
+    '500px'
+  );
+
+  function _doDisableAndConnect(skipSave){
+    forceCloseModal();
+    _autoSnapBefore('Before: USB disabled to reconnect cloud – '+new Date().toLocaleTimeString());
+    _stopUSBHeartbeat();
+    clearTimeout(_usbSaveTimer);
+    function _after(){
+      _usbHandle=null;_usbConnected=false;_usbMode=false;_usbIndex=null;
+      _usbClearHandle();
+      updateUSBStatus('off');
+      _userDisconnected=false;
+      connectToKey(target.key);
+      window._keysModalRender&&window._keysModalRender();
+    }
+    if(!skipSave&&_usbHandle&&_usbConnected){
+      notify('💾 Saving to USB… then connecting to cloud.');
+      _usbWriteState(S).then(_after).catch(_after);
+    }else{
+      _after();
+      notify('☁ Connecting to cloud sync…');
+    }
+  }
+
+  window._rcOverrideSafe=function(){_doDisableAndConnect(false);};
+  window._rcOverrideForce=function(){_doDisableAndConnect(true);};
+  window._rcOverrideKeep=function(){forceCloseModal();notify('💾 USB mode kept active.');};
 }
 function removeKey(key){
   if(!confirm('Remove this board key from this device? (The board data in Firebase is not deleted.)'))return;
@@ -1132,30 +1507,123 @@ function updateUSBStatus(state){
   el.onclick=(state==='lost')?function(){selectDriveFolder();}:null;
 }
 
+// On page load: check IndexedDB for a stored USB handle. If found, show a one-click reconnect
+// banner — the browser will prompt for permission, then USB sync resumes automatically.
+function _usbCheckStoredHandle(){
+  if(!window.showDirectoryPicker)return; // not supported or blocked — skip silently; user will get guidance when they try to enable
+  _usbLoadStoredHandle(function(handle){
+    if(!handle)return;
+    // Check if permission is already granted (drive still plugged in) or needs re-prompt
+    handle.queryPermission({mode:'readwrite'}).then(function(perm){
+      if(perm==='granted'){
+        // Drive is still accessible — reconnect silently
+        _usbWasCloudActive=!!_activeKey;
+        if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+        _usbMode=true;_usbHandle=handle;
+        updateUSBStatus('connecting');
+        connectUSB(handle);
+      }else if(perm==='prompt'){
+        // Drive may be there — show a banner so user can restore with one click
+        _usbShowReconnectBanner(handle);
+      }
+      // perm==='denied': stored handle is no longer accessible, leave it
+    }).catch(function(){
+      // queryPermission not supported or handle stale — show the banner anyway
+      _usbShowReconnectBanner(handle);
+    });
+  });
+}
+
+function _usbShowReconnectBanner(handle){
+  var banner=document.createElement('div');
+  banner.id='usb-reconnect-banner';
+  banner.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:8888;'+
+    'background:var(--surf);border:1px solid rgba(16,185,129,.35);border-radius:14px;'+
+    'padding:12px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.45);'+
+    'font-size:13px;color:var(--txt-m);max-width:420px;animation:usbPlugIn .3s cubic-bezier(.34,1.4,.64,1) both';
+  banner.innerHTML=
+    '<span style="font-size:20px">💾</span>'+
+    '<span style="flex:1;line-height:1.4"><strong style="color:var(--txt-b)">USB drive was connected last session.</strong><br>'+
+    '<span style="font-size:11px;color:var(--txt-d)">Same device only — for a new computer use Reconnect USB Board in Backups.</span></span>'+
+    '<button class="btn btn-green" style="font-size:12px;white-space:nowrap" id="usb-reconnect-btn">Reconnect</button>'+
+    '<button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" onclick="document.getElementById(\'usb-reconnect-banner\').remove();_usbClearHandle()">✕</button>';
+  document.body.appendChild(banner);
+  document.getElementById('usb-reconnect-btn').onclick=function(){
+    banner.remove();
+    handle.requestPermission({mode:'readwrite'}).then(function(perm){
+      if(perm==='granted'){
+        _usbWasCloudActive=!!_activeKey;
+        if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+        _usbMode=true;_usbHandle=handle;
+        updateUSBStatus('connecting');
+        connectUSB(handle);
+      }else{
+        notify('⚠️ Drive access was not granted. Select the folder manually in Backups → Reconnect USB Board.');
+        _usbClearHandle();
+      }
+    }).catch(function(){
+      notify('⚠️ Could not access drive. Try Reconnect USB Board in Backups.');
+      _usbClearHandle();
+    });
+  };
+}
+
+// Returns true if running in Brave (navigator.brave is injected by Brave itself)
+function _isBrave(){return !!(window.navigator&&window.navigator.brave);}
+
+// Human-readable browser hint for File System API errors
+function _fsBrowserHint(){
+  if(_isBrave())
+    return 'You are using Brave. Go to Shields (lion icon) → turn off "Block fingerprinting" or set it to Standard, then try again.';
+  return 'USB sync requires Chrome, Edge, or Brave (Chrome/Edge with File System Access API support).';
+}
+
 function enableUSBMode(){
   if(!window.showDirectoryPicker){
-    notify('⚠️ USB sync requires Chrome or Edge — your browser does not support it.');return;
+    notify('⚠️ '+_fsBrowserHint());return;
   }
-  _usbWasCloudActive=!!_activeKey;
+  var hasCloud=!!_activeKey;
+  var msg='Enable USB Drive mode?\n\n';
+  msg+='• Your board will save to the USB drive on every change.\n';
+  msg+='• Cloud sync will be paused while USB mode is active.\n';
+  if(hasCloud)msg+='• Cloud connection will be suspended (data stays in Firebase).\n';
+  msg+='\nUSB mode applies to the current board. Reconnect the drive after any page reload.';
+  if(!confirm(msg))return;
+  _usbWasCloudActive=hasCloud;
+  // Pause the Firebase listener so remote updates cannot overwrite local state while on USB
+  if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
   _usbMode=true;
   updateUSBStatus('connecting');
   selectDriveFolder();
 }
 
 function disableUSBMode(){
+  // Always snapshot before teardown — this is the last safe recovery point
+  _autoSnapBefore('Before: USB mode disabled – '+new Date().toLocaleTimeString());
   _stopUSBHeartbeat();
   clearTimeout(_usbSaveTimer);
   _usbHandle=null;_usbConnected=false;_usbMode=false;_usbIndex=null;
+  _usbClearHandle();
   updateUSBStatus('off');
   if(_usbWasCloudActive&&_activeKey){
-    _autoSnapBefore('Before: Switched from USB to Cloud – '+new Date().toLocaleTimeString());
+    // Restore the Firebase listener that was paused when USB mode started
     updateSyncStatus('syncing');
-    if(_syncRef){
+    if(_syncRef&&!_syncListener){
+      _syncListener=_syncRef.on('value',function(snap){
+        if(_pendingWrites>0)return;
+        var remote=snap.val();if(!remote)return;
+        migrateRemote(remote);
+        var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
+        if(localTs>=remoteTs){
+          _pendingWrites++;
+          _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+        }else{
+          _setRemoteBaseline(remote);_applyRemote(remote);updateSyncStatus('synced');
+        }
+      },function(){updateSyncStatus('error');});
+    }else if(_syncRef){
       _pendingWrites++;
-      _syncRef.set(S).then(function(){
-        _pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);
-        if(_pendingWrites===0)updateSyncStatus('synced');
-      }).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
+      _syncRef.set(S).then(function(){_pendingWrites=Math.max(0,_pendingWrites-1);_setRemoteBaseline(S);updateSyncStatus('synced');}).catch(function(){_pendingWrites=Math.max(0,_pendingWrites-1);updateSyncStatus('error');});
     }
   }else{
     updateSyncStatus('local');
@@ -1205,7 +1673,7 @@ function _usbUpdateIndex(state){
     cards:(state.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0)};
   var found=false;
   for(var i=0;i<idx.length;i++){if(idx[i].boardId===state.boardId){idx[i]=entry;found=true;break;}}
-  if(!found)idx.push(entry);
+  if(!found){idx.push(entry);updateUSBStatus('synced');}
   _usbIndex=idx;
   return _usbWriteIndex(idx);
 }
@@ -1229,6 +1697,173 @@ function _usbWriteState(state){
   });
 }
 
+// Show a confirmation popup before overwriting local state with USB data.
+// onConfirm is called only if the user agrees (or if the change is minor).
+function _usbConfirmLoad(remote,source,onConfirm){
+  var localCards=(S.cols||[]).reduce(function(n,c){return n+(c.cols||c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
+  var remoteCards=(remote.cols||[]).reduce(function(n,c){return n+(c.cards||[]).filter(function(k){return !k.archived;}).length;},0);
+  var localGroups=(S.groups||[]).length,remoteGroups=(remote.groups||[]).length;
+  var cardDiff=Math.abs(remoteCards-localCards);
+  var major=cardDiff>5||(localCards>0&&cardDiff/localCards>0.2);
+  var ago=function(ts){if(!ts)return'unknown';var m=Math.round((Date.now()-ts)/60000);return m<2?'just now':m<60?m+' min ago':Math.round(m/60)+' hr ago';};
+  _autoSnapBefore('Before: USB load from '+source+' – '+new Date().toLocaleTimeString());
+  if(!major){_applyFromUSB(remote);notify('💾 Board loaded from '+source+'.');if(onConfirm)onConfirm();return;}
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(480,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  // Store pending remote in a global so the onclick doesn't need to embed the JSON
+  window._usbPendingRemote=remote;
+  window._usbPendingSource=source;
+  window._usbPendingConfirm=onConfirm||null;
+  m.innerHTML=
+    '<div style="text-align:center;margin-bottom:20px">'+
+      '<div style="font-size:36px;margin-bottom:10px">⚠️</div>'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:6px">Overwrite Warning</div>'+
+      '<div style="font-size:13px;color:var(--txt-m);line-height:1.65">The '+esc(source)+' data is significantly different from your local board.</div>'+
+    '</div>'+
+    '<div style="background:var(--surf2);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:13px">'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+        '<div style="text-align:center;padding:10px;background:var(--surf);border-radius:8px">'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-bottom:4px">LOCAL (current)</div>'+
+          '<div style="font-weight:700;color:var(--txt-b)">'+localCards+' cards</div>'+
+          '<div style="font-size:11px;color:var(--txt-d)">'+localGroups+' group'+(localGroups!==1?'s':'')+'</div>'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-top:3px">'+ago(S.lastModified)+'</div>'+
+        '</div>'+
+        '<div style="text-align:center;padding:10px;background:var(--surf);border-radius:8px">'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-bottom:4px">'+esc(source.toUpperCase())+'</div>'+
+          '<div style="font-weight:700;color:var(--txt-b)">'+remoteCards+' cards</div>'+
+          '<div style="font-size:11px;color:var(--txt-d)">'+remoteGroups+' group'+(remoteGroups!==1?'s':'')+'</div>'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-top:3px">'+ago(remote.lastModified)+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-top:10px;font-size:12px;color:#10b981;padding:6px 8px;background:rgba(16,185,129,.08);border-radius:7px">✅ A snapshot of your current board has already been saved.</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:10px">'+
+      '<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'modal-root\').innerHTML=\'\'">Keep Local</button>'+
+      '<button class="btn btn-danger" style="flex:1" onclick="_usbConfirmApply()">Load from '+esc(source)+'</button>'+
+    '</div>';
+  ov.appendChild(m);root.appendChild(ov);
+}
+
+function _usbConfirmApply(){
+  document.getElementById('modal-root').innerHTML='';
+  var remote=window._usbPendingRemote,cb=window._usbPendingConfirm,src=window._usbPendingSource||'USB drive';
+  window._usbPendingRemote=null;window._usbPendingConfirm=null;window._usbPendingSource=null;
+  if(!remote)return;
+  _applyFromUSB(remote);
+  notify('💾 Board loaded from '+src+'.');
+  if(cb)cb();
+}
+
+// Entry point for cross-computer reconnect: pick a folder WITHOUT enabling full USB mode first.
+function importFromUSB(){
+  if(!window.showDirectoryPicker){
+    notify('⚠️ '+_fsBrowserHint());return;
+  }
+  window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'}).then(function(handle){
+    // Read the index from the selected folder
+    handle.getFileHandle(USB_INDEX_FILENAME).then(function(fh){
+      return fh.getFile().then(function(f){return f.text();});
+    }).then(function(txt){
+      var index=JSON.parse(txt);
+      if(!Array.isArray(index)||!index.length){
+        notify('⚠️ No FlowBoard boards found in that folder.');return;
+      }
+      _showUSBImportModal(handle,index);
+    }).catch(function(e){
+      if(e.name==='NotFoundError'){
+        notify('⚠️ No FlowBoard data found in that folder. Make sure you selected the correct USB folder.');
+      }else{
+        notify('❌ Could not read drive: '+e.message);
+      }
+    });
+  }).catch(function(e){
+    if(e.name!=='AbortError')notify('❌ Could not access drive: '+e.message);
+  });
+}
+
+// Show boards found on a selected drive and let the user choose what to do.
+function _showUSBImportModal(handle,index){
+  var fmt=function(ts){return ts?new Date(ts).toLocaleString():'Unknown';};
+  var ago=function(ts){if(!ts)return'';var m=Math.round((Date.now()-ts)/60000);return m<2?' (just now)':m<60?' ('+m+' min ago)':' ('+Math.round(m/60)+' hr ago)';};
+  closeThemePanel();closeAllPops();
+  var root=document.getElementById('modal-root');root.innerHTML='';
+  var ov=document.createElement('div');ov.className='overlay';
+  var m=document.createElement('div');m.className='modal';
+  m.style.width=Math.min(560,window.innerWidth*.92)+'px';
+  m.onclick=function(e){e.stopPropagation();};
+  var cards='';
+  for(var i=0;i<index.length;i++){
+    var b=index[i],isCur=b.boardId===S.boardId;
+    cards+=
+      '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surf2);border:1px solid '+(isCur?'rgba(16,185,129,.3)':'var(--bd)')+';border-radius:12px;margin-bottom:9px">'+
+        '<div style="font-size:24px">💾</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-weight:700;font-size:13px;color:var(--txt-b)">'+(b.name||'Board')+(isCur?' <span style="color:#10b981;font-size:10px">● current board</span>':'')+'</div>'+
+          '<div style="font-size:11px;color:var(--txt-d);margin-top:2px">'+fmt(b.lastModified)+ago(b.lastModified)+' &middot; '+(b.cards||0)+' cards</div>'+
+        '</div>'+
+        '<button class="btn btn-green" style="font-size:12px;white-space:nowrap" onclick="_usbImportBoard(\''+b.boardId+'\')">'+
+          (isCur?'Reconnect':'Load Board')+
+        '</button>'+
+      '</div>';
+  }
+  m.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+      '<div>'+
+        '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Boards Found on Drive</div>'+
+        '<div style="font-size:12px;color:var(--txt-d);margin-top:3px">'+index.length+' board'+(index.length!==1?'s':'')+' found — select one to load or reconnect</div>'+
+      '</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="document.getElementById(\'modal-root\').innerHTML=\'\'">✕</button>'+
+    '</div>'+
+    '<div style="max-height:300px;overflow-y:auto;margin-bottom:14px">'+cards+'</div>'+
+    '<div style="display:flex;gap:9px;border-top:1px solid var(--bd-s);padding-top:14px">'+
+      '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="document.getElementById(\'modal-root\').innerHTML=\'\'">Cancel</button>'+
+      '<button class="btn btn-green" style="flex:1;font-size:12px" onclick="_usbImportEnableMode()">Enable USB Sync for This Drive</button>'+
+    '</div>';
+  // Store handle for callbacks
+  window._usbImportHandle=handle;
+  window._usbImportIndex=index;
+  ov.appendChild(m);root.appendChild(ov);
+}
+
+function _usbImportBoard(boardId){
+  var handle=window._usbImportHandle,index=window._usbImportIndex;
+  if(!handle){notify('⚠️ Drive handle lost — please try again.');return;}
+  handle.getFileHandle(_usbBoardFilename(boardId)).then(function(fh){
+    return fh.getFile().then(function(f){return f.text();});
+  }).then(function(txt){
+    var remote=JSON.parse(txt);
+    document.getElementById('modal-root').innerHTML='';
+    _usbConfirmLoad(remote,'USB drive',function(){
+      // After loading, enable USB mode on this drive for ongoing sync
+      var msg='Board loaded. Enable USB sync so changes save back to the drive automatically?';
+      if(confirm(msg)){
+        if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+        _usbWasCloudActive=!!_activeKey;
+        _usbMode=true;_usbHandle=handle;_usbIndex=index;
+        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
+        notify('💾 USB sync active — changes will save to the drive.');
+      }
+      showBackupModal();
+    });
+  }).catch(function(e){
+    notify('❌ Could not read board from drive: '+e.message);
+  });
+}
+
+function _usbImportEnableMode(){
+  var handle=window._usbImportHandle;
+  if(!handle){notify('⚠️ Drive handle lost — please try again.');return;}
+  document.getElementById('modal-root').innerHTML='';
+  if(_syncRef&&_syncListener){_syncRef.off('value',_syncListener);_syncListener=null;}
+  _usbWasCloudActive=!!_activeKey;
+  _usbMode=true;
+  updateUSBStatus('connecting');
+  connectUSB(handle);
+}
+
 function connectUSB(handle){
   _usbHandle=handle;
   updateUSBStatus('connecting');
@@ -1243,15 +1878,16 @@ function connectUSB(handle){
         var remote=JSON.parse(txt);
         var localTs=S.lastModified||0,remoteTs=remote.lastModified||0;
         if(remoteTs>localTs){
-          _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
-          _applyFromUSB(remote);
-          notify('💾 Drive data loaded — it was newer than your local board.');
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
+          _usbConfirmLoad(remote,'drive',function(){
+            if(document.querySelector('#modal-root .overlay'))showBackupModal();
+          });
         }else{
           _usbWriteState(S);
           notify('💾 Drive updated — your local board was newer.');
+          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
+          if(document.querySelector('#modal-root .overlay'))showBackupModal();
         }
-        _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
-        if(document.querySelector('#modal-root .overlay'))showBackupModal();
       });
     }else{
       showUSBBoardPickerModal(index);
@@ -1272,22 +1908,23 @@ function connectUSB(handle){
         if(legacy.boardId===S.boardId){
           var localTs=S.lastModified||0,remoteTs=legacy.lastModified||0;
           if(remoteTs>localTs){
-            _autoSnapBefore('Before: USB drive loaded (drive was newer) – '+new Date().toLocaleTimeString());
-            _applyFromUSB(legacy);
-            notify('💾 Legacy drive data migrated — drive was newer.');
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
+            _usbConfirmLoad(legacy,'drive (legacy)',function(){
+              if(document.querySelector('#modal-root .overlay'))showBackupModal();
+            });
           }else{
             _usbWriteState(S);
             notify('💾 Drive migrated to new format — your local board was newer.');
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
+            if(document.querySelector('#modal-root .overlay'))showBackupModal();
           }
-          _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
-          if(document.querySelector('#modal-root .overlay'))showBackupModal();
         }else{
           showUSBBoardPickerModal(_usbIndex);
         }
       }).catch(function(le){
         if(le.name==='NotFoundError'){
           _usbWriteState(S).then(function(){
-            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+            _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
             notify('💾 Board saved to USB drive!');
             if(document.querySelector('#modal-root .overlay'))showBackupModal();
           });
@@ -1353,7 +1990,7 @@ function switchUSBBoard(boardId){
     var remote=JSON.parse(txt);
     document.getElementById('modal-root').innerHTML='';
     _applyFromUSB(remote);
-    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
     notify('💾 Board loaded from USB drive!');
     if(document.querySelector('#modal-root .overlay'))showBackupModal();
   }).catch(function(e){
@@ -1364,7 +2001,7 @@ function switchUSBBoard(boardId){
 function addCurrentBoardToUSB(){
   document.getElementById('modal-root').innerHTML='';
   _usbWriteState(S).then(function(){
-    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();
+    _usbConnected=true;updateUSBStatus('synced');_startUSBHeartbeat();if(_usbHandle)_usbSaveHandle(_usbHandle);
     notify('💾 Your board has been added to the USB drive!');
     if(document.querySelector('#modal-root .overlay'))showBackupModal();
   }).catch(function(e){
@@ -1420,6 +2057,7 @@ function load(){
       S.prefs={theme:localStorage.getItem('fb4_theme')||'midnight',modalW:(_lsm.w>=320?_lsm.w:510),modalH:(_lsm.h>=200?_lsm.h:null)};
     }
     if(S.prefs.theme===undefined)S.prefs.theme='midnight';
+    if(S.prefs.dateFormat===undefined)S.prefs.dateFormat='short';
     if(S.prefs.modalW===undefined)S.prefs.modalW=510;
     if(S.prefs.modalH===undefined)S.prefs.modalH=null;
     if(!S.prefs.boardName)S.prefs.boardName='My Board';
@@ -1440,6 +2078,10 @@ function load(){
         if(k.color===undefined)k.color=null;
         if(k.desc===undefined)k.desc='';
         if(k.due===undefined)k.due='';
+        if(!k.done)k.done=[];
+        if(!k.items)k.items=[];
+        _ensureItemMeta(k);
+        _syncCardDueFromItems(k);
       });
     });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
   // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
@@ -1548,6 +2190,190 @@ function deleteAutoBak(id){
   setAutoBaks(remaining);
   _pushAutoSnapsToCloud(remaining);
   showBackupModal();
+}
+
+// ── SNAPSHOT DIFF VIEWER ──
+var _diffRows=null; // stores {type, textA, textB} keyed by row number
+
+function _computeSnapshotDiff(stateA,stateB){
+  var mapA={},mapB={};
+  (stateA.cols||[]).forEach(function(col){
+    (col.cards||[]).forEach(function(card){mapA[card.id]={card:card,col:col.title||'Untitled'};});
+  });
+  (stateB.cols||[]).forEach(function(col){
+    (col.cards||[]).forEach(function(card){mapB[card.id]={card:card,col:col.title||'Untitled'};});
+  });
+  var added=[],deleted=[],modified=[];
+  Object.keys(mapB).forEach(function(id){
+    if(!mapA[id]){added.push({card:mapB[id].card,col:mapB[id].col});}
+    else if(JSON.stringify(mapA[id].card)!==JSON.stringify(mapB[id].card)){
+      modified.push({cardA:mapA[id].card,colA:mapA[id].col,cardB:mapB[id].card,colB:mapB[id].col});
+    }
+  });
+  Object.keys(mapA).forEach(function(id){
+    if(!mapB[id])deleted.push({card:mapA[id].card,col:mapA[id].col});
+  });
+  return{added:added,modified:modified,deleted:deleted};
+}
+
+function showDiffPicker(){
+  var allSnaps=[];
+  getBaks().forEach(function(b){allSnaps.push({id:b.id,label:b.name,ts:b.ts,src:'m'});});
+  getAutoBaks().forEach(function(b){allSnaps.push({id:b.id,label:b.name,ts:b.ts,src:'a'});});
+  allSnaps.sort(function(a,b){return b.ts-a.ts;});
+  if(allSnaps.length<2){notify('⚠️ Need at least 2 snapshots to compare.');return;}
+  var opts=allSnaps.map(function(s){
+    return '<option value="'+s.id+'|'+s.src+'">'+esc(s.label)+' — '+new Date(s.ts).toLocaleString()+'</option>';
+  }).join('');
+  var opts2=allSnaps.map(function(s,i){
+    return '<option value="'+s.id+'|'+s.src+'"'+(i===1?' selected':'')+'>'+esc(s.label)+' — '+new Date(s.ts).toLocaleString()+'</option>';
+  }).join('');
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Compare Snapshots</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showBackupModal()">← Back</button>'+
+    '</div>'+
+    '<label class="lbl">Snapshot A <span style="font-weight:400;color:var(--txt-dd)">(older / before)</span></label>'+
+    '<select id="diff-sel-a" class="finput" style="width:100%;margin-bottom:14px">'+opts+'</select>'+
+    '<label class="lbl">Snapshot B <span style="font-weight:400;color:var(--txt-dd)">(newer / after)</span></label>'+
+    '<select id="diff-sel-b" class="finput" style="width:100%;margin-bottom:22px">'+opts2+'</select>'+
+    '<button class="btn btn-green" style="width:100%;font-size:13px" onclick="runSnapshotDiff()">⚡ Show Diff</button>',
+  '540px');
+}
+
+function runSnapshotDiff(){
+  var selA=document.getElementById('diff-sel-a');
+  var selB=document.getElementById('diff-sel-b');
+  if(!selA||!selB)return;
+  var partsA=selA.value.split('|'),partsB=selB.value.split('|');
+  var idA=partsA[0],srcA=partsA[1],idB=partsB[0],srcB=partsB[1];
+  if(idA===idB){notify('⚠️ Please select two different snapshots.');return;}
+  showSnapshotDiff(idA,srcA,idB,srcB);
+}
+
+function showSnapshotDiff(idA,srcA,idB,srcB){
+  var all=getBaks().concat(getAutoBaks());
+  var snapA=all.find(function(x){return x.id===idA;});
+  var snapB=all.find(function(x){return x.id===idB;});
+  if(!snapA||!snapB){notify('⚠️ Snapshot not found.');return;}
+  var stateA=JSON.parse(snapA.data),stateB=JSON.parse(snapB.data);
+  var diff=_computeSnapshotDiff(stateA,stateB);
+  var total=diff.added.length+diff.modified.length+diff.deleted.length;
+  var fmtTs=function(ts){var d=new Date(ts);return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});};
+  var trunc=function(s,n){s=String(s||'');return s.length>n?s.slice(0,n)+'…':s;};
+
+  var header=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Snapshot Diff</div>'+
+      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showDiffPicker()">← Back</button>'+
+    '</div>'+
+    '<div style="font-size:12px;padding:8px 10px;background:var(--surf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;line-height:1.7">'+
+      '<span style="color:var(--txt-d)">A:</span> <strong>'+esc(snapA.name)+'</strong> <span style="color:var(--txt-dd)">'+fmtTs(snapA.ts)+'</span><br>'+
+      '<span style="color:var(--txt-d)">B:</span> <strong>'+esc(snapB.name)+'</strong> <span style="color:var(--txt-dd)">'+fmtTs(snapB.ts)+'</span>'+
+    '</div>';
+
+  var statsBar=
+    '<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap">'+
+      '<span style="background:rgba(16,185,129,.15);color:#10b981;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">+'+diff.added.length+' added</span>'+
+      '<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">~'+diff.modified.length+' modified</span>'+
+      '<span style="background:rgba(225,29,72,.12);color:#e11d48;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">–'+diff.deleted.length+' deleted</span>'+
+    '</div>';
+
+  if(total===0){
+    setModal(header+statsBar+'<div style="text-align:center;padding:28px;color:var(--txt-d);font-size:13px">✓ Snapshots are identical — no differences found.</div>','580px');
+    return;
+  }
+
+  // group by sheet
+  var sheets={};
+  var order=[];
+  function addToSheet(name,entry){
+    if(!sheets[name]){sheets[name]=[];order.push(name);}
+    sheets[name].push(entry);
+  }
+  diff.modified.forEach(function(item){addToSheet(item.colB||item.colA,{type:'mod',item:item});});
+  diff.added.forEach(function(item){addToSheet(item.col,{type:'add',item:item});});
+  diff.deleted.forEach(function(item){addToSheet(item.col,{type:'del',item:item});});
+
+  _diffRows={};
+  var rn=0;
+  var rows='';
+  order.forEach(function(sheet){
+    rows+='<div class="diff-sheet-header">Sheet: '+esc(sheet)+'</div>';
+    sheets[sheet].forEach(function(entry){
+      rn++;
+      var n=rn,type=entry.type,item=entry.item;
+      if(type==='add'){
+        var t=item.card.text||'(empty)';
+        _diffRows[n]={type:'add',textA:'',textB:t};
+        rows+='<div class="diff-row diff-add">'+
+          '<span class="diff-type-badge diff-badge-add">+</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+esc(trunc(t,80))+'</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }else if(type==='del'){
+        var t=item.card.text||'(empty)';
+        _diffRows[n]={type:'del',textA:t,textB:''};
+        rows+='<div class="diff-row diff-del">'+
+          '<span class="diff-type-badge diff-badge-del">–</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+esc(trunc(t,80))+'</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }else{
+        var tA=item.cardA.text||'(empty)',tB=item.cardB.text||'(empty)';
+        _diffRows[n]={type:'mod',textA:tA,textB:tB};
+        rows+='<div class="diff-row diff-mod">'+
+          '<span class="diff-type-badge diff-badge-mod">~</span>'+
+          '<span class="diff-rownum">#'+n+'</span>'+
+          '<span class="diff-content" id="dc-'+n+'" style="flex:1">'+
+            '<span style="opacity:.55">was: </span>'+esc(trunc(tA,40))+'<br>'+
+            '<span style="opacity:.55">now: </span>'+esc(trunc(tB,40))+
+          '</span>'+
+          '<button class="diff-expand-btn" onclick="diffExpand('+n+')" title="Toggle full text">▼</button>'+
+        '</div>';
+      }
+    });
+  });
+
+  setModal(
+    header+statsBar+
+    '<div style="max-height:380px;overflow-y:auto;padding-right:2px">'+rows+'</div>',
+  '640px');
+}
+
+function diffExpand(n){
+  if(!_diffRows||!_diffRows[n])return;
+  var d=_diffRows[n];
+  var cnt=document.getElementById('dc-'+n);
+  var btn=cnt&&cnt.nextElementSibling;
+  if(!cnt)return;
+  if(cnt.dataset.exp){
+    // collapse
+    if(d.type==='mod'){
+      cnt.innerHTML='<span style="opacity:.55">was: </span>'+esc(d.textA.length>40?d.textA.slice(0,40)+'…':d.textA)+'<br><span style="opacity:.55">now: </span>'+esc(d.textB.length>40?d.textB.slice(0,40)+'…':d.textB);
+    }else{
+      var t=d.type==='add'?d.textB:d.textA;
+      cnt.textContent=t.length>80?t.slice(0,80)+'…':t;
+    }
+    delete cnt.dataset.exp;
+    if(btn)btn.textContent='▼';
+  }else{
+    // expand
+    if(d.type==='mod'){
+      cnt.innerHTML=
+        '<span style="display:block;margin-bottom:2px;opacity:.55;font-size:10px">BEFORE</span>'+
+        '<span style="display:block;padding:5px 7px;background:rgba(225,29,72,.12);border-radius:5px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px">'+esc(d.textA)+'</span>'+
+        '<span style="display:block;margin-bottom:2px;opacity:.55;font-size:10px">AFTER</span>'+
+        '<span style="display:block;padding:5px 7px;background:rgba(16,185,129,.12);border-radius:5px;white-space:pre-wrap;word-break:break-word">'+esc(d.textB)+'</span>';
+    }else{
+      var t=d.type==='add'?d.textB:d.textA;
+      cnt.innerHTML='<span style="display:block;padding:5px 7px;background:rgba(0,0,0,.06);border-radius:5px;white-space:pre-wrap;word-break:break-word">'+esc(t)+'</span>';
+    }
+    cnt.dataset.exp='1';
+    if(btn)btn.textContent='▲';
+  }
 }
 
 // Write the full auto-snaps array to Firebase. Debounced 2s so rapid snap creation
@@ -1667,11 +2493,15 @@ function delCol(id){
 function addCard(colId,t,color){
   var c=S.cols.find(function(x){return x.id===colId;});if(!c||!t.trim())return;
   _pushUndo();
-  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],tags:[],desc:'',due:''};
+  var card={id:uid(),title:t.trim(),pri:0,color:color||null,done:[],items:[],itemMeta:[],tags:[],desc:'',due:'',completed:false,createdAt:Date.now(),updatedAt:Date.now(),completedAt:null};
   c.cards.push(card);newCardId=card.id;save();render();newCardId=null;
 }
 function saveCard(card){
   _pushUndo();
+  card.updatedAt=Date.now();
+  var allDone=card.items&&card.items.length>0&&card.items.every(function(it){return card.done.includes(it);});
+  if((card.completed||allDone)&&!card.completedAt)card.completedAt=Date.now();
+  else if(!card.completed&&!allDone)card.completedAt=null;
   for(var i=0;i<S.cols.length;i++){
     var idx=S.cols[i].cards.findIndex(function(x){return x.id===card.id;});
     if(idx>=0){S.cols[i].cards[idx]=card;break;}
@@ -1692,6 +2522,7 @@ function duplicateCard(cid,colId){
   _pushUndo();
   var copy=JSON.parse(JSON.stringify(col.cards[idx]));
   copy.id=uid();copy.title='Copy of '+col.cards[idx].title;
+  copy.createdAt=Date.now();copy.updatedAt=Date.now();
   col.cards.splice(idx+1,0,copy);
   newCardId=copy.id;save();render();newCardId=null;
   forceCloseModal();notify('📋 Card duplicated!');
@@ -1886,6 +2717,7 @@ function moveCard(cid,fromId,toId,beforeId){
   var idx=fc.cards.findIndex(function(x){return x.id===cid;});if(idx<0)return;
   _pushUndo();
   var card=fc.cards.splice(idx,1)[0];
+  card.updatedAt=Date.now();
   if(beforeId){var bi=tc.cards.findIndex(function(x){return x.id===beforeId;});tc.cards.splice(bi<0?tc.cards.length:bi,0,card);}
   else tc.cards.push(card);
   settleCardId=cid;save();render();settleCardId=null;
@@ -1968,22 +2800,29 @@ function setCMColor(color){
 }
 
 // ── CUSTOM CALENDAR ──
-var _calMonth=null,_calYear=null,_calColId=null;
-function openCMCal(e,colId){
+var _calMonth=null,_calYear=null,_calColId=null,_calField='due',_calItemIdx=null;
+function _isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _calDropId(field){return field==='created'?'cm-cal-drop-created':field==='item'?'cm-item-cal-drop':'cm-cal-drop';}
+function openCMCal(e,colId,field){
   e.stopPropagation();
-  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  field=field||'due';
+  _calField=field;
+  var other=document.getElementById(_calDropId(field==='created'?'due':'created'));if(other)other.classList.remove('open');
+  var drop=document.getElementById(_calDropId(field));if(!drop)return;
   _calColId=colId;
-  var d=EC.due?new Date(EC.due+'T00:00:00'):new Date();
+  var d=field==='created'?(EC.createdAt?new Date(EC.createdAt):new Date()):(EC.due?new Date(EC.due+'T00:00:00'):new Date());
   _calMonth=d.getMonth();_calYear=d.getFullYear();
   drop.classList.add('open');
   renderCal();
 }
 function renderCal(){
-  var drop=document.getElementById('cm-cal-drop');if(!drop)return;
+  var drop=document.getElementById(_calDropId(_calField));if(!drop)return;
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var DAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   var today=new Date();today.setHours(0,0,0,0);
-  var selStr=EC.due||'';
+  var selStr=_calField==='created'?(EC.createdAt?_isoDate(new Date(EC.createdAt)):''):
+    _calField==='item'?((EC.itemMeta[_calItemIdx]&&EC.itemMeta[_calItemIdx].due)||''):
+    (EC.due||'');
   var first=new Date(_calYear,_calMonth,1);
   var startDay=first.getDay();
   var daysInMonth=new Date(_calYear,_calMonth+1,0).getDate();
@@ -2019,11 +2858,48 @@ function renderCal(){
 }
 function calNav(dir){_calMonth+=dir;if(_calMonth>11){_calMonth=0;_calYear++;}if(_calMonth<0){_calMonth=11;_calYear--;}renderCal();}
 function pickCalDay(iso){
-  EC.due=iso;saveCard(EC);
-  var drop=document.getElementById('cm-cal-drop');if(drop)drop.classList.remove('open');
-  renderCM(_calColId);
+  if(_calField==='created'){
+    EC.createdAt=iso?new Date(iso+'T12:00:00').getTime():0;
+  }else if(_calField==='item'){
+    _ensureItemMeta(EC);
+    if(!EC.itemMeta[_calItemIdx])EC.itemMeta[_calItemIdx]={due:'',createdAt:Date.now(),pri:null,completedAt:null};
+    EC.itemMeta[_calItemIdx].due=iso;
+  }else{
+    EC.due=iso;
+  }
+  var dueChanged=_syncCardDueFromItems(EC);
+  saveCard(EC);
+  var drop=document.getElementById(_calDropId(_calField));
+  if(_calField==='item'){
+    if(drop){drop.classList.remove('open');drop.remove();}
+    if(dueChanged)refreshCMDue(_calColId);
+    refreshChk(_calColId);
+  }else{
+    if(drop)drop.classList.remove('open');
+    renderCM(_calColId);
+  }
 }
 function pickCalToday(){var t=new Date();pickCalDay(t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));}
+
+// ── PER-ITEM DUE DATE CALENDAR ──
+function openItemCal(e,idx,colId){
+  e.stopPropagation();
+  _ensureItemMeta(EC);
+  _calField='item';_calItemIdx=idx;_calColId=colId;
+  var meta=EC.itemMeta[idx]||{due:'',createdAt:Date.now()};
+  var d=meta.due?new Date(meta.due+'T00:00:00'):new Date();
+  _calMonth=d.getMonth();_calYear=d.getFullYear();
+  ['cm-cal-drop','cm-cal-drop-created'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('open');});
+  var drop=document.getElementById('cm-item-cal-drop');
+  if(!drop){drop=document.createElement('div');drop.id='cm-item-cal-drop';drop.className='cm-cal-drop item-cal-drop';document.body.appendChild(drop);}
+  var btn=e.currentTarget.getBoundingClientRect();
+  var top=btn.bottom+6,left=btn.right-280;
+  if(left<8)left=Math.max(8,btn.left);
+  if(top+360>window.innerHeight)top=Math.max(8,btn.top-366);
+  drop.style.top=top+'px';drop.style.left=left+'px';
+  drop.classList.add('open');
+  renderCal();
+}
 
 // ── TAGS DROPDOWN ──
 function toggleCMTags(e){
@@ -2061,9 +2937,13 @@ function mkInlineColorPicker(selectedColor,onSelect){
 
 // ── CHECKLIST ──
 function mkChkHtml(colId){
+  _ensureItemMeta(EC);
   return EC.items.map(function(it,i){
     var done=EC.done.includes(it);
-    return '<div class="chk-row" draggable="true"'+
+    var meta=EC.itemMeta[i];
+    var expanded=_expandedChk.has(i);
+    return '<div class="chk-row-group">'+
+      '<div class="chk-row" draggable="true"'+
       ' ondragstart="chkDragStart(event,'+i+')"'+
       ' ondragover="chkDragOver(event)"'+
       ' ondrop="chkDrop(event,'+i+',\''+colId+'\')"'+
@@ -2071,21 +2951,187 @@ function mkChkHtml(colId){
       '<span class="chk-handle">⠿</span>'+
       '<div class="checkbox '+(done?'on':'')+'" onclick="toggleCMItem('+i+',\''+colId+'\')">'+(done?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'')+' </div>'+
       '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" onmouseenter="showTip(event,\''+escA(it)+'\')" onmouseleave="hideTip()" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
-      '<span onclick="removeCMItem('+i+',\''+colId+'\')" style="color:var(--txt-dd);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0">&times;</span>'+
+      mkChkBadges(meta,done)+
+      '<span class="chk-chevron-wrap"><button class="chk-chevron'+(expanded?' open':'')+'" onclick="toggleChkPanel('+i+',\''+colId+'\')" title="Item details">▾</button></span>'+
+      '<span class="chk-x" onclick="removeCMItem('+i+',\''+colId+'\')" title="Remove item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 5L19 19M19 5L5 19"/></svg></span>'+
+      '</div>'+
+      '<div class="chk-panel'+(expanded?' open':'')+'" id="chk-panel-'+i+'">'+mkChkPanelHtml(i,colId,meta,done)+'</div>'+
       '</div>';
   }).join('');
 }
+function mkChkBadges(meta,done){
+  var b='';
+  if(meta.pri!=null){
+    var p=PRI[meta.pri];
+    b+='<span class="chk-badge chk-badge-pri" style="background:'+p.d+'" title="'+p.l+' priority"></span>';
+  }
+  if(meta.due&&!done){
+    var idc=dueClass(meta.due);
+    var cls=idc==='over'?'over':idc==='soon'?'soon':'set';
+    b+='<span class="chk-badge chk-badge-due '+cls+'" title="Due '+dueLabel(meta.due)+'">📅 '+dueLabel(meta.due)+'</span>';
+  }
+  return b?'<span class="chk-badges">'+b+'</span>':'';
+}
+function mkChkPanelHtml(i,colId,meta,done){
+  var idc=meta.due?dueClass(meta.due):null;
+  var dueBtnCls=done?'completed':(idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':''));
+  var dueBtnLbl=done?'✓ Completed':(meta.due?'📅 '+dueLabel(meta.due):'+ Due');
+  var priHtml=PRI.map(function(p,pi){return '<button class="chk-pri-mini'+(meta.pri===pi?' on':'')+'" style="'+(meta.pri===pi?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setItemPri('+i+',\''+colId+'\','+pi+')" title="'+p.l+' priority">'+p.l.charAt(0)+'</button>';}).join('');
+  return '<div class="chk-panel-inner">'+
+    '<div class="chk-meta-line">'+
+      '<span class="chk-meta-item">Created '+_dateOnly(meta.createdAt)+'</span>'+
+      '<span class="chk-sep">·</span>'+
+      '<span class="chk-meta-item">Completed <span id="chk-completed-'+i+'">'+(meta.completedAt?_dateOnly(meta.completedAt):'—')+'</span></span>'+
+      '<span class="chk-sep">·</span>'+
+      '<button class="chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'')+'" id="chk-due-btn-'+i+'" onclick="openItemCal(event,'+i+',\''+colId+'\')" title="Set a due date for this item">'+dueBtnLbl+'</button>'+
+      '<span class="chk-sep">·</span>'+
+      '<div class="chk-pri-mini-group">'+priHtml+'</div>'+
+    '</div>'+
+  '</div>';
+}
+var CHK_SORT_OPTS=[
+  {id:'date',label:'By Due Date'},
+  {id:'priority',label:'By Priority'},
+  {id:'done-bottom',label:'Done to Bottom'},
+];
+var CHK_SORT_LABELS={date:'Due Date',priority:'Priority','done-bottom':'Done to Bottom'};
 function mkChkControls(colId){
   if(!EC.items.length)return'';
   var allDone=EC.items.every(function(it){return EC.done.includes(it);});
   var hasDone=EC.done.length>0;
+  var pinned=!!(S.prefs&&S.prefs.chkAlwaysExpanded);
+  var allExpanded=EC.items.every(function(it,i){return _expandedChk.has(i);});
   return '<div id="cm-chk-ctrl" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:6px">'+
-    '<button class="chk-ctrl-btn" onclick="toggleChkSort(\''+colId+'\')">'+(  _chkSorted?'↺ Original':'⇅ Sort')+'</button>'+
+    '<button class="chk-ctrl-btn" id="chk-sort-btn" onclick="toggleChkSortMenu(event,\''+colId+'\')">⇅ '+(_chkSortMode?CHK_SORT_LABELS[_chkSortMode]:'Sort')+'</button>'+
+    '<button class="chk-ctrl-btn'+(pinned?' on':'')+'" onclick="toggleChkAlwaysExpanded(\''+colId+'\')" onmouseenter="_chkTipShow(event,\''+(pinned?'Always-expand is ON — every card opens with all checklist items expanded. Click to turn off (all items will collapse).':'Pin checklists open — when on, every card opens with all checklist items expanded by default.')+'\')" onmouseleave="_chkTipHide()">📌</button>'+
+    '<button class="chk-ctrl-btn" onclick="toggleExpandAll(\''+colId+'\')">'+(allExpanded?'⊟ Collapse all':'⊞ Expand all')+'</button>'+
     '<button class="chk-ctrl-btn" onclick="toggleAllItems(\''+colId+'\')">'+(allDone?'☐ Uncheck all':'☑ Check all')+'</button>'+
     (hasDone?'<button class="chk-ctrl-btn" style="color:#e11d48" onclick="clearCompleted(\''+colId+'\')">🗑 Clear done</button>':'')+
     '</div>';
 }
+var _chkTipTimer=null;
+function _chkTipShow(e,text){
+  clearTimeout(_chkTipTimer);
+  _chkTipTimer=setTimeout(function(){showTipAlways(e,text);},700);
+}
+function _chkTipHide(){
+  clearTimeout(_chkTipTimer);hideTip();
+}
+function toggleExpandAll(colId){
+  var allExpanded=EC.items.every(function(it,i){return _expandedChk.has(i);});
+  _expandedChk=allExpanded?new Set():new Set(EC.items.map(function(it,i){return i;}));
+  _persistExpandedChk();
+  refreshChk(colId);
+}
+function toggleChkAlwaysExpanded(colId){
+  if(!S.prefs)S.prefs={};
+  var on=!S.prefs.chkAlwaysExpanded;
+  S.prefs.chkAlwaysExpanded=on;
+  if(on){
+    _expandedChk=new Set(EC.items.map(function(it,i){return i;}));
+    _persistExpandedChk();
+  }else{
+    _expandedChk=new Set();
+    _expandedChkByCard={};
+    try{localStorage.removeItem('fb4_expanded_chk');}catch(e){}
+  }
+  save();
+  refreshChk(colId);
+}
+var _chkSortDismiss=null;
+function closeChkSortMenu(){
+  var d=document.getElementById('chk-sort-drop');if(d)d.remove();
+  if(_chkSortDismiss){
+    document.removeEventListener('click',_chkSortDismiss,true);
+    document.removeEventListener('scroll',_chkSortDismiss,true);
+    window.removeEventListener('resize',_chkSortDismiss);
+    _chkSortDismiss=null;
+  }
+}
+function toggleChkSortMenu(e,colId){
+  e.stopPropagation();
+  if(document.getElementById('chk-sort-drop')){closeChkSortMenu();return;}
+  var btn=e.currentTarget,r=btn.getBoundingClientRect();
+  var d=document.createElement('div');d.id='chk-sort-drop';d.className='chk-sort-drop';
+  var html=CHK_SORT_OPTS.map(function(o){
+    return '<button class="chk-sort-opt'+(_chkSortMode===o.id?' on':'')+'" onclick="applyChkSort(\''+o.id+'\',\''+colId+'\')">'+o.label+'</button>';
+  }).join('');
+  if(_chkSorted)html+='<button class="chk-sort-opt" onclick="applyChkSort(null,\''+colId+'\')">↺ Original Order</button>';
+  d.innerHTML=html;
+  d.style.top=(r.bottom+6)+'px';
+  document.body.appendChild(d);
+  var dw=d.offsetWidth;
+  d.style.left=Math.max(8,Math.min(r.right-dw,window.innerWidth-dw-8))+'px';
+  // Capture-phase dismissal: the card modal calls stopPropagation() on its own
+  // clicks, so a bubble-phase document listener would never see clicks inside
+  // the modal. Capturing runs top-down before that, so it catches every click.
+  // Clicks on the trigger button or inside the menu are ignored here — their
+  // own handlers (toggle / applyChkSort) manage those cases.
+  _chkSortDismiss=function(ev){
+    if(ev.type==='click'&&(d.contains(ev.target)||btn.contains(ev.target)))return;
+    closeChkSortMenu();
+  };
+  setTimeout(function(){
+    document.addEventListener('click',_chkSortDismiss,true);
+    document.addEventListener('scroll',_chkSortDismiss,true);
+    window.addEventListener('resize',_chkSortDismiss);
+  },0);
+}
+function applyChkSort(mode,colId){
+  closeChkSortMenu();
+  if(!_chkSorted&&mode!==null){
+    _chkOrigItems=EC.items.slice();_chkOrigMeta=EC.itemMeta.slice();
+  }
+  if(mode===null){
+    if(_chkOrigItems){EC.items=_chkOrigItems.slice();EC.itemMeta=_chkOrigMeta.slice();}
+    _chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
+  }else{
+    var idxs=EC.items.map(function(it,i){return i;});
+    var order;
+    if(mode==='date'){
+      order=idxs.slice().sort(function(a,b){
+        var da=EC.itemMeta[a].due,db=EC.itemMeta[b].due;
+        if(!da&&!db)return a-b;
+        if(!da)return 1;if(!db)return -1;
+        return da<db?-1:da>db?1:a-b;
+      });
+    }else if(mode==='priority'){
+      order=idxs.slice().sort(function(a,b){
+        var pa=EC.itemMeta[a].pri,pb=EC.itemMeta[b].pri;
+        var va=pa==null?-1:pa,vb=pb==null?-1:pb;
+        if(va===vb)return a-b;
+        return vb-va;
+      });
+    }else if(mode==='done-bottom'){
+      order=idxs.filter(function(i){return !EC.done.includes(EC.items[i]);}).concat(idxs.filter(function(i){return EC.done.includes(EC.items[i]);}));
+    }
+    var srcItems=EC.items,srcMeta=EC.itemMeta;
+    EC.items=order.map(function(i){return srcItems[i];});
+    EC.itemMeta=order.map(function(i){return srcMeta[i];});
+    _chkSorted=true;_chkSortMode=mode;
+  }
+  _expandedChk.clear();_persistExpandedChk();
+  refreshChk(colId);
+}
+function _closeItemCal(){
+  var ip=document.getElementById('cm-item-cal-drop');if(ip)ip.remove();
+}
+function toggleChkPanel(i,colId){
+  if(_expandedChk.has(i))_expandedChk.delete(i);else _expandedChk.add(i);
+  _persistExpandedChk();
+  _closeItemCal();
+  var btn=document.querySelector('.chk-chevron-wrap .chk-chevron[onclick*="toggleChkPanel('+i+',"]');
+  var panel=document.getElementById('chk-panel-'+i);
+  if(btn)btn.classList.toggle('open');
+  if(panel)panel.classList.toggle('open');
+}
+function setItemPri(i,colId,p){
+  _ensureItemMeta(EC);
+  EC.itemMeta[i].pri=(EC.itemMeta[i].pri===p)?null:p;
+  saveCard(EC);refreshChk(colId);
+}
 function refreshChk(colId){
+  _closeItemCal();closeChkSortMenu();
   var chk=document.getElementById('cm-chk');if(chk)chk.innerHTML=mkChkHtml(colId);
   refreshChkControls(colId);updateCMProgress();
 }
@@ -2097,22 +3143,33 @@ function refreshChkControls(colId){
   else if(ctrl&&!newEl)ctrl.remove();
   else if(!ctrl&&newEl){var chk=document.getElementById('cm-chk');if(chk)chk.before(newEl);}
 }
-function toggleChkSort(colId){
-  if(!_chkSorted){
-    _chkOrigItems=EC.items.slice();
-    EC.items=EC.items.filter(function(it){return !EC.done.includes(it);}).concat(EC.items.filter(function(it){return EC.done.includes(it);}));
-    _chkSorted=true;
-  }else{
-    EC.items=_chkOrigItems.slice();_chkSorted=false;_chkOrigItems=null;
-  }
-  refreshChk(colId);
-}
 function toggleAllItems(colId){
   var allDone=EC.items.length>0&&EC.items.every(function(it){return EC.done.includes(it);});
-  EC.done=allDone?[]:EC.items.slice();_cmDirty=true;saveCard(EC);refreshChk(colId);
+  _ensureItemMeta(EC);
+  if(allDone){
+    EC.done=[];
+    EC.itemMeta.forEach(function(m){m.completedAt=null;});
+  }else{
+    EC.done=EC.items.slice();
+    var now=Date.now();
+    EC.itemMeta.forEach(function(m){if(!m.completedAt)m.completedAt=now;});
+  }
+  _cmDirty=true;
+  var dueChanged=_syncCardDueFromItems(EC);
+  saveCard(EC);
+  if(dueChanged)refreshCMDue(colId);
+  refreshChk(colId);
 }
 function clearCompleted(colId){
-  EC.items=EC.items.filter(function(it){return !EC.done.includes(it);});EC.done=[];saveCard(EC);refreshChk(colId);
+  var origItems=EC.items,origMeta=EC.itemMeta;
+  var keepIdx=origItems.map(function(it,i){return i;}).filter(function(i){return !EC.done.includes(origItems[i]);});
+  EC.items=keepIdx.map(function(i){return origItems[i];});
+  EC.itemMeta=keepIdx.map(function(i){return origMeta[i];});
+  EC.done=[];_expandedChk.clear();_persistExpandedChk();
+  var dueChanged=_syncCardDueFromItems(EC);
+  saveCard(EC);
+  if(dueChanged)refreshCMDue(colId);
+  refreshChk(colId);
 }
 function editCMItem(idx,colId){
   var rows=document.querySelectorAll('#cm-chk .chk-row');
@@ -2146,7 +3203,8 @@ function chkDrop(e,idx,colId){
   document.querySelectorAll('#cm-chk .chk-row').forEach(function(r){r.classList.remove('chk-drag-over');r.classList.remove('chk-dragging');});
   if(_chkDragIdx===null||_chkDragIdx===idx){_chkDragIdx=null;return;}
   var item=EC.items.splice(_chkDragIdx,1)[0];EC.items.splice(idx,0,item);
-  _chkDragIdx=null;saveCard(EC);refreshChk(colId);
+  var meta=EC.itemMeta.splice(_chkDragIdx,1)[0];EC.itemMeta.splice(idx,0,meta);
+  _chkDragIdx=null;_expandedChk.clear();_persistExpandedChk();saveCard(EC);refreshChk(colId);
 }
 function chkDragEnd(){document.querySelectorAll('#cm-chk .chk-row').forEach(function(r){r.classList.remove('chk-drag-over');r.classList.remove('chk-dragging');});_chkDragIdx=null;}
 
@@ -2157,7 +3215,7 @@ function updateDropIndicator(el,x,y){
   if(!_pd||!el)return;
   if(_pd.type==='col'){
     var group=el.closest('.group-cols');
-    var colEl=el.closest('.col');
+    var colEl=el.closest('.col,.col-pill');
     if(group&&colEl&&colEl!==_pd.el){
       var r=colEl.getBoundingClientRect(),left=x<r.left+r.width/2;
       var ind2=document.createElement('div');ind2.id='drop-ind-col';
@@ -2198,6 +3256,7 @@ function initPointerDrag(){
   document.addEventListener('pointerdown',function(e){
     if(e.button!==0||e.target.closest('input,textarea,button,select,a,.cpicker,.cm-col-drop,.cm-color-drop'))return;
     var st=e.target.closest('.group-cols');
+    if(!st)st=e.target.closest('#topbar');
     if(!st)st=document.getElementById('board');
     if(st){
       if(e.pointerType==='mouse'||e.pointerType==='touch'){
@@ -2246,7 +3305,8 @@ function initPointerDrag(){
       }
       if(_swipe.moved&&_swipe.target){
         if(_swipe.dir==='x'){
-          if(_swipe.target.classList&&_swipe.target.classList.contains('group-cols')) _swipe.target.scrollLeft-=dx;
+          var t=_swipe.target;
+          if((t.classList&&t.classList.contains('group-cols'))||t.id==='topbar') t.scrollLeft-=dx;
         }else{
           var board=document.getElementById('board');if(board)board.scrollTop-=dy;
         }
@@ -2271,7 +3331,7 @@ function initPointerDrag(){
           vx*=0.92;vy*=0.92;
           if(Math.abs(vx)<0.5&&Math.abs(vy)<0.5)return;
           if(_swipe.dir==='x'){
-            if(target.classList&&target.classList.contains('group-cols')) target.scrollLeft-=vx;
+            if((target.classList&&target.classList.contains('group-cols'))||target.id==='topbar') target.scrollLeft-=vx;
           }else{
             var board=document.getElementById('board');if(board)board.scrollTop-=vy;
           }
@@ -2316,6 +3376,185 @@ function initPointerDrag(){
     document.querySelectorAll('.col-body.drag-over').forEach(function(x){x.classList.remove('drag-over');});
   });
 }
+// ── CARD DATE FILTER ──
+var _cardFilter=localStorage.getItem('fb4_filter')||'all';
+var CARD_FILTERS=[
+  {id:'all',          label:'All cards'},
+  {id:'incomplete',   label:'☐ Incomplete only'},
+  {id:'hasDue',       label:'📅 Has due date'},
+  {id:'createdToday', label:'Created today'},
+  {id:'created7',     label:'Created — last 7 days'},
+  {id:'worked7',      label:'Worked on — last 7 days'},
+  {id:'completedWeek',label:'Completed this week'},
+  {id:'completed7',   label:'Completed — last 7 days'}
+];
+function _cardIsComplete(k){
+  return !!k.completed||(k.items&&k.items.length>0&&k.items.every(function(it){return k.done.includes(it);}));
+}
+function cardPassesFilter(k,f){
+  f=f||_cardFilter;
+  if(!f||f==='all')return true;
+  var now=Date.now(),day=86400000;
+  if(f==='incomplete')return !_cardIsComplete(k);
+  if(f==='hasDue')return !!k.due||(k.itemMeta||[]).some(function(m){return !!(m&&m.due);});
+  if(f==='createdToday'){var t0=new Date();t0.setHours(0,0,0,0);return (k.createdAt||0)>=t0.getTime();}
+  if(f==='created7')return (k.createdAt||0)>=now-7*day;
+  if(f==='worked7')return (k.updatedAt||k.createdAt||0)>=now-7*day;
+  if(f==='completedWeek'){
+    var w=new Date();w.setHours(0,0,0,0);
+    var dow=(w.getDay()+6)%7; // Monday = start of week
+    return !!k.completedAt&&k.completedAt>=w.getTime()-dow*day;
+  }
+  if(f==='completed7')return !!k.completedAt&&k.completedAt>=now-7*day;
+  return true;
+}
+// returns true if at least one (non-archived) card in this column passes the given filter
+function _colVisible(col,f){
+  f=f||_cardFilter;
+  if(!f||f==='all')return true;
+  return col.cards.some(function(k){return !k.archived&&cardPassesFilter(k,f);});
+}
+function updateFilterBtn(){
+  var b=document.getElementById('filter-btn');if(!b)return;
+  var f=CARD_FILTERS.find(function(x){return x.id===_cardFilter;});
+  var active=_cardFilter&&_cardFilter!=='all';
+  b.textContent=active?'📅 '+f.label:'📅 Filter';
+  b.classList.toggle('toggled-on',active);
+}
+// returns the list of columns belonging to a group (or the synthetic Ungrouped group)
+function _gcolsFor(gid){
+  return S.cols.filter(function(c){
+    if(c.archived)return false;
+    if(gid==='__ug')return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});
+    return c.gid===gid;
+  });
+}
+// adds .anim-filter-in to col/group DOM nodes that became visible going oldFilter -> newFilter
+function _animateFilterIn(oldFilter,newFilter){
+  var board=document.getElementById('board');
+  S.cols.filter(function(c){return !c.archived;}).forEach(function(col){
+    if(!_colVisible(col,oldFilter)&&_colVisible(col,newFilter)){
+      var el=board.querySelector('[data-colid="'+col.id+'"]');
+      if(el)el.classList.add('anim-filter-in');
+    }
+  });
+  S.groups.concat([{id:'__ug'}]).forEach(function(g){
+    var gcols=_gcolsFor(g.id);
+    if(!gcols.length)return;
+    var wasVis=gcols.some(function(c){return _colVisible(c,oldFilter);});
+    var willVis=gcols.some(function(c){return _colVisible(c,newFilter);});
+    if(!wasVis&&willVis){
+      var gel=board.querySelector('.group[data-gid="'+g.id+'"]');
+      if(gel)gel.classList.add('anim-filter-in');
+    }
+  });
+}
+// FLIP-slides elements that stay visible into their new positions after a filter-driven reflow
+function _flipSurvivors(staying){
+  if(!staying.length)return;
+  var board=document.getElementById('board'),moves=[];
+  staying.forEach(function(s){
+    var sel=s.type==='col'?'[data-colid="'+s.id+'"]':'.group[data-gid="'+s.id+'"]';
+    var el=board.querySelector(sel);
+    if(!el)return;
+    var newRect=el.getBoundingClientRect();
+    var dx=s.rect.left-newRect.left,dy=s.rect.top-newRect.top;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;
+    el.style.transition='none';
+    el.style.transform='translate('+dx+'px,'+dy+'px)';
+    moves.push(el);
+  });
+  if(!moves.length)return;
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      moves.forEach(function(el){
+        el.style.transition='transform .25s ease';
+        el.style.transform='';
+      });
+      setTimeout(function(){
+        moves.forEach(function(el){el.style.transition='';el.style.transform='';});
+      },300);
+    });
+  });
+}
+function setCardFilter(id){
+  if(id===_cardFilter){closeFilterDrop();return;}
+  var oldFilter=_cardFilter;
+  closeFilterDrop();
+  var board=document.getElementById('board'),goingHidden=[],staying=[];
+  S.cols.filter(function(c){return !c.archived;}).forEach(function(col){
+    var wasVis=_colVisible(col,oldFilter),willVis=_colVisible(col,id);
+    var el=board.querySelector('[data-colid="'+col.id+'"]');
+    if(wasVis&&!willVis){
+      if(el)goingHidden.push(el);
+    }else if(wasVis&&willVis&&el){
+      staying.push({type:'col',id:col.id,rect:el.getBoundingClientRect()});
+    }
+  });
+  S.groups.concat([{id:'__ug'}]).forEach(function(g){
+    var gcols=_gcolsFor(g.id);
+    if(!gcols.length)return;
+    var wasVis=gcols.some(function(c){return _colVisible(c,oldFilter);});
+    var willVis=gcols.some(function(c){return _colVisible(c,id);});
+    var gel=board.querySelector('.group[data-gid="'+g.id+'"]');
+    if(wasVis&&!willVis){
+      if(gel)goingHidden.push(gel);
+    }else if(wasVis&&willVis&&gel){
+      staying.push({type:'group',id:g.id,rect:gel.getBoundingClientRect()});
+    }
+  });
+  var apply=function(){
+    _cardFilter=id;localStorage.setItem('fb4_filter',id);
+    updateFilterBtn();render();
+    _animateFilterIn(oldFilter,id);
+    _flipSurvivors(staying);
+  };
+  if(goingHidden.length){
+    goingHidden.forEach(function(el){el.classList.add('anim-filter-out');});
+    setTimeout(apply,300);
+  }else{
+    apply();
+  }
+}
+function closeFilterDrop(){var d=document.getElementById('filter-drop');if(d)d.remove();}
+function toggleFilterDrop(e){
+  e.stopPropagation();
+  if(document.getElementById('filter-drop')){closeFilterDrop();return;}
+  var btn=document.getElementById('filter-btn'),r=btn.getBoundingClientRect();
+  var d=document.createElement('div');d.id='filter-drop';
+  d.innerHTML=CARD_FILTERS.map(function(f){
+    return '<button class="filter-opt'+(f.id===_cardFilter?' on':'')+'" onclick="setCardFilter(\''+f.id+'\')">'+f.label+'</button>';
+  }).join('');
+  d.style.top=(r.bottom+6)+'px';
+  document.body.appendChild(d);
+  // align right edge to button, clamp to viewport
+  var dw=d.offsetWidth;
+  d.style.left=Math.max(8,Math.min(r.right-dw,window.innerWidth-dw-8))+'px';
+  setTimeout(function(){
+    var off=function(ev){if(!d.contains(ev.target)){closeFilterDrop();document.removeEventListener('click',off);}};
+    document.addEventListener('click',off);
+  },0);
+}
+function _dateOnly(ts){
+  return ts?_fmtDate(new Date(ts)):'—';
+}
+// ── MOVE COLLAPSED COLUMNS TO END (per group) ──
+function moveCollapsedToEnd(gid){
+  var open=[],closed=[];
+  S.cols.forEach(function(c){
+    if(c.gid===gid&&!c.archived)(c.collapsed?closed:open).push(c);
+  });
+  if(!closed.length){notify('No collapsed columns in this group.');return;}
+  _pushUndo();
+  var firstIdx=S.cols.findIndex(function(c){return c.gid===gid&&!c.archived;});
+  var rest=S.cols.filter(function(c){return !(c.gid===gid&&!c.archived);});
+  var args=[firstIdx,0].concat(open).concat(closed);
+  rest.splice.apply(rest,args);
+  S.cols=rest;
+  save();render();notify('⇥ Collapsed columns moved to the end.');
+}
+updateFilterBtn();
+
 function render(){
   var q=document.getElementById('search').value.toLowerCase().trim();
   var board=document.getElementById('board'),st=board.scrollTop;
@@ -2324,9 +3563,23 @@ function render(){
   var activeCols=S.cols.filter(function(c){return !c.archived;});
   var tc=activeCols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
   document.getElementById('stats').textContent=S.groups.length+' group'+(S.groups.length!==1?'s':'')+' \u00B7 '+activeCols.length+' cols \u00B7 '+tc+' cards';
-  S.groups.forEach(function(g){board.appendChild(mkGroup(g,activeCols.filter(function(c){return c.gid===g.id;}),q,false));});
+  var anyVisible=false;
+  S.groups.forEach(function(g){
+    var gcols=activeCols.filter(function(c){return c.gid===g.id;});
+    var fcols=gcols.filter(function(c){return _colVisible(c);});
+    if(gcols.length>0&&fcols.length===0)return;
+    if(fcols.length)anyVisible=true;
+    board.appendChild(mkGroup(g,fcols,q,false));
+  });
   var ug=activeCols.filter(function(c){return !c.gid||!S.groups.find(function(g){return g.id===c.gid;});});
-  if(ug.length)board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},ug,q,true));
+  var fug=ug.filter(function(c){return _colVisible(c);});
+  if(fug.length){anyVisible=true;board.appendChild(mkGroup({id:'__ug',title:'📦 Ungrouped',pi:0,col:false},fug,q,true));}
+  if(_cardFilter!=='all'&&!anyVisible&&activeCols.length>0){
+    var em=document.createElement('div');em.className='anim-filter-in';
+    em.style.cssText='padding:32px 12px;text-align:center;color:var(--txt-d);font-size:13px';
+    em.textContent='No cards match the current filter.';
+    board.appendChild(em);
+  }
   var r=document.createElement('div');r.style.cssText='padding:6px 0 20px';
   var b=document.createElement('button');b.className='btn btn-ghost';b.style.fontSize='12px';b.textContent='＋ Add Group';
   b.onclick=function(){showAddGroupModal();};r.appendChild(b);board.appendChild(r);
@@ -2335,7 +3588,7 @@ function render(){
 
 function mkGroup(g,gcols,q,fake){
   var P=PAL[g.pi%PAL.length],tc=gcols.reduce(function(n,c){return n+c.cards.filter(function(k){return !k.archived;}).length;},0);
-  var wrap=document.createElement('div');wrap.className='group';
+  var wrap=document.createElement('div');wrap.className='group';wrap.dataset.gid=g.id;
   if(g.id===newGroupId)wrap.classList.add('anim-group-new');
   var hdr=document.createElement('div');hdr.className='group-hdr';hdr.style.borderBottomColor=P.a+'55';
   var dot=document.createElement('div');dot.className='group-accent';dot.style.cssText='background:'+P.a+';box-shadow:0 0 8px '+P.a+'80';
@@ -2370,11 +3623,16 @@ function mkGroup(g,gcols,q,fake){
     eb.title=g.expanded?'Expanded view ON — click to hide inline tasks':'Show top 3 incomplete tasks on each card';
     eb.onclick=function(e){e.stopPropagation();toggleGroupExpand(g.id);};
     hdr.appendChild(eb);
+    if(gcols.some(function(c){return c.collapsed;})){
+      var te=document.createElement('button');te.className='limit-btn';te.textContent='⇥ Tidy';
+      te.title='Move collapsed columns to the end of this group';
+      te.onclick=function(e){e.stopPropagation();moveCollapsedToEnd(g.id);};
+      hdr.appendChild(te);
+    }
     var pp=document.createElement('div');pp.style.position='relative';
     var picker=document.createElement('div');picker.className='cpicker';picker.id='gp_'+g.id;picker.style.display='none';
     PAL.forEach(function(p,i){var d=document.createElement('div');d.className='cdot'+(g.pi===i?' on':'');d.style.background=p.a;d.title=p.n;d.onclick=function(){setGroupPi(g.id,i);};picker.appendChild(d);});
     pp.appendChild(picker);hdr.appendChild(pp);
-    var ac=document.createElement('button');ac.className='icon-btn';ac.title='Add column';ac.textContent='+';ac.style.fontSize='19px';ac.onclick=function(){showAddColModal(g.id);};hdr.appendChild(ac);
     var db=document.createElement('button');db.className='icon-btn';db.title='Delete group';db.textContent='\u00D7';db.onclick=function(){delGroup(g.id);};hdr.appendChild(db);
   }
   wrap.appendChild(hdr);
@@ -2400,8 +3658,27 @@ function mkPill(col){
   var P=PAL[col.pi%PAL.length],light=isLight();
   var hdrBg=light?hexToRgba(P.a,.22):P.h,hdrBd=light?hexToRgba(P.a,.35):'rgba(255,255,255,.08)';
   var pill=document.createElement('div');pill.className='col-pill';pill.dataset.pi=col.pi%PAL.length;
+  pill.dataset.colid=col.id;
   pill.style.cssText+='background:'+hdrBg+';border-color:'+hdrBd;
-  pill.title=col.title+' — click to expand';pill.onclick=function(){setColCollapsed(col.id,false);};
+  pill.title=col.title+' — click to expand, hold to drag';pill.onclick=function(){setColCollapsed(col.id,false);};
+  pill.addEventListener('pointerdown',function(e){
+    if((e.button!==0&&e.pointerType!=='touch')||e.target.closest('input,textarea,button,select,a'))return;
+    var r=pill.getBoundingClientRect();
+    window._pendingPd={type:'col',colId:col.id,el:pill,startX:e.clientX,startY:e.clientY,ox:e.clientX-r.left,oy:e.clientY-r.top,moved:false,ghost:null,dropGroupId:undefined,dropBeforeColId:null};
+    pill.classList.add('grab-fading');
+    window._pdTimer=setTimeout(function(){
+      var pd=window._pendingPd;if(!pd)return;
+      _pd=pd;window._pendingPd=null;
+      pill.classList.remove('grab-fading');
+      var g=pill.cloneNode(true);g.id='dg';
+      g.classList.remove('grab-fading');
+      var br=pill.getBoundingClientRect();
+      g.style.cssText+=';position:fixed;pointer-events:none;z-index:9999;opacity:.88;width:'+br.width+'px;left:'+br.left+'px;top:'+br.top+'px;transform:rotate(2deg) scale(1.04);box-shadow:0 16px 48px rgba(0,0,0,.5);transition:none;';
+      document.body.appendChild(g);_pd.ghost=g;
+      pill.style.opacity='0.15';
+      document.body.style.userSelect='none';
+    },300);
+  });
   var titleEl=document.createElement('div');titleEl.className='col-pill-title';titleEl.style.color=light?P.a:'var(--txt-b)';titleEl.textContent=col.title;pill.appendChild(titleEl);
   var countEl=document.createElement('div');countEl.className='col-pill-count';countEl.style.cssText='background:rgba(0,0,0,.22);color:'+P.a;
   countEl.textContent=col.cards.length;pill.appendChild(countEl);
@@ -2414,7 +3691,7 @@ function mkCol(col,q){
   var hdrBg=light?hexToRgba(P.a,.22):P.h,bodyBg=light?hexToRgba(P.a,.07):P.b;
   var hdrBd=light?hexToRgba(P.a,.35):'rgba(255,255,255,.08)',bodyBd=light?hexToRgba(P.a,.2):'rgba(255,255,255,.06)';
   var grp=getGroupForCol(col.id),limit=grp?grp.limit||0:0,expanded=grp?!!grp.expanded:false;
-  var fc=col.cards.filter(function(k){return !k.archived&&(!q||k.title.toLowerCase().includes(q)||k.tags.some(function(t){return t.toLowerCase().includes(q);}));});
+  var fc=col.cards.filter(function(k){return !k.archived&&cardPassesFilter(k)&&(!q||k.title.toLowerCase().includes(q)||k.tags.some(function(t){return t.toLowerCase().includes(q);}));});
   if(col.sort)fc=fc.slice().sort(function(a,b){return b.pri-a.pri;});
   var wrap=document.createElement('div');wrap.className='col';
   wrap.dataset.colid=col.id;
@@ -2465,9 +3742,8 @@ function mkCol(col,q){
   db.style.color=light?hexToRgba(P.a,.5):'rgba(255,255,255,.22)';db.onclick=function(){delCol(col.id);};hdr.appendChild(db);
   wrap.appendChild(hdr);
   var body=document.createElement('div');body.className='col-body';body.dataset.pi=col.pi%PAL.length;body.style.background=bodyBg;body.style.borderColor=bodyBd;body.id='cb_'+col.id;
-  if(limit>0&&col.cards.length>0){
-    var slots=Math.min(col.cards.length,limit);
-    var targetH=slots*CARD_SLOT_H+COL_BODY_PAD;
+  if(limit>0&&fc.length>=limit){
+    var targetH=limit*CARD_SLOT_H+COL_BODY_PAD;
     body.classList.add('limited');
     body.style.flex='0 0 auto';
     var prevH=_colHeights[col.id];
@@ -2477,9 +3753,9 @@ function mkCol(col,q){
     }else{
       body.style.height=targetH+'px';
     }
-    if(col.cards.length>limit)body.style.overflowY='auto';
+    body.style.overflowY='auto';
   }
-  var fillId=(limit>0&&col.cards.length===limit)?newCardId:null;
+  var fillId=(limit>0&&fc.length===limit)?newCardId:null;
   fc.forEach(function(card){body.appendChild(mkCard(card,col,P,fillId,expanded));});
   if(fc.length===0&&addTo!==col.id){
     var empty=document.createElement('div');
@@ -2515,9 +3791,9 @@ function mkCol(col,q){
   }else{
     var ab=document.createElement('button');ab.className='add-card-btn';ab.textContent='+ Add card';
     if(light){ab.style.borderColor=hexToRgba(P.a,.3);ab.style.color=hexToRgba(P.a,.6);}
-    ab.onclick=function(){addCardColor=null;addTo=col.id;render();};aa.appendChild(ab);
+    ab.onclick=function(){addCardColor=PAL_CARD_COLOR[col.pi%PAL_CARD_COLOR.length];addTo=col.id;render();};aa.appendChild(ab);
   }
-  var foot=document.createElement('div');foot.className='col-foot';
+  var foot=document.createElement('div');foot.className='col-foot';foot.dataset.pi=col.pi%PAL.length;
   foot.style.background=bodyBg;foot.style.borderColor=bodyBd;
   foot.appendChild(aa);
   wrap.appendChild(body);wrap.appendChild(foot);
@@ -2528,7 +3804,7 @@ function mkCard(card,col,P,fillId,expanded){
   var pri=PRI[card.pri]||PRI[0];
   var borderColor=card.color||pri.d;
   var pct=card.items.length?Math.round(card.done.length/card.items.length*100):null;
-  var dc=dueClass(card.due);
+  var dc=card.completed?'done':dueClass(card.due);
   var div=document.createElement('div');div.className='card';div.dataset.cid=card.id;
   div.style.borderLeftColor=borderColor;
   if(card.color){div.dataset.color=card.color;div.style.background=hexToRgba(card.color,isLight()?.09:.13);}
@@ -2542,8 +3818,12 @@ function mkCard(card,col,P,fillId,expanded){
   }
   h+='<div class="card-meta"><span class="pri-badge" style="background:'+pri.b+';color:'+pri.d+'">'+pri.l+'</span>'+card.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join('');
   if(dc){
-    var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
-    h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    if(dc==='done'){
+      h+='<span class="due-badge due-done">✓ Done</span>';
+    }else{
+      var icon=dc==='over'?'⚠ ':dc==='soon'?'⏰ ':'📅 ';
+      h+='<span class="due-badge due-'+dc+'">'+icon+dueLabel(card.due)+'</span>';
+    }
   }
   h+='</div>';
   div.innerHTML=h;
@@ -2620,7 +3900,11 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('.cm-color-wrap')){_cmColorOpen=false;var cd=document.getElementById('cm-color-drop');if(cd)cd.classList.remove('open');}
   if(!e.target.closest('.cm-col-wrap')){_cmColOpen=false;var cc=document.getElementById('cm-col-drop');if(cc)cc.classList.remove('open');}
   if(!e.target.closest('.cm-tags-wrap')){_cmTagsOpen=false;var ct=document.getElementById('cm-tags-drop');if(ct)ct.classList.remove('open');}
-  if(!e.target.closest('.cm-cal')){var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');}
+  if(!e.target.closest('.cm-cal')){
+    var cp=document.getElementById('cm-cal-drop');if(cp)cp.classList.remove('open');
+    var cp2=document.getElementById('cm-cal-drop-created');if(cp2)cp2.classList.remove('open');
+  }
+  if(!e.target.closest('.chk-due-btn')&&!e.target.closest('#cm-item-cal-drop'))_closeItemCal();
 },true);
 
 // ── MODALS ──
@@ -2630,10 +3914,12 @@ function closeModal(){
   if(draft){showDraftWarning();return;}
   if(_cmDirty){showUnsavedWarning();return;}
   _cmDirty=false;
+  _closeItemCal();closeChkSortMenu();
   document.getElementById('modal-root').innerHTML='';
 }
 function forceCloseModal(){
   _cmDirty=false;
+  _closeItemCal();closeChkSortMenu();
   document.getElementById('modal-root').innerHTML='';
 }
 function showDraftWarning(){
@@ -2653,7 +3939,7 @@ function showDraftWarning(){
     '<button id="dw-cancel" style="flex:1;border:none;border-radius:7px;padding:6px 0;background:var(--inp);color:var(--txt-d);font-weight:700;cursor:pointer;font-size:12px">← Go Back</button>'+
     '</div>';
   m.insertBefore(w,m.firstChild);m.scrollTop=0;
-  document.getElementById('dw-add').onclick=function(){if(draft&&EC){EC.items.unshift(draft);saveCard(EC);}document.getElementById('modal-root').innerHTML='';};
+  document.getElementById('dw-add').onclick=function(){if(draft&&EC){_ensureItemMeta(EC);EC.items.unshift(draft);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,completedAt:null});saveCard(EC);}document.getElementById('modal-root').innerHTML='';};
   document.getElementById('dw-discard').onclick=function(){if(ni)ni.value='';closeModal();};
   document.getElementById('dw-cancel').onclick=function(){w.remove();if(ni)ni.focus();};
 }
@@ -2731,15 +4017,65 @@ function showAddColModal(gid){
 function showCardModal(cardId,colId){
   var card=S.cols.reduce(function(a,c){return a.concat(c.cards);},[]).find(function(x){return x.id===cardId;});
   if(!card)return;
-  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;
-  EC=JSON.parse(JSON.stringify(card));renderCM(colId);
+  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
+  _expandedChk=(S.prefs&&S.prefs.chkAlwaysExpanded)
+    ?new Set((card.items||[]).map(function(_,i){return i;}))
+    :new Set(_expandedChkByCard[card.id]||[]);
+  EC=JSON.parse(JSON.stringify(card));_syncCardDueFromItems(EC);renderCM(colId);
+}
+function _mkDueLabelHtml(c){
+  var dc=c.completed?'done':dueClass(c.due);
+  if(dc==='done'){
+    return '<span style="font-size:12px;font-weight:800;flex-shrink:0;color:#10b981;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:5px 12px">✓ Done</span>';
+  }else if(dc){
+    var dlColor=dc==='over'?'#e11d48':dc==='soon'?'#f59e0b':'#60a5fa';
+    var dlBg=dc==='over'?'rgba(225,29,72,.15)':dc==='soon'?'rgba(245,158,11,.12)':'rgba(96,165,250,.12)';
+    var dlBd=dc==='over'?'rgba(225,29,72,.4)':dc==='soon'?'rgba(245,158,11,.35)':'rgba(96,165,250,.25)';
+    var dlGlow=dc==='over'?'0 0 12px rgba(225,29,72,.4),0 0 4px rgba(225,29,72,.2)':dc==='soon'?'0 0 12px rgba(245,158,11,.35),0 0 4px rgba(245,158,11,.15)':'none';
+    var dlIcon=dc==='over'?'⚠ Overdue':dc==='soon'?'⏰ Due soon':'📅 '+dueLabel(c.due);
+    return '<span style="font-size:12px;font-weight:800;flex-shrink:0;color:'+dlColor+';background:'+dlBg+';border:1px solid '+dlBd+';border-radius:10px;padding:5px 12px;box-shadow:'+dlGlow+';'+(dc==='over'?'animation:deadlinePulse 2s ease-in-out infinite':'')+'">'+dlIcon+'</span>';
+  }else if(c.dueAuto){
+    return '<span style="font-size:12px;font-weight:800;flex-shrink:0;color:#10b981;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:5px 12px">✅ Due dates complete</span>';
+  }
+  return '';
+}
+function _mkDueActionsHtml(c,colId){
+  var doneBtn=c.completed
+    ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
+    :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>';
+  if(c.dueAuto)return c.due?doneBtn:'';
+  return (c.due?
+        doneBtn+
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
+      :'');
+}
+function _mkDueCalHtml(c,colId){
+  if(c.dueAuto){
+    return '<div class="cm-cal"><span class="cm-date-btn" style="opacity:.6;cursor:default" title="Due date is synced from checklist item due dates">🔗 '+(c.due?dueLabel(c.due):'Synced')+'</span></div>';
+  }
+  return '<div class="cm-cal">'+
+    '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
+      (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
+    '</button>'+
+    '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
+  '</div>';
+}
+// Lightweight refresh of the due-date badge and deadline controls without
+// rebuilding the whole card modal (avoids a full-modal flicker when checking
+// off items triggers an auto-synced due date change).
+function refreshCMDue(colId){
+  var c=EC;
+  var labelEl=document.getElementById('cm-due-label');
+  if(labelEl)labelEl.innerHTML=_mkDueLabelHtml(c);
+  var metaEl=document.getElementById('cm-due-meta');
+  if(metaEl)metaEl.innerHTML=_mkDueCalHtml(c,colId)+_mkDueActionsHtml(c,colId);
 }
 function renderCM(colId){
+  _closeItemCal();
   var prevScroll=document.querySelector('#modal-root .modal')?document.querySelector('#modal-root .modal').scrollTop:0;
   var c=EC,pri=PRI[c.pri]||PRI[0],light=isLight();
   var borderColor=c.color||pri.d;
   var pct=c.items.length?Math.round(c.done.length/c.items.length*100):null;
-  var dc=dueClass(c.due);
 
   var colorDropHtml=CARD_COLORS.map(function(cc){
     var sel=c.color===cc.c;
@@ -2759,31 +4095,23 @@ function renderCM(colId){
   var chkControls=mkChkControls(colId);
   var tagHtml=c.tags.map(function(t){return '<span class="tag-chip">'+esc(t)+'<span class="x" onclick="removeCMTag(\''+escA(t)+'\',\''+colId+'\')">&times;</span></span>';}).join('');
 
-  var dueLabelHtml='';
-  if(dc){
-    var dlColor=dc==='over'?'#e11d48':dc==='soon'?'#f59e0b':'#60a5fa';
-    var dlBg=dc==='over'?'rgba(225,29,72,.15)':dc==='soon'?'rgba(245,158,11,.12)':'rgba(96,165,250,.12)';
-    var dlBd=dc==='over'?'rgba(225,29,72,.4)':dc==='soon'?'rgba(245,158,11,.35)':'rgba(96,165,250,.25)';
-    var dlGlow=dc==='over'?'0 0 12px rgba(225,29,72,.4),0 0 4px rgba(225,29,72,.2)':dc==='soon'?'0 0 12px rgba(245,158,11,.35),0 0 4px rgba(245,158,11,.15)':'none';
-    var dlIcon=dc==='over'?'⚠ Overdue':dc==='soon'?'⏰ Due soon':'📅 '+dueLabel(c.due);
-    dueLabelHtml='<span style="font-size:12px;font-weight:800;flex-shrink:0;color:'+dlColor+';background:'+dlBg+';border:1px solid '+dlBd+';border-radius:10px;padding:5px 12px;box-shadow:'+dlGlow+';'+(dc==='over'?'animation:deadlinePulse 2s ease-in-out infinite':'')+'">'+dlIcon+'</span>';
-  }
+  var dueLabelHtml=_mkDueLabelHtml(c);
 
   var tagsBadge=c.tags.length?'<span id="cm-tags-badge" style="background:rgba(96,165,250,.2);color:#60a5fa;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:2px">'+c.tags.length+'</span>':'';
 
-  var html=
-    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
+  var headerHtml='<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">'+
       '<div id="cm-bar" style="width:5px;border-radius:99px;background:'+borderColor+';flex-shrink:0;align-self:stretch;min-height:36px;transition:background .2s"></div>'+
       '<div class="cm-color-wrap">'+
         '<div id="cm-color-circle" class="cm-color-circle" style="'+circleStyle+'" onclick="toggleCMColor(event)" title="Card color"></div>'+
         '<div id="cm-color-drop" class="cm-color-drop'+(_cmColorOpen?' open':'')+'">'+colorDropHtml+'</div>'+
       '</div>'+
       '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
-      dueLabelHtml+
-    '</div>'+
-    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
-      '<div class="cm-tags-wrap">'+
+      '<span id="cm-due-label">'+dueLabelHtml+'</span>'+
+    '</div>';
+
+  var descHtml='<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>';
+
+  var tagsTriggerHtml='<div class="cm-tags-wrap">'+
         '<div class="cm-tags-trigger" onclick="toggleCMTags(event)">'+
           '🏷 Tags'+tagsBadge+
         '</div>'+
@@ -2793,49 +4121,60 @@ function renderCM(colId){
             '<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="addCMTag(\''+colId+'\')">+</button>'+
           '</div>'+
         '</div>'+
-      '</div>'+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Priority</span>'+
-      PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('')+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Column</span>'+
-      '<div class="cm-col-wrap">'+
+      '</div>';
+
+  var priInlineHtml=PRI.map(function(p,i){return '<button class="pri-btn" style="'+(c.pri===i?'background:'+p.b+';border-color:'+p.d+';color:'+p.d:'')+'" onclick="setCMPri('+i+',\''+colId+'\')">'+p.l+'</button>';}).join('');
+
+  var colDropdownHtml='<div class="cm-col-wrap">'+
         '<div class="cm-col-trigger" onclick="toggleCMCol(event)">'+
           '<span style="overflow:hidden;text-overflow:ellipsis">'+currentColTitle+'</span>'+
           '<span style="opacity:.5;font-size:10px;flex-shrink:0">'+(_cmColOpen?'▴':'▾')+'</span>'+
         '</div>'+
         '<div id="cm-col-drop" class="cm-col-drop'+(_cmColOpen?' open':'')+'">'+colDropHtml+'</div>'+
-      '</div>'+
-      '<span style="font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px">Deadline</span>'+
-      '<div class="cm-cal">'+
-        '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\')">'+
-          (c.due?'📅 '+dueLabel(c.due):'🗓 Set date')+
-        '</button>'+
-        '<div id="cm-cal-drop" class="cm-cal-drop"></div>'+
-      '</div>'+
-      (c.due?'<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';saveCard(EC);renderCM(\''+colId+'\')">✕</button>':'')+
-    '</div>'+
-    (c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>')+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
+      '</div>';
+
+  function createdCalHtml(){
+    return '<div class="cm-cal">'+
+      '<button class="cm-date-btn" onclick="openCMCal(event,\''+colId+'\',\'created\')" title="Card creation date — click to edit">'+
+        '🛠 '+(c.createdAt?_dateOnly(c.createdAt):'Set date')+
+      '</button>'+
+      '<div id="cm-cal-drop-created" class="cm-cal-drop"></div>'+
+    '</div>';
+  }
+
+  var tagsRowHtml=(c.tags.length?'<div id="cm-tags" style="margin-bottom:10px;min-height:22px">'+tagHtml+'</div>':'<div id="cm-tags" style="margin-bottom:10px"></div>');
+
+  var progRowHtml='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
       '<label class="lbl" style="margin-bottom:0">Checklist</label>'+
       (pct!==null?'<span class="prog-label" style="font-size:12px;font-weight:700;color:'+(pct===100?'#10b981':'var(--txt-d)')+'">'+pct+'% done</span>':'')+
     '</div>'+
-    (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'')+
-    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+    (pct!==null?'<div style="height:4px;background:var(--surf2);border-radius:99px;margin-bottom:10px"><div id="cm-prog-fill" class="prog-fill" style="width:'+pct+'%;background:'+(pct===100?'#10b981':borderColor)+';border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div>':'');
+
+  var addItemHtml='<div style="display:flex;gap:8px;margin-bottom:10px">'+
       '<input id="cm-ni" class="finput" placeholder="Add checklist item…" style="flex:1" onpaste="handleCMItemPaste(event,\''+colId+'\')" onkeydown="if(event.key===\'Enter\')addCMItem(\''+colId+'\')">'+
       '<button class="btn btn-ghost" style="padding:7px 11px" onclick="addCMItem(\''+colId+'\')">+</button>'+
-    '</div>'+
-    '<div style="display:flex;justify-content:space-between;margin-bottom:14px">'+
-      '<div style="display:flex;gap:6px">'+
-        '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
-        '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
-        '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
-      '</div>'+
-      '<div style="display:flex;gap:9px">'+
-        '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
-        '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
-      '</div>'+
-    '</div>'+
-    chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
+    '</div>';
+
+  var actionBtnsHtml='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+      '<button class="btn btn-danger" onclick="deleteCard(\''+c.id+'\');forceCloseModal()">🗑 Delete</button>'+
+      '<button class="btn btn-amber" onclick="duplicateCard(\''+c.id+'\',\''+colId+'\')">📋 Duplicate</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="archiveCard(\''+c.id+'\');forceCloseModal()">📦 Archive</button>'+
+      '<button class="btn btn-ghost" style="border-color:rgba(148,163,184,.25)" onclick="closeModal();openReport(\'tasks\',\''+c.id+'\')">📄 Report</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'+
+      '<button class="btn btn-primary" onclick="cmSave()">Save</button>'+
+    '</div>';
+
+  var checklistHtml=chkControls+'<div id="cm-chk">'+chkHtml+'</div>';
+
+  var metaRowHtml='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+      tagsTriggerHtml+
+      '<span class="cm-meta-label">Priority</span>'+priInlineHtml+
+      '<span class="cm-meta-label">Column</span>'+colDropdownHtml+
+      '<span class="cm-meta-label">Deadline</span><span id="cm-due-meta" style="display:contents">'+_mkDueCalHtml(c,colId)+_mkDueActionsHtml(c,colId)+'</span>'+
+      '<span class="cm-meta-label">Created</span>'+createdCalHtml()+
+    '</div>';
+  var html=headerHtml+descHtml+metaRowHtml+tagsRowHtml+progRowHtml+addItemHtml+actionBtnsHtml+checklistHtml;
 
   setModal(html,null,function(){
     var m=document.querySelector('#modal-root .modal');
@@ -2850,6 +4189,17 @@ function renderCM(colId){
 }
 
 function setCMPri(p,cid){EC.pri=p;saveCard(EC);renderCM(cid);}
+function markCMDone(colId){
+  EC.completed=true;
+  if(EC.items.length){
+    EC.done=EC.items.slice();
+    _ensureItemMeta(EC);
+    var now=Date.now();
+    EC.itemMeta.forEach(function(m){if(!m.completedAt)m.completedAt=now;});
+  }
+  _syncCardDueFromItems(EC);
+  saveCard(EC);renderCM(colId);
+}
 function addCMTag(cid){
   var i=document.getElementById('cm-nt'),t=i.value.trim();if(!t||EC.tags.includes(t))return;
   EC.tags.push(t);i.value='';saveCard(EC);
@@ -2877,7 +4227,9 @@ function removeCMTag(t,cid){
 
 function addCMItem(colId){
   var i=document.getElementById('cm-ni'),t=i.value.trim();if(!t)return;
-  EC.items.unshift(t);i.value='';saveCard(EC);
+  _ensureItemMeta(EC);EC.items.unshift(t);EC.itemMeta.unshift({due:'',createdAt:Date.now(),pri:null,completedAt:null});i.value='';saveCard(EC);
+  _expandedChk=new Set([..._expandedChk].map(function(x){return x+1;}));
+  _persistExpandedChk();
   refreshChk(colId);
   var chk=document.getElementById('cm-chk');
   if(chk){
@@ -2940,7 +4292,9 @@ function cmPasteOptionHtml(colId,mode,title,desc,items,isPrimary){
 function applyCMItemPaste(colId,mode,text){
   var items=parseChecklistPaste(text,mode);
   if(!items.length)return;
+  _ensureItemMeta(EC);
   EC.items=EC.items.concat(items);
+  EC.itemMeta=EC.itemMeta.concat(items.map(function(){return {due:'',createdAt:Date.now(),pri:null,completedAt:null};}));
   _cmDirty=true;
   var input=document.getElementById('cm-ni');
   if(input)input.value='';
@@ -2992,21 +4346,77 @@ function updateCMProgress(){
   if(label)label.textContent=pct+'% done';
 }
 function removeCMItem(idx,cid){
-  var it=EC.items[idx];EC.done=EC.done.filter(function(x){return x!==it;});EC.items.splice(idx,1);_cmDirty=true;
+  var it=EC.items[idx];EC.done=EC.done.filter(function(x){return x!==it;});EC.items.splice(idx,1);EC.itemMeta.splice(idx,1);_cmDirty=true;
+  var remapped=new Set();
+  _expandedChk.forEach(function(x){if(x<idx)remapped.add(x);else if(x>idx)remapped.add(x-1);});
+  _expandedChk=remapped;_persistExpandedChk();
+  _closeItemCal();
+  var dueChanged=_syncCardDueFromItems(EC);
+  if(dueChanged)refreshCMDue(cid);
   var chk=document.getElementById('cm-chk');
-  if(chk){var rows=chk.querySelectorAll('.chk-row');if(rows[idx])rows[idx].remove();refreshChkControls(cid);updateCMProgress();}
-  else renderCM(cid);
+  if(chk){
+    var rows=chk.querySelectorAll('.chk-row');
+    if(rows[idx]){var grp=rows[idx].closest('.chk-row-group');(grp||rows[idx]).remove();}
+    refreshChkControls(cid);updateCMProgress();
+  }else renderCM(cid);
+}
+function _autoResortDone(idx){
+  var n=EC.items.length,target=0;
+  // target = boundary between the not-done block and the done block
+  // (excluding this item). Checking an item moves it to the top of the
+  // done block; unchecking moves it to the bottom of the not-done block.
+  for(var k=0;k<n;k++){
+    if(k===idx)continue;
+    if(EC.done.includes(EC.items[k]))break;
+    target++;
+  }
+  if(target===idx)return null;
+  var item=EC.items.splice(idx,1)[0];
+  var meta=EC.itemMeta.splice(idx,1)[0];
+  EC.items.splice(target,0,item);
+  EC.itemMeta.splice(target,0,meta);
+  var remapped=new Set();
+  _expandedChk.forEach(function(x){
+    var nx=x;
+    if(x===idx)nx=target;
+    else if(idx<target){if(x>idx&&x<=target)nx=x-1;}
+    else{if(x>=target&&x<idx)nx=x+1;}
+    remapped.add(nx);
+  });
+  _expandedChk=remapped;_persistExpandedChk();
+  return target;
 }
 function toggleCMItem(idx,cid){
   var it=EC.items[idx];var wasDone=EC.done.includes(it);
   if(wasDone)EC.done=EC.done.filter(function(x){return x!==it;});else EC.done.push(it);_cmDirty=true;
+  _ensureItemMeta(EC);
+  var nowDone=!wasDone;
+  EC.itemMeta[idx].completedAt=nowDone?Date.now():null;
+  var dueChanged=_syncCardDueFromItems(EC);
+  if(dueChanged)refreshCMDue(cid);
+  if(!_chkSorted&&_autoResortDone(idx)!==null){refreshChk(cid);return;}
   var chk=document.getElementById('cm-chk');
   if(chk){
     var row=chk.querySelectorAll('.chk-row')[idx];
     if(row){
-      var box=row.querySelector('.checkbox'),txt=row.querySelector('.chk-txt'),nowDone=!wasDone;
+      var box=row.querySelector('.checkbox'),txt=row.querySelector('.chk-txt');
       if(box){box.classList.toggle('on',nowDone);box.innerHTML=nowDone?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'';}
       if(txt){txt.style.color=nowDone?'var(--txt-d)':'var(--txt)';txt.style.textDecoration=nowDone?'line-through':'none';}
+    }
+    var completedEl=document.getElementById('chk-completed-'+idx);
+    if(completedEl)completedEl.textContent=nowDone?_dateOnly(EC.itemMeta[idx].completedAt):'—';
+    var dueBtn=document.getElementById('chk-due-btn-'+idx);
+    if(dueBtn){
+      var meta=EC.itemMeta[idx];
+      if(nowDone){
+        dueBtn.className='chk-due-btn completed';
+        dueBtn.textContent='✓ Completed';
+      }else{
+        var idc=meta.due?dueClass(meta.due):null;
+        var dueBtnCls=idc==='over'?'over':idc==='soon'?'soon':(meta.due?'set':'');
+        dueBtn.className='chk-due-btn'+(dueBtnCls?' '+dueBtnCls:'');
+        dueBtn.textContent=meta.due?'📅 '+dueLabel(meta.due):'+ Due';
+      }
     }
     refreshChkControls(cid);updateCMProgress();
   }else renderCM(cid);
@@ -3081,14 +4491,21 @@ function showBackupModal(){
     }
     usbDriveBoards+='</div>';
   }
+  var _braveApiBlocked=_isBrave()&&!window.showDirectoryPicker;
   var usbSection=
     '<label class="lbl" style="margin-top:4px">Sync Mode</label>'+
+    (_braveApiBlocked?
+      '<div style="margin-bottom:8px;padding:9px 13px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;font-size:12px;color:#f59e0b;line-height:1.6">'+
+        '&#x1F6E1; <strong>Brave Shields is blocking USB file access.</strong> '+
+        'To fix: click the Shields icon (lion) in the address bar → set <strong>Fingerprinting blocking</strong> to <strong>Standard</strong> or <em>Disabled</em>, then reload.'+
+      '</div>'
+    :'')+
     '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:8px">'+
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+(_usbMode?'&#x1F4BE; USB Drive Mode':'&#x2601;&#xFE0F; Cloud / Local Mode')+'</div>'+
-        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt-d)">'+(_usbMode?'Cloud sync paused — saves go to your flash drive':'Switch to USB flash drive sync instead of cloud — works in Chrome, Edge &amp; Brave')+'</div>'+
       '</div>'+
-      '<button class="btn '+(_usbMode?'btn-danger':'btn-green')+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
+      '<button class="btn '+(_usbMode?'btn-danger':(_braveApiBlocked?'btn-ghost':'btn-green'))+'" style="font-size:12px;white-space:nowrap" onclick="'+(_usbMode?'disableUSBMode()':'enableUSBMode()')+'">'+
         (_usbMode?'Disable USB':'&#x1F50C; Enable USB')+
       '</button>'+
     '</div>'+
@@ -3100,17 +4517,25 @@ function showBackupModal(){
       '">'+
         (_usbConnected
           ?'&#x1F7E2; Drive connected — syncing boards'
-          :'&#x1F534; No drive connected')+
+          :'&#x1F534; No drive connected — reconnect required after page reload')+
         (!_usbConnected?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;margin-left:auto" onclick="selectDriveFolder()">&#x1F4C2; Select Drive</button>':'')+
       '</div>'+
       usbDriveBoards+
       '<div style="margin-bottom:10px"></div>'
-    :'<div style="margin-bottom:18px"></div>');
+    :
+      '<div style="display:flex;gap:9px;margin-bottom:18px">'+
+        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="importFromUSB()">&#x1F4C2; Reconnect USB Board</button>'+
+      '</div>'
+    );
 
+  var _totalSnaps=baks.length+autos.length;
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
       '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup & Restore</div>'+
-      '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
+      '<div style="display:flex;gap:6px">'+
+        (_totalSnaps>=2?'<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showDiffPicker()">⇄ Compare</button>':'')+
+        '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeModal()">✕</button>'+
+      '</div>'+
     '</div>'+
     usbSection+
     undoBar+
@@ -3541,6 +4966,7 @@ function notify(msg){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(_pd){if(_pd.ghost)_pd.ghost.remove();_pd.el.style.opacity='';var _i=document.getElementById('drop-ind');if(_i)_i.remove();document.body.style.userSelect='';_pd=null;return;}
+    if(document.getElementById('chk-sort-drop')){closeChkSortMenu();return;}
     if(document.getElementById('cm-paste-preview')){closeCMItemPastePreview();return;}
     closeModal();
   }
@@ -3559,6 +4985,7 @@ document.addEventListener('keydown',function(e){
 load();loadTheme();loadModalSize();render();initPointerDrag();
 _sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
+_usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
 initSync();
 </script>
 </body>
