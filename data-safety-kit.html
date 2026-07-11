@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Data Safety Kit — portable backup/undo/sync module</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#0f1420;--surf:#161d2c;--surf2:#1c2438;--surf3:#232c44;--bd:#2a3450;--bd-i:#334066;
+    --txt:#e6e9f2;--txt-m:#a8b0c8;--txt-d:#7280a0;--accent:#60a5fa;--good:#10b981;--warn:#f59e0b;--bad:#e11d48}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--txt-d);font-size:12px;margin-bottom:20px}
+  .banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;color:var(--txt-m)}
+  .banner b{color:var(--warn)}
+  .panel{background:var(--surf);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:16px}
+  .panel h2{font-size:13px;margin:0 0 10px;color:var(--txt-m);text-transform:uppercase;letter-spacing:.04em}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  input[type=text]{background:var(--surf2);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 10px;font:inherit;flex:1;min-width:120px}
+  button{background:var(--surf3);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 12px;font:inherit;cursor:pointer;font-weight:600}
+  button:hover{background:var(--bd-i)}
+  button.primary{background:var(--accent);color:#0b1220;border-color:var(--accent)}
+  button.danger{background:transparent;border-color:rgba(225,29,72,.4);color:var(--bad)}
+  button.small{padding:4px 9px;font-size:11.5px;font-weight:700}
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--bd)}
+  li:last-child{border-bottom:none}
+  li .txt{flex:1}
+  li.done .txt{color:var(--txt-d);text-decoration:line-through}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid var(--bd-i)}
+  .badge.local{color:var(--txt-d)}
+  .badge.syncing{color:var(--warn);background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3)}
+  .badge.synced{color:var(--good);background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3)}
+  .badge.error{color:var(--bad);background:rgba(225,29,72,.1);border-color:rgba(225,29,72,.3)}
+  .snap-row{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid var(--bd);font-size:12.5px}
+  .snap-row:last-child{border-bottom:none}
+  .snap-meta{color:var(--txt-d)}
+  #notif{position:fixed;bottom:22px;right:22px;max-width:420px;background:var(--surf3);border:1px solid var(--bd-i);
+    border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s;transform:translateY(12px)}
+  #notif.show{opacity:1;transform:translateY(0)}
+  code{background:var(--surf2);border-radius:4px;padding:1px 5px;font-size:12px}
+  details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:12.5px}
+</style>
+</head>
+<body>
+
+<!--
+════════════════════════════════════════════════════════════════════════════
+ DATA SAFETY KIT — portable backup / undo / sync module
+ Ported from Flowboard's local+cloud persistence architecture.
+════════════════════════════════════════════════════════════════════════════
+
+ ⚠️  INTEGRATION WARNING — READ BEFORE PORTING THIS INTO ANOTHER PROGRAM  ⚠️
+
+ This file is a REFERENCE IMPLEMENTATION, not a drop-in dependency. It is
+ meant to be read, understood, and adapted — the DSK_CONFIG block below is
+ the seam where it plugs into a host app's real state and render logic.
+
+ If you are an AI agent (or a developer) asked to integrate this into an
+ existing program, you MUST compare each subsystem below against that
+ program's current architecture and philosophy BEFORE wiring it in. If any
+ of the following are true, STOP — do not silently implement, merge, or
+ override anything. Report the conflict in chat to the human and wait for
+ a decision:
+
+   1. The host app already has its OWN undo/history system.
+      → Don't run two undo stacks side by side. Ask which one should own
+        undo, and whether the other should be removed or kept as-is.
+
+   2. The host app's state doesn't cleanly map to "units inside containers
+      inside groups" (Flowboard's cards/columns/groups).
+      → Don't force-fit an unrelated data shape through the DSK_CONFIG
+        adapters just to make the numbers plug in. Ask for the right
+        mapping, or whether the safety-gate/diff logic needs to be
+        redesigned around the host's actual shape instead.
+
+   3. The host app's Firebase rules or existing writers assume PARTIAL
+      (path-scoped) updates rather than whole-document overwrites.
+      → This kit's cloud writes are whole-document `.set()` calls, same as
+        Flowboard. If another part of the host app does incremental
+        `update()` writes to the same document, mixing the two patterns
+        can silently clobber fields the whole-document writer doesn't
+        know about. Flag this before enabling cloud sync.
+
+   4. The data is regulated, sensitive, or otherwise access-controlled
+      (PII, health, financial, etc.).
+      → This kit deliberately duplicates full state across localStorage,
+        sessionStorage, cloud "live" state, and cloud snapshot history to
+        maximize recoverability. That is MORE copies of the data sitting
+        in MORE places than a minimal implementation would create. Flag
+        this before enabling it on anything regulated — the tradeoff needs
+        a human decision, not an assumed default.
+
+   5. The host app is multi-writer / high concurrency (many simultaneous
+      editors on the same document).
+      → Last-write-wins + the heuristic safety gate below is a tripwire
+        against obviously catastrophic writes, NOT real conflict
+        resolution. It will silently let two legitimate concurrent edits
+        overwrite each other if neither looks "catastrophic." Flag this
+        before relying on it as the only safeguard for concurrent editing.
+
+   6. The host app already has soft-delete, trash, or server-side
+      versioning for this data.
+      → Don't bolt a second, redundant snapshot/versioning system on top
+        without reconciling which one is authoritative for "restore".
+
+   7. The host app has different storage-budget assumptions (e.g. it
+      already stores large blobs/images/attachments in localStorage).
+      → The quota-warning threshold and snapshot retention counts below
+        are Flowboard-sized defaults. Don't assume they're safe for a
+        larger-per-record app; flag and recalculate instead.
+
+   8. The host app's mutations don't go through clearly identifiable,
+      individually-callable functions (e.g. they're generated, or routed
+      through a single reducer/dispatch instead of one function per
+      action).
+      → The "call pushUndo() as the first line of every mutating function"
+        convention assumes that shape. If it doesn't fit, flag it — the
+        undo hook point needs to move to wherever mutations actually funnel
+        through (e.g. a single dispatch wrapper), not be sprinkled by hand.
+
+ None of the above are reasons to refuse the task — they're reasons to
+ surface the tradeoff to the human FIRST, since reconciling it after the
+ fact (once both systems are live and depended on) is much more expensive
+ than a five-minute conversation now.
+════════════════════════════════════════════════════════════════════════════
+-->
+
+<h1>🗄 Data Safety Kit</h1>
+<div class="sub">Standalone demo of the portable backup / undo / sync module. Open this file directly in a browser — nothing to install.</div>
+
+<div class="banner">
+  <b>This is a reference module, not a finished feature.</b> See the long HTML comment at the top of this
+  file's source for the full integration warning — it lists 8 specific conditions under which an AI or
+  developer porting this into another program should stop and ask a human before implementing, rather than
+  silently merging it in. <code>view-source:</code> this file or open it in an editor to read it.
+</div>
+
+<div class="panel">
+  <h2>Demo list <span id="sync-badge" class="badge local" style="float:right">💾 Local</span></h2>
+  <div class="row">
+    <input type="text" id="new-item" placeholder="Add an item and press Enter…">
+    <button class="primary" onclick="demoAddItem()">Add</button>
+  </div>
+  <ul id="item-list"></ul>
+</div>
+
+<div class="panel">
+  <h2>History</h2>
+  <div class="row">
+    <button onclick="DSK.undo()">↩ Undo</button>
+    <button onclick="DSK.redo()">↪ Redo</button>
+    <span id="undo-count" class="snap-meta"></span>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Snapshots</h2>
+  <div class="row">
+    <button class="primary" onclick="DSK.createManualSnapshot(prompt('Snapshot name:','Manual snapshot'))">📌 Save snapshot now</button>
+    <button onclick="DSK.exportState()">⬇ Export current state</button>
+    <button onclick="document.getElementById('import-file').click()">⬆ Import…</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="DSK.importState(this.files[0])">
+  </div>
+  <div id="snap-list"></div>
+</div>
+
+<div class="panel">
+  <h2>Cloud sync (optional)</h2>
+  <div class="sub" style="margin-bottom:8px">
+    Firebase is <b id="fb-state">not configured</b> in this demo. Fill in <code>DSK_CONFIG.firebaseConfig</code> and set
+    <code>DSK_CONFIG.firebaseEnabled = true</code> in the source to enable it — the whole module runs fully
+    local-only (undo, snapshots, export/import) with no cloud dependency until you do.
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   DSK_CONFIG — the ONLY section a host app should need to edit to adopt
+   this module. Everything below this block is generic and reads/writes
+   the host app's state exclusively through these adapters — it never
+   assumes a global variable name, a specific state shape, or that
+   Firebase is present.
+   ════════════════════════════════════════════════════════════════════════ */
+var DSK_CONFIG = {
+  // Namespaces every localStorage/sessionStorage key this kit creates, so
+  // it can't collide with the host app's own keys.
+  storagePrefix: 'dsk_demo',
+
+  // ── STATE ADAPTER ──────────────────────────────────────────────────────
+  // Point these at the host app's real root state variable and render
+  // function. The kit calls these instead of touching a global directly.
+  getState:      function(){ return AppState; },
+  setState:      function(next){ AppState = next; },
+  onStateApplied: function(){ renderDemo(); },   // call the host app's own render()
+
+  // ── SHAPE ADAPTER ──────────────────────────────────────────────────────
+  // Generalizes Flowboard's cards-inside-columns-inside-groups into three
+  // counting/enumeration hooks. If the host app has no natural equivalent
+  // for "containers" or "groups", return [] / 0 to disable that half of
+  // the safety gate rather than forcing a fake mapping.
+  countUnits:        function(state){ return (state.items||[]).length; },
+  getContainerIds:   function(state){ return []; },   // no "columns" in this demo
+  getGroupCount:     function(state){ return 0; },    // no "groups" in this demo
+  // Must return [{id, label, data}, ...] — used by the diff viewer.
+  diffItems: function(state){
+    return (state.items||[]).map(function(it){ return {id: it.id, label: it.text, data: it}; });
+  },
+
+  // ── UI ADAPTER ──────────────────────────────────────────────────────────
+  notify: function(msg, ms){
+    var el = document.getElementById('notif');
+    if(!el) return;
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(DSK_CONFIG.notify._t);
+    DSK_CONFIG.notify._t = setTimeout(function(){ el.classList.remove('show'); }, ms || 7800);
+  },
+  updateSyncBadge: function(status){
+    var el = document.getElementById('sync-badge'); if(!el) return;
+    var map = {
+      local:   {t:'💾 Local',   cls:'local'},
+      syncing: {t:'🔄 Syncing', cls:'syncing'},
+      synced:  {t:'☁ Synced',  cls:'synced'},
+      error:   {t:'⚠ No Sync', cls:'error'}
+    };
+    var s = map[status] || map.local;
+    el.textContent = s.t; el.className = 'badge ' + s.cls;
+  },
+
+  // ── CLOUD (optional) ────────────────────────────────────────────────────
+  // Leave firebaseEnabled:false to run this kit fully local-only — every
+  // subsystem (undo, snapshots, export/import) works with zero cloud
+  // dependency. Only flip this on after resolving warning #3 and #4 above
+  // with the host app's actual Firebase setup.
+  firebaseEnabled: false,
+  firebaseConfig: null,     // { apiKey, databaseURL, ... }
+  boardKey: null,           // cloud document key/path segment, e.g. a share code
+
+  // ── RETENTION / THRESHOLDS ──────────────────────────────────────────────
+  // Flowboard-sized defaults — see warning #7 before trusting these as-is
+  // for an app with larger per-record sizes.
+  maxUndoSteps: 50,
+  maxUndoSessionMirror: 10,
+  maxManualSnapshots: 25,
+  maxAutoSnapshots: 15,
+  idleSnapshotMs: 20 * 60 * 1000,
+  quotaWarnBytes: 4 * 1024 * 1024,
+  cloudWriteDebounceMs: 600,
+  autoSnapCloudDebounceMs: 2000
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   DSK — the module itself. Generic below this line; do not hardcode
+   anything demo-specific here. All host-app specifics live in DSK_CONFIG.
+   ════════════════════════════════════════════════════════════════════════ */
+var DSK = (function(){
+  var C = DSK_CONFIG;
+  function k(name){ return C.storagePrefix + '_' + name; }
+
+  var _undoStack = [], _redoStack = [], _undoInProgress = false;
+  var _idleTimer = null, _savesSinceIdle = 0;
+  var _cloudEnabled = false, _db = null, _stateRef = null, _autoSnapRef = null;
+  var _pendingWrites = 0, _syncTimer = null, _remoteBaseline = null, _skipCloudWrite = false;
+
+  function uid(){ return '_' + Math.random().toString(36).slice(2, 9); }
+  function nowIso(){ return new Date().toLocaleString(); }
+
+  // ── LOCAL PERSISTENCE (always on, no cloud dependency) ──────────────────
+  function save(){
+    var state = C.getState();
+    if(!_skipCloudWrite) state.lastModified = Date.now();
+    var data;
+    try{
+      data = JSON.stringify(state);
+      localStorage.setItem(k('live'), data);
+      var used = new Blob([data]).size
+        + new Blob([localStorage.getItem(k('manual_snaps')) || '']).size
+        + new Blob([localStorage.getItem(k('auto_snaps')) || '']).size;
+      if(used > C.quotaWarnBytes && !save._warned){
+        save._warned = true;
+        C.notify('⚠️ Storage nearly full (' + Math.round(used/1024/1024*10)/10 + 'MB used) — export a backup soon!');
+      } else if(used <= C.quotaWarnBytes){
+        save._warned = false;
+      }
+    }catch(e){
+      // Distinguish WHY the local write failed instead of guessing — mirrors
+      // the fix made in Flowboard's own save() after a false-positive report
+      // where the sync badge showed "synced" while the local write had
+      // actually failed (the two paths are fully decoupled; see below).
+      console.error('[DSK] Local write failed:', e);
+      var boardKB = data ? Math.round(new Blob([data]).size/1024) : '?';
+      var isQuota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      var isSecurity = e && e.name === 'SecurityError';
+      var msg;
+      if(isQuota){
+        msg = '❌ Local save FAILED — storage quota exceeded (state ~' + boardKB + 'KB). Delete old snapshots or export a backup now — this change is NOT saved on this device.';
+      }else if(isSecurity){
+        msg = '❌ Local save FAILED — this browser is blocking local storage (private/incognito mode, or site data disabled). This change is NOT saved on this device.';
+      }else{
+        msg = '❌ Local save FAILED — ' + (e && e.name ? e.name : 'unknown error') + '. This change may NOT be saved — see console.';
+      }
+      C.notify(msg);
+    }
+    // Idle auto-snapshot: fires C.idleSnapshotMs after the last real change.
+    if(!_skipCloudWrite && !_undoInProgress){
+      _savesSinceIdle++;
+      clearTimeout(_idleTimer);
+      _idleTimer = setTimeout(function(){
+        if(_savesSinceIdle > 0) createAutoSnapshot('Idle checkpoint – ' + nowIso(), 'idle');
+      }, C.idleSnapshotMs);
+    }
+    if(!_skipCloudWrite && _cloudEnabled) scheduleCloudPush();
+  }
+
+  // ── UNDO / REDO ───────────────────────────────────────────────────────
+  // Convention: call DSK.pushUndo() as the FIRST line of every mutating
+  // function in the host app, after any guard/early-return checks but
+  // before the mutation itself. See integration warning #8 if the host
+  // app's mutations don't funnel through individually-callable functions.
+  function pushUndo(){
+    if(_skipCloudWrite || _undoInProgress) return;
+    _undoStack.push(JSON.stringify(C.getState()));
+    if(_undoStack.length > C.maxUndoSteps) _undoStack.shift();
+    _redoStack = [];
+    persistUndoSession();
+  }
+  function undo(){
+    if(_undoStack.length === 0) return;
+    _redoStack.push(JSON.stringify(C.getState()));
+    if(_redoStack.length > C.maxUndoSteps) _redoStack.shift();
+    _undoInProgress = true;
+    C.setState(JSON.parse(_undoStack.pop()));
+    save(); C.onStateApplied();
+    _undoInProgress = false;
+    persistUndoSession();
+    C.notify('↩ Undone' + (_undoStack.length > 0 ? ' (' + _undoStack.length + ' more)' : ''));
+  }
+  function redo(){
+    if(_redoStack.length === 0) return;
+    _undoStack.push(JSON.stringify(C.getState()));
+    if(_undoStack.length > C.maxUndoSteps) _undoStack.shift();
+    _undoInProgress = true;
+    C.setState(JSON.parse(_redoStack.pop()));
+    save(); C.onStateApplied();
+    _undoInProgress = false;
+    persistUndoSession();
+    C.notify('↪ Redone' + (_redoStack.length > 0 ? ' (' + _redoStack.length + ' more)' : ''));
+  }
+  function persistUndoSession(){
+    try{ sessionStorage.setItem(k('undo'), JSON.stringify(_undoStack.slice(-C.maxUndoSessionMirror))); }catch(e){}
+  }
+  function restoreUndoSession(){
+    try{
+      var stored = sessionStorage.getItem(k('undo'));
+      if(!stored) return;
+      var arr = JSON.parse(stored);
+      if(Array.isArray(arr) && arr.length){
+        _undoStack = arr;
+        C.notify('↩ Undo history restored from last session (' + arr.length + ' step' + (arr.length !== 1 ? 's' : '') + ')');
+      }
+    }catch(e){}
+  }
+
+  // ── MANUAL SNAPSHOTS (local-only by design — see integration note) ─────
+  function getManualSnapshots(){ try{ return JSON.parse(localStorage.getItem(k('manual_snaps')) || '[]'); }catch(e){ return []; } }
+  function setManualSnapshots(a){ localStorage.setItem(k('manual_snaps'), JSON.stringify(a)); }
+  function createManualSnapshot(name){
+    if(name === null) return; // user cancelled the prompt
+    var a = getManualSnapshots();
+    a.unshift({ id: uid(), name: name || ('Snapshot ' + nowIso()), ts: Date.now(), units: C.countUnits(C.getState()), data: JSON.stringify(C.getState()) });
+    if(a.length > C.maxManualSnapshots) a.splice(C.maxManualSnapshots);
+    setManualSnapshots(a);
+    C.notify('📌 Snapshot saved!');
+    renderSnapshotList();
+  }
+  function restoreManualSnapshot(id){
+    var b = getManualSnapshots().find(function(x){ return x.id === id; });
+    if(!b || !confirm('Restore this snapshot? Current state will be replaced.')) return;
+    autoSnapBefore('Before: Restore snapshot – ' + nowIso());
+    _undoStack = []; _redoStack = []; persistUndoSession();
+    C.setState(JSON.parse(b.data)); save(); C.onStateApplied();
+    C.notify('✅ Restored from snapshot!');
+    renderSnapshotList();
+  }
+  function deleteManualSnapshot(id){
+    setManualSnapshots(getManualSnapshots().filter(function(x){ return x.id !== id; }));
+    renderSnapshotList();
+  }
+
+  // ── AUTO SNAPSHOTS ────────────────────────────────────────────────────
+  // Triggers: session-start (if state changed since last auto-snap),
+  // idle timer (see save()), and pre-destructive-action via autoSnapBefore().
+  function getAutoSnapshots(){ try{ return JSON.parse(localStorage.getItem(k('auto_snaps')) || '[]'); }catch(e){ return []; } }
+  function setAutoSnapshots(a){
+    try{ localStorage.setItem(k('auto_snaps'), JSON.stringify(a)); }
+    catch(e){ console.warn('[DSK] Storage full — auto-snapshot skipped locally (still attempting cloud push).'); }
+  }
+  function createAutoSnapshot(name, trigger){
+    var a = getAutoSnapshots();
+    var snap = { id: uid(), name: name, ts: Date.now(), trigger: trigger || 'auto', units: C.countUnits(C.getState()), data: JSON.stringify(C.getState()) };
+    a.unshift(snap);
+    var dropped = a.length > C.maxAutoSnapshots ? a.splice(C.maxAutoSnapshots) : [];
+    setAutoSnapshots(a);
+    _savesSinceIdle = 0;
+    if(_cloudEnabled) pushAutoSnapToCloud(snap, dropped);
+    renderSnapshotList();
+  }
+  function sessionStartSnapshot(){
+    var ts = C.getState().lastModified || 0;
+    if(ts === 0) return; // nothing saved yet — skip
+    var autos = getAutoSnapshots();
+    var lastTs = autos.length ? autos[0].ts : 0;
+    if(ts <= lastTs) return; // no changes since last auto-snap
+    createAutoSnapshot('Opened – ' + nowIso(), 'session');
+  }
+  function autoSnapBefore(label){ createAutoSnapshot(label, 'destructive'); }
+
+  // ── EXPORT / IMPORT ──────────────────────────────────────────────────
+  function exportState(snapshotId){
+    var data, name;
+    if(snapshotId){
+      var b = getManualSnapshots().concat(getAutoSnapshots()).find(function(x){ return x.id === snapshotId; });
+      if(!b) return;
+      data = b.data; name = b.name;
+    }else{
+      data = JSON.stringify(C.getState()); name = C.storagePrefix + '_export';
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') + '_' + Date.now() + '.json';
+    a.click();
+  }
+  function importState(file){
+    if(!file) return;
+    var r = new FileReader();
+    r.onload = function(ev){
+      try{
+        var d = JSON.parse(ev.target.result);
+        if(!confirm('Import this file? Current state will be replaced.')) return;
+        autoSnapBefore('Before: Import – ' + nowIso());
+        _undoStack = []; _redoStack = []; persistUndoSession();
+        C.setState(d); save(); C.onStateApplied();
+        C.notify('✅ Imported!');
+      }catch(e2){ alert('Invalid file — could not parse JSON.'); }
+    };
+    r.readAsText(file);
+  }
+
+  // ── DIFF VIEWER ───────────────────────────────────────────────────────
+  // Generic: relies entirely on C.diffItems(state) -> [{id,label,data}, ...]
+  function diffSnapshots(snapA, snapB){
+    var stateA = JSON.parse(snapA.data), stateB = JSON.parse(snapB.data);
+    var itemsA = C.diffItems(stateA), itemsB = C.diffItems(stateB);
+    var mapA = {}, mapB = {};
+    itemsA.forEach(function(i){ mapA[i.id] = i; });
+    itemsB.forEach(function(i){ mapB[i.id] = i; });
+    var added = [], deleted = [], modified = [];
+    Object.keys(mapB).forEach(function(id){
+      if(!mapA[id]) added.push(mapB[id]);
+      else if(JSON.stringify(mapA[id].data) !== JSON.stringify(mapB[id].data)) modified.push({ before: mapA[id], after: mapB[id] });
+    });
+    Object.keys(mapA).forEach(function(id){ if(!mapB[id]) deleted.push(mapA[id]); });
+    return { added: added, deleted: deleted, modified: modified };
+  }
+
+  // ── SAFETY GATE ───────────────────────────────────────────────────────
+  // A heuristic tripwire against obviously catastrophic writes, NOT real
+  // conflict resolution. See integration warning #5.
+  function isSafeWrite(state){
+    if(!_remoteBaseline) return true;
+    var units = C.countUnits(state);
+    var containerIds = C.getContainerIds(state);
+    var groups = C.getGroupCount(state);
+    if(_remoteBaseline.groups > 0 && groups === 0) return false;
+    if(_remoteBaseline.containerIds.length > 0 && containerIds.length === 0) return false;
+    if(_remoteBaseline.units > 3 && units === 0) return false;
+    var dropped = _remoteBaseline.units - units;
+    if(_remoteBaseline.units > 0 && dropped / _remoteBaseline.units > 0.75 && dropped > 5) return false;
+    if(_remoteBaseline.containerIds.length > 2 && containerIds.length > 0){
+      var matches = containerIds.filter(function(id){ return _remoteBaseline.containerIds.indexOf(id) !== -1; }).length;
+      if(matches / _remoteBaseline.containerIds.length < 0.2) return false;
+    }
+    return true;
+  }
+  function setRemoteBaseline(state){
+    _remoteBaseline = { units: C.countUnits(state), containerIds: C.getContainerIds(state), groups: C.getGroupCount(state) };
+  }
+
+  // ── CLOUD SYNC (optional — no-ops entirely if firebaseEnabled is false) ──
+  // NOTE: per-edit writes below are whole-document `.set()` calls, same
+  // tradeoff as Flowboard. Auto-snapshots, however, are stored as
+  // INDIVIDUALLY KEYED children (autoSnapRef.child(id).set(...) /
+  // .child(id).remove()) rather than one big array overwrite — this fixes
+  // a known inefficiency in the original Flowboard implementation, where
+  // a single new snapshot rewrote the entire snapshot history (up to 15x
+  // the document size) in one write. Do not regress to the array-overwrite
+  // pattern when porting this.
+  function connectCloud(){
+    if(!C.firebaseEnabled || !C.firebaseConfig || !C.boardKey) return;
+    if(!window.firebase){ console.warn('[DSK] firebase SDK not loaded — cloud sync disabled.'); return; }
+    if(!firebase.apps.length) firebase.initializeApp(C.firebaseConfig);
+    _db = firebase.database();
+    _stateRef = _db.ref('dsk/' + C.boardKey + '/state');
+    _autoSnapRef = _db.ref('dsk/' + C.boardKey + '/autoSnaps');
+    _cloudEnabled = true;
+    C.updateSyncBadge('syncing');
+    _stateRef.once('value').then(function(snap){
+      var remote = snap.val();
+      if(remote === null){
+        _pendingWrites++;
+        _stateRef.set(C.getState()).then(function(){ _pendingWrites--; setRemoteBaseline(C.getState()); C.updateSyncBadge('synced'); });
+        return;
+      }
+      setRemoteBaseline(remote);
+      var localTs = C.getState().lastModified || 0, remoteTs = remote.lastModified || 0;
+      if(localTs >= remoteTs){
+        C.setState(remote); // trust remote on connect unless local is strictly newer — mirrors Flowboard's "never push on first fire" fix
+      }
+      C.onStateApplied();
+      C.updateSyncBadge('synced');
+      _stateRef.on('value', function(s2){
+        if(_pendingWrites > 0) return; // ignore echo of our own write
+        var r2 = s2.val(); if(!r2) return;
+        setRemoteBaseline(r2);
+        if((r2.lastModified || 0) > (C.getState().lastModified || 0)){
+          C.setState(r2); C.onStateApplied();
+        }
+      });
+    });
+  }
+  function scheduleCloudPush(){
+    clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(function(){
+      var state = C.getState();
+      if(!isSafeWrite(state)){
+        C.updateSyncBadge('error');
+        C.notify('🛑 Sync blocked — this write would delete most of your data. Reload to resync before continuing.');
+        console.error('[DSK] Cloud write blocked by safety gate. Baseline:', _remoteBaseline, 'Attempted units:', C.countUnits(state));
+        return;
+      }
+      _pendingWrites++;
+      C.updateSyncBadge('syncing');
+      _stateRef.set(state).then(function(){
+        _pendingWrites = Math.max(0, _pendingWrites - 1);
+        setRemoteBaseline(state);
+        if(_pendingWrites === 0) C.updateSyncBadge('synced');
+      }).catch(function(err){
+        _pendingWrites = Math.max(0, _pendingWrites - 1);
+        C.updateSyncBadge('error');
+        console.error('[DSK] Cloud write failed:', err);
+        var code = err && err.code, msg;
+        if(code === 'PERMISSION_DENIED') msg = '⚠ Cloud sync FAILED — permission denied. Local copy is safe.';
+        else if(typeof navigator !== 'undefined' && navigator.onLine === false) msg = '⚠ Cloud sync FAILED — offline. Local copy is safe; will retry on reconnect.';
+        else msg = '⚠ Cloud sync FAILED — ' + (code || (err && err.message) || 'unknown error') + '. Local copy is safe.';
+        C.notify(msg);
+      });
+    }, C.cloudWriteDebounceMs);
+  }
+  function pushAutoSnapToCloud(snap, droppedSnaps){
+    if(!_cloudEnabled) return;
+    clearTimeout(pushAutoSnapToCloud._t);
+    pushAutoSnapToCloud._t = setTimeout(function(){
+      _autoSnapRef.child(snap.id).set(snap).catch(function(err){ console.warn('[DSK] Auto-snap cloud push failed:', err); });
+      (droppedSnaps || []).forEach(function(old){ _autoSnapRef.child(old.id).remove().catch(function(){}); });
+    }, C.autoSnapCloudDebounceMs);
+  }
+
+  // ── INIT ──────────────────────────────────────────────────────────────
+  function load(){
+    try{
+      var raw = localStorage.getItem(k('live'));
+      if(raw) C.setState(JSON.parse(raw));
+    }catch(e){ console.error('[DSK] Failed to load local state:', e); }
+  }
+  function init(){
+    load();
+    C.onStateApplied();
+    restoreUndoSession();
+    sessionStartSnapshot();
+    if(C.firebaseEnabled) connectCloud();
+    C.updateSyncBadge(C.firebaseEnabled ? 'syncing' : 'local');
+  }
+
+  return {
+    init: init, save: save,
+    pushUndo: pushUndo, undo: undo, redo: redo,
+    createManualSnapshot: createManualSnapshot, restoreManualSnapshot: restoreManualSnapshot, deleteManualSnapshot: deleteManualSnapshot, getManualSnapshots: getManualSnapshots,
+    createAutoSnapshot: createAutoSnapshot, autoSnapBefore: autoSnapBefore, getAutoSnapshots: getAutoSnapshots,
+    exportState: exportState, importState: importState,
+    diffSnapshots: diffSnapshots,
+    get undoStack(){ return _undoStack; }, get redoStack(){ return _redoStack; }
+  };
+})();
+
+/* ════════════════════════════════════════════════════════════════════════
+   DEMO APP — a minimal task list wired to DSK, purely to prove the module
+   works end to end. This whole section is throwaway in a real integration;
+   only DSK_CONFIG and the DSK module above are meant to survive porting.
+   ════════════════════════════════════════════════════════════════════════ */
+var AppState = { items: [], lastModified: 0 };
+
+function renderDemo(){
+  var ul = document.getElementById('item-list');
+  ul.innerHTML = '';
+  AppState.items.forEach(function(it){
+    var li = document.createElement('li');
+    if(it.done) li.className = 'done';
+    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = it.done;
+    cb.onchange = function(){ demoToggleItem(it.id); };
+    var span = document.createElement('span'); span.className = 'txt'; span.textContent = it.text;
+    var del = document.createElement('button'); del.className = 'small danger'; del.textContent = '✕';
+    del.onclick = function(){ demoDeleteItem(it.id); };
+    li.appendChild(cb); li.appendChild(span); li.appendChild(del);
+    ul.appendChild(li);
+  });
+  document.getElementById('undo-count').textContent =
+    DSK.undoStack.length + ' undo step' + (DSK.undoStack.length !== 1 ? 's' : '') + ' · ' +
+    DSK.redoStack.length + ' redo step' + (DSK.redoStack.length !== 1 ? 's' : '');
+  renderSnapshotList();
+}
+function renderSnapshotList(){
+  var el = document.getElementById('snap-list');
+  var manual = DSK.getManualSnapshots(), auto = DSK.getAutoSnapshots();
+  var rows = manual.map(function(s){ return snapRowHtml(s, 'manual'); })
+    .concat(auto.map(function(s){ return snapRowHtml(s, 'auto'); }));
+  el.innerHTML = rows.length ? rows.join('') : '<div class="snap-meta">No snapshots yet.</div>';
+}
+function snapRowHtml(s, kind){
+  return '<div class="snap-row"><div>' + (kind === 'auto' ? '🤖 ' : '📌 ') + esc(s.name) +
+    '<div class="snap-meta">' + new Date(s.ts).toLocaleString() + ' · ' + s.units + ' item' + (s.units !== 1 ? 's' : '') + '</div></div>' +
+    '<div class="row" style="margin:0"><button class="small" onclick="DSK.restoreManualSnapshot(\'' + s.id + '\')">Restore</button>' +
+    '<button class="small" onclick="DSK.exportState(\'' + s.id + '\')">Export</button>' +
+    (kind === 'manual' ? '<button class="small danger" onclick="DSK.deleteManualSnapshot(\'' + s.id + '\');renderSnapshotList()">✕</button>' : '') +
+    '</div></div>';
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function demoAddItem(){
+  var inp = document.getElementById('new-item');
+  var text = inp.value.trim();
+  if(!text) return;
+  DSK.pushUndo(); // ← the convention: undo snapshot BEFORE the mutation
+  AppState.items.push({ id: '_' + Math.random().toString(36).slice(2,9), text: text, done: false });
+  inp.value = '';
+  DSK.save(); renderDemo();
+}
+function demoToggleItem(id){
+  DSK.pushUndo();
+  var it = AppState.items.find(function(x){ return x.id === id; });
+  if(it) it.done = !it.done;
+  DSK.save(); renderDemo();
+}
+function demoDeleteItem(id){
+  DSK.pushUndo();
+  AppState.items = AppState.items.filter(function(x){ return x.id !== id; });
+  DSK.save(); renderDemo();
+}
+document.getElementById('new-item').addEventListener('keydown', function(e){ if(e.key === 'Enter') demoAddItem(); });
+
+DSK.init();
+</script>
+</body>
+</html>

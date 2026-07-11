@@ -1137,17 +1137,38 @@ function initSync(){
 
 function save(){
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
+  var data;
   try{
-    var data=JSON.stringify(S);localStorage.setItem('fb4',data);
+    data=JSON.stringify(S);localStorage.setItem('fb4',data);
     // Keep the key entry's boardId in sync so the modal can show it for sync-off boards
     var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
     if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
     var used=new Blob([data]).size
       +new Blob([localStorage.getItem(_bakKey())||'']).size
       +new Blob([localStorage.getItem(_autoKey())||'']).size;
-    if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full — export a backup soon!');}
+    if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full ('+Math.round(used/1024/1024*10)/10+'MB used) — export a backup soon!');}
     else if(used<=4*1024*1024){save._warned=false;}
-  }catch(e){notify('❌ Save failed — storage may be full!');}
+  }catch(e){
+    // Give an accurate diagnosis instead of a generic "storage may be full" guess —
+    // this is a LOCAL (browser-disk) failure, entirely separate from cloud sync,
+    // so it's reported distinctly rather than folded into the sync status badge.
+    console.error('[Save] Local (localStorage) write failed:',e);
+    var boardKB=data?Math.round(new Blob([data]).size/1024):'?';
+    var bakKB=0,autoKB=0;
+    try{bakKB=Math.round(new Blob([localStorage.getItem(_bakKey())||'']).size/1024);}catch(e2){}
+    try{autoKB=Math.round(new Blob([localStorage.getItem(_autoKey())||'']).size/1024);}catch(e2){}
+    var isQuota=e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014||e.name==='NS_ERROR_DOM_QUOTA_REACHED');
+    var isSecurity=e&&e.name==='SecurityError';
+    var msg;
+    if(isQuota){
+      msg='❌ Local save FAILED — browser storage quota exceeded (board ~'+boardKB+'KB + snapshots ~'+bakKB+'KB + auto-snaps ~'+autoKB+'KB). Delete old backups/snapshots or export a backup now — this edit is NOT saved on this device.';
+    }else if(isSecurity){
+      msg='❌ Local save FAILED — this browser is blocking local storage (private/incognito mode, or site data disabled). This edit is NOT saved on this device.';
+    }else{
+      msg='❌ Local save FAILED — '+(e&&e.name?e.name:'unknown error')+(e&&e.message?': '+e.message:'')+'. This edit may NOT be saved — see console for details.';
+    }
+    notify(msg);
+  }
   // ── Idle auto-snapshot: fires 20min after the last real user action ──
   if(!_skipFbWrite&&!_undoInProgress){
     _savesSinceAutoSnap++;
@@ -1177,7 +1198,20 @@ function save(){
       }).catch(function(err){
         _pendingWrites=Math.max(0,_pendingWrites-1);
         updateSyncStatus('error');
-        console.error('Firebase write failed:',err);
+        console.error('[Sync] Firebase write failed:',err);
+        // This is the main "why isn't it syncing" signal — previously only the
+        // badge changed color and the failure was logged silently to console.
+        var code=err&&err.code,msg;
+        if(code==='PERMISSION_DENIED'){
+          msg='⚠ Cloud sync FAILED — permission denied by Firebase rules (or you were signed out). Local copy is safe; cloud is now out of date.';
+        }else if(typeof navigator!=='undefined'&&navigator.onLine===false){
+          msg='⚠ Cloud sync FAILED — this device is offline. Local copy is safe; will retry automatically once reconnected.';
+        }else if(code==='UNAVAILABLE'||code==='NETWORK_ERROR'){
+          msg='⚠ Cloud sync FAILED — could not reach Firebase (network/server issue). Local copy is safe; will retry.';
+        }else{
+          msg='⚠ Cloud sync FAILED — '+(code||(err&&err.name)||'unknown error')+(err&&err.message?': '+err.message:'')+'. Local copy is safe — see console.';
+        }
+        notify(msg);
       });
     },600);
   }
@@ -4959,9 +4993,10 @@ function setModal(html,w,cb,resizable){
   if(resizable){var rh=document.createElement('div');rh.className='modal-resize-handle';m.appendChild(rh);initModalResize(rh,m);}
   ov.appendChild(m);root.appendChild(ov);if(cb)setTimeout(cb,10);
 }
-function notify(msg){
+function notify(msg,ms){
   var el=document.getElementById('notif');el.textContent=msg;el.classList.add('show');
-  setTimeout(function(){el.classList.remove('show');},2600);
+  clearTimeout(notify._t);
+  notify._t=setTimeout(function(){el.classList.remove('show');},ms||7800);
 }
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
