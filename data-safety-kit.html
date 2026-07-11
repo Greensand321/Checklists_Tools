@@ -5,42 +5,88 @@
 <title>Data Safety Kit — portable backup/undo/sync module</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root{--bg:#0f1420;--surf:#161d2c;--surf2:#1c2438;--surf3:#232c44;--bd:#2a3450;--bd-i:#334066;
-    --txt:#e6e9f2;--txt-m:#a8b0c8;--txt-d:#7280a0;--accent:#60a5fa;--good:#10b981;--warn:#f59e0b;--bad:#e11d48}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
-  h1{font-size:19px;margin:0 0 4px}
-  .sub{color:var(--txt-d);font-size:12px;margin-bottom:20px}
-  .banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;color:var(--txt-m)}
-  .banner b{color:var(--warn)}
-  .panel{background:var(--surf);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:16px}
-  .panel h2{font-size:13px;margin:0 0 10px;color:var(--txt-m);text-transform:uppercase;letter-spacing:.04em}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  input[type=text]{background:var(--surf2);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 10px;font:inherit;flex:1;min-width:120px}
-  button{background:var(--surf3);border:1px solid var(--bd-i);border-radius:8px;color:var(--txt);padding:7px 12px;font:inherit;cursor:pointer;font-weight:600}
-  button:hover{background:var(--bd-i)}
-  button.primary{background:var(--accent);color:#0b1220;border-color:var(--accent)}
-  button.danger{background:transparent;border-color:rgba(225,29,72,.4);color:var(--bad)}
-  button.small{padding:4px 9px;font-size:11.5px;font-weight:700}
-  ul{list-style:none;margin:0;padding:0}
-  li{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--bd)}
-  li:last-child{border-bottom:none}
-  li .txt{flex:1}
-  li.done .txt{color:var(--txt-d);text-decoration:line-through}
-  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid var(--bd-i)}
-  .badge.local{color:var(--txt-d)}
-  .badge.syncing{color:var(--warn);background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3)}
-  .badge.synced{color:var(--good);background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3)}
-  .badge.error{color:var(--bad);background:rgba(225,29,72,.1);border-color:rgba(225,29,72,.3)}
-  .snap-row{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid var(--bd);font-size:12.5px}
-  .snap-row:last-child{border-bottom:none}
-  .snap-meta{color:var(--txt-d)}
-  #notif{position:fixed;bottom:22px;right:22px;max-width:420px;background:var(--surf3);border:1px solid var(--bd-i);
-    border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;
-    transition:opacity .25s,transform .25s;transform:translateY(12px)}
-  #notif.show{opacity:1;transform:translateY(0)}
-  code{background:var(--surf2);border-radius:4px;padding:1px 5px;font-size:12px}
-  details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:12.5px}
+/* ── Theme: cloned verbatim from Flowboard's "pearl" (light) theme variables. ──
+   This kit is fixed to light — no theme switcher — per request. If the host
+   app has its own theme system, these variables are the seam to re-point. */
+:root{
+  --bg:#f5f5f7;--topbar:rgba(255,255,255,.88);
+  --bd:rgba(0,0,0,.09);--bd-s:rgba(0,0,0,.07);--bd-i:rgba(0,0,0,.15);
+  --txt:#1d1d1f;--txt-b:#000;--txt-m:#6e6e73;--txt-d:#86868b;--txt-dd:#aeaeb2;
+  --surf:#fff;--surf2:rgba(0,0,0,.04);--surf3:rgba(0,0,0,.07);
+  --modal:#fff;--card:rgba(255,255,255,.82);--card-h:#fff;
+  --inp:rgba(0,0,0,.05);--inp2:rgba(0,0,0,.06);--inp-d:rgba(0,0,0,.07);
+  --scroll:rgba(0,0,0,.12);--ghost-bg:rgba(0,0,0,.06);
+  --ghost-c:#6e6e73;--ghost-bd:rgba(0,0,0,.14);--dnd:rgba(0,100,200,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;padding:28px 24px 60px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:19px;margin:0 0 4px;color:var(--txt-b)}
+.sub{color:var(--txt-d);font-size:12px;margin-bottom:18px}
+.banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;color:var(--txt-m);line-height:1.6}
+.banner b{color:#b45309}
+.topbar-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.sync-badge{font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1px solid var(--bd-i)}
+.sync-badge.local{color:var(--txt-d);background:var(--surf2)}
+.sync-badge.syncing{color:#b45309;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3)}
+.sync-badge.synced{color:#10b981;background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3)}
+.sync-badge.error{color:#e11d48;background:rgba(225,29,72,.1);border-color:rgba(225,29,72,.3)}
+.panel{background:var(--surf);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.panel h2{font-size:12px;margin:0 0 10px;color:var(--txt-d);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+ul.item-list{list-style:none}
+ul.item-list li{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--bd)}
+ul.item-list li:last-child{border-bottom:none}
+ul.item-list li .txt{flex:1;font-size:13px}
+ul.item-list li.done .txt{color:var(--txt-d);text-decoration:line-through}
+input[type=text]{background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;color:var(--txt);padding:8px 12px;font:inherit;flex:1;min-width:120px;outline:none}
+
+/* ── Everything below this line is cloned as-is from Flowboard's own CSS ──
+   (button system, modal/overlay, snapshot list items, diff viewer) so the
+   backup UI itself is not a reinterpretation — it's the same interface. */
+.btn{border:none;border-radius:9px;padding:7px 15px;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s,transform .12s,box-shadow .15s;white-space:nowrap;font-family:inherit}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;box-shadow:0 2px 12px rgba(99,102,241,.3)}
+.btn-ghost{background:var(--ghost-bg);color:var(--ghost-c);border:1px solid var(--ghost-bd)}
+.btn-danger{background:rgba(251,113,133,.12);color:#f43f5e;border:1px solid rgba(251,113,133,.25)}
+.btn-green{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+
+.lbl{display:block;font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.finput{background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none;width:100%;font-family:inherit}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal{background:var(--modal);border:1px solid var(--bd);border-radius:18px;padding:26px;width:510px;max-width:100%;max-height:92vh;overflow-y:auto;position:relative}
+
+.bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:11px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
+.bak-item:hover{background:var(--surf3)}
+.bak-name{font-weight:700;font-size:13px;color:var(--txt-b);margin-bottom:2px;cursor:text}
+.bak-date{font-size:11px;color:var(--txt-d)}
+.bak-actions{display:flex;gap:5px;flex-shrink:0}
+.bak-actions button{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:700;transition:opacity .12s,transform .12s}
+.bak-actions button:hover{opacity:.82}
+.bak-actions button:active{transform:scale(.93)}
+
+.auto-bak-item{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:7px;transition:background .15s}
+.auto-bak-item:hover{background:var(--surf3)}
+.auto-trigger-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+
+.diff-sheet-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-d);padding:10px 0 5px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+.diff-sheet-header:not(:first-child){margin-top:12px}
+.diff-row{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:3px;font-size:12px;line-height:1.45}
+.diff-add{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)}
+.diff-mod{background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.22)}
+.diff-del{background:rgba(225,29,72,.09);border:1px solid rgba(225,29,72,.2)}
+.diff-type-badge{font-size:11px;font-weight:800;width:18px;text-align:center;flex-shrink:0;padding-top:1px}
+.diff-badge-add{color:#10b981}
+.diff-badge-mod{color:#b45309}
+.diff-badge-del{color:#e11d48}
+.diff-rownum{font-size:10px;color:var(--txt-dd);flex-shrink:0;padding-top:2px;min-width:24px}
+.diff-expand-btn{background:none;border:none;cursor:pointer;color:var(--txt-d);font-size:11px;padding:1px 4px;flex-shrink:0;border-radius:4px;margin-top:1px;font-family:inherit}
+.diff-expand-btn:hover{background:var(--surf3);color:var(--txt)}
+
+#notif{position:fixed;bottom:22px;right:22px;max-width:420px;background:var(--surf);border:1px solid var(--bd-i);
+  border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;color:var(--txt);z-index:999;opacity:0;pointer-events:none;
+  transition:opacity .25s,transform .25s;transform:translateY(12px);box-shadow:0 8px 28px rgba(0,0,0,.12)}
+#notif.show{opacity:1;transform:translateY(0)}
 </style>
 </head>
 <body>
@@ -48,7 +94,10 @@
 <!--
 ════════════════════════════════════════════════════════════════════════════
  DATA SAFETY KIT — portable backup / undo / sync module
- Ported from Flowboard's local+cloud persistence architecture.
+ Ported from Flowboard's local+cloud persistence architecture. The backup
+ UI below (CSS classes, the Backup & Restore modal, the Compare/Diff
+ viewer) is cloned as-is from Flowboard, not reinterpreted — the intent is
+ that a host app gets the same interface, not a redesign of it.
 ════════════════════════════════════════════════════════════════════════════
 
  ⚠️  INTEGRATION WARNING — READ BEFORE PORTING THIS INTO ANOTHER PROGRAM  ⚠️
@@ -127,54 +176,44 @@
 ════════════════════════════════════════════════════════════════════════════
 -->
 
-<h1>🗄 Data Safety Kit</h1>
-<div class="sub">Standalone demo of the portable backup / undo / sync module. Open this file directly in a browser — nothing to install.</div>
+<div class="wrap">
+  <h1>🗄 Data Safety Kit</h1>
+  <div class="sub">Standalone demo of the portable backup / undo / sync module. Open this file directly in a browser — nothing to install.</div>
 
-<div class="banner">
-  <b>This is a reference module, not a finished feature.</b> See the long HTML comment at the top of this
-  file's source for the full integration warning — it lists 8 specific conditions under which an AI or
-  developer porting this into another program should stop and ask a human before implementing, rather than
-  silently merging it in. <code>view-source:</code> this file or open it in an editor to read it.
-</div>
-
-<div class="panel">
-  <h2>Demo list <span id="sync-badge" class="badge local" style="float:right">💾 Local</span></h2>
-  <div class="row">
-    <input type="text" id="new-item" placeholder="Add an item and press Enter…">
-    <button class="primary" onclick="demoAddItem()">Add</button>
+  <div class="banner">
+    <b>This is a reference module, not a finished feature.</b> See the long HTML comment at the top of this
+    file's source for the full integration warning — it lists 8 specific conditions under which an AI or
+    developer porting this into another program should stop and ask a human before implementing, rather than
+    silently merging it in. <code>view-source:</code> this file or open it in an editor to read it.
   </div>
-  <ul id="item-list"></ul>
-</div>
 
-<div class="panel">
-  <h2>History</h2>
-  <div class="row">
-    <button onclick="DSK.undo()">↩ Undo</button>
-    <button onclick="DSK.redo()">↪ Redo</button>
-    <span id="undo-count" class="snap-meta"></span>
+  <div class="topbar-row">
+    <button class="btn btn-primary" onclick="DSK.showBackupModal()">💾 Backup &amp; Restore</button>
+    <button class="btn btn-ghost" onclick="DSK.undo()">↩ Undo</button>
+    <button class="btn btn-ghost" onclick="DSK.redo()">↪ Redo</button>
+    <span id="sync-badge" class="sync-badge local" style="margin-left:auto">💾 Local</span>
   </div>
-</div>
 
-<div class="panel">
-  <h2>Snapshots</h2>
-  <div class="row">
-    <button class="primary" onclick="DSK.createManualSnapshot(prompt('Snapshot name:','Manual snapshot'))">📌 Save snapshot now</button>
-    <button onclick="DSK.exportState()">⬇ Export current state</button>
-    <button onclick="document.getElementById('import-file').click()">⬆ Import…</button>
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="DSK.importState(this.files[0])">
+  <div class="panel">
+    <h2>Demo list</h2>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <input type="text" id="new-item" placeholder="Add an item and press Enter…">
+      <button class="btn btn-green" onclick="demoAddItem()">Add</button>
+    </div>
+    <ul class="item-list" id="item-list"></ul>
   </div>
-  <div id="snap-list"></div>
-</div>
 
-<div class="panel">
-  <h2>Cloud sync (optional)</h2>
-  <div class="sub" style="margin-bottom:8px">
-    Firebase is <b id="fb-state">not configured</b> in this demo. Fill in <code>DSK_CONFIG.firebaseConfig</code> and set
-    <code>DSK_CONFIG.firebaseEnabled = true</code> in the source to enable it — the whole module runs fully
-    local-only (undo, snapshots, export/import) with no cloud dependency until you do.
+  <div class="panel">
+    <h2>Cloud sync (optional)</h2>
+    <div class="sub" style="margin:0">
+      Firebase is <b>not configured</b> in this demo. Fill in <code>DSK_CONFIG.firebaseConfig</code> and set
+      <code>DSK_CONFIG.firebaseEnabled = true</code> in the source to enable it — every subsystem (undo,
+      snapshots, export/import, the modal below) already runs fully local-only with no cloud dependency.
+    </div>
   </div>
 </div>
 
+<div id="modal-root"></div>
 <div id="notif"></div>
 
 <script>
@@ -193,8 +232,8 @@ var DSK_CONFIG = {
   // ── STATE ADAPTER ──────────────────────────────────────────────────────
   // Point these at the host app's real root state variable and render
   // function. The kit calls these instead of touching a global directly.
-  getState:      function(){ return AppState; },
-  setState:      function(next){ AppState = next; },
+  getState:       function(){ return AppState; },
+  setState:       function(next){ AppState = next; },
   onStateApplied: function(){ renderDemo(); },   // call the host app's own render()
 
   // ── SHAPE ADAPTER ──────────────────────────────────────────────────────
@@ -202,10 +241,13 @@ var DSK_CONFIG = {
   // counting/enumeration hooks. If the host app has no natural equivalent
   // for "containers" or "groups", return [] / 0 to disable that half of
   // the safety gate rather than forcing a fake mapping.
-  countUnits:        function(state){ return (state.items||[]).length; },
-  getContainerIds:   function(state){ return []; },   // no "columns" in this demo
-  getGroupCount:     function(state){ return 0; },    // no "groups" in this demo
-  // Must return [{id, label, data}, ...] — used by the diff viewer.
+  countUnits:      function(state){ return (state.items||[]).length; },
+  getContainerIds: function(state){ return []; },   // no "columns" in this demo
+  getGroupCount:   function(state){ return 0; },    // no "groups" in this demo
+  // Must return [{id, label, data, container?}, ...] — used by the diff
+  // viewer. `container` is optional; when present, the diff groups rows
+  // under a "Sheet: <container>" header, same as Flowboard grouping by
+  // column. Omit it (as this demo does) for a flat list.
   diffItems: function(state){
     return (state.items||[]).map(function(it){ return {id: it.id, label: it.text, data: it}; });
   },
@@ -227,14 +269,14 @@ var DSK_CONFIG = {
       error:   {t:'⚠ No Sync', cls:'error'}
     };
     var s = map[status] || map.local;
-    el.textContent = s.t; el.className = 'badge ' + s.cls;
+    el.textContent = s.t; el.className = 'sync-badge ' + s.cls;
   },
 
   // ── CLOUD (optional) ────────────────────────────────────────────────────
   // Leave firebaseEnabled:false to run this kit fully local-only — every
-  // subsystem (undo, snapshots, export/import) works with zero cloud
-  // dependency. Only flip this on after resolving warning #3 and #4 above
-  // with the host app's actual Firebase setup.
+  // subsystem (undo, snapshots, export/import, the Backup modal) works
+  // with zero cloud dependency. Only flip this on after resolving warning
+  // #3 and #4 above with the host app's actual Firebase setup.
   firebaseEnabled: false,
   firebaseConfig: null,     // { apiKey, databaseURL, ... }
   boardKey: null,           // cloud document key/path segment, e.g. a share code
@@ -259,11 +301,13 @@ var DSK_CONFIG = {
 var DSK = (function(){
   var C = DSK_CONFIG;
   function k(name){ return C.storagePrefix + '_' + name; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
   var _undoStack = [], _redoStack = [], _undoInProgress = false;
   var _idleTimer = null, _savesSinceIdle = 0;
   var _cloudEnabled = false, _db = null, _stateRef = null, _autoSnapRef = null;
   var _pendingWrites = 0, _syncTimer = null, _remoteBaseline = null, _skipCloudWrite = false;
+  var _diffRows = null;
 
   function uid(){ return '_' + Math.random().toString(36).slice(2, 9); }
   function nowIso(){ return new Date().toLocaleString(); }
@@ -374,7 +418,28 @@ var DSK = (function(){
     if(a.length > C.maxManualSnapshots) a.splice(C.maxManualSnapshots);
     setManualSnapshots(a);
     C.notify('📌 Snapshot saved!');
-    renderSnapshotList();
+    if(document.getElementById('modal-root').querySelector('.overlay')) showBackupModal();
+  }
+  function renameManualSnapshot(id){
+    var baks = getManualSnapshots();
+    var b = baks.find(function(x){ return x.id === id; });
+    if(!b) return;
+    var el = document.getElementById('bakname_' + id);
+    if(!el) return;
+    var orig = b.name;
+    var inp = document.createElement('input');
+    inp.value = orig;
+    inp.style.cssText = 'background:transparent;border:none;border-bottom:1px solid #3b82f6;color:var(--txt-b);font-size:13px;font-weight:700;outline:none;width:100%;font-family:inherit;padding:1px 0';
+    inp.onblur = function(){
+      var v = inp.value.trim() || orig;
+      baks.forEach(function(x){ if(x.id === id) x.name = v; });
+      setManualSnapshots(baks); showBackupModal();
+    };
+    inp.onkeydown = function(e){
+      if(e.key === 'Enter'){ inp.blur(); }
+      else if(e.key === 'Escape'){ inp.value = orig; inp.blur(); }
+    };
+    el.replaceWith(inp); inp.focus(); inp.select();
   }
   function restoreManualSnapshot(id){
     var b = getManualSnapshots().find(function(x){ return x.id === id; });
@@ -383,11 +448,11 @@ var DSK = (function(){
     _undoStack = []; _redoStack = []; persistUndoSession();
     C.setState(JSON.parse(b.data)); save(); C.onStateApplied();
     C.notify('✅ Restored from snapshot!');
-    renderSnapshotList();
+    closeModal();
   }
   function deleteManualSnapshot(id){
     setManualSnapshots(getManualSnapshots().filter(function(x){ return x.id !== id; }));
-    renderSnapshotList();
+    showBackupModal();
   }
 
   // ── AUTO SNAPSHOTS ────────────────────────────────────────────────────
@@ -406,7 +471,7 @@ var DSK = (function(){
     setAutoSnapshots(a);
     _savesSinceIdle = 0;
     if(_cloudEnabled) pushAutoSnapToCloud(snap, dropped);
-    renderSnapshotList();
+    if(document.getElementById('modal-root').querySelector('.overlay')) showBackupModal();
   }
   function sessionStartSnapshot(){
     var ts = C.getState().lastModified || 0;
@@ -417,6 +482,21 @@ var DSK = (function(){
     createAutoSnapshot('Opened – ' + nowIso(), 'session');
   }
   function autoSnapBefore(label){ createAutoSnapshot(label, 'destructive'); }
+  function restoreAutoSnapshot(id){
+    var b = getAutoSnapshots().find(function(x){ return x.id === id; });
+    if(!b || !confirm('Restore this auto-snapshot? Current state will be replaced.')) return;
+    autoSnapBefore('Before: Restore auto-snapshot – ' + nowIso());
+    _undoStack = []; _redoStack = []; persistUndoSession();
+    C.setState(JSON.parse(b.data)); save(); C.onStateApplied();
+    C.notify('✅ Restored from auto-snapshot!');
+    closeModal();
+  }
+  function deleteAutoSnapshot(id){
+    var remaining = getAutoSnapshots().filter(function(x){ return x.id !== id; });
+    setAutoSnapshots(remaining);
+    if(_cloudEnabled && _autoSnapRef) _autoSnapRef.child(id).remove().catch(function(){});
+    showBackupModal();
+  }
 
   // ── EXPORT / IMPORT ──────────────────────────────────────────────────
   function exportState(snapshotId){
@@ -433,26 +513,69 @@ var DSK = (function(){
     a.download = name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') + '_' + Date.now() + '.json';
     a.click();
   }
-  function importState(file){
-    if(!file) return;
-    var r = new FileReader();
-    r.onload = function(ev){
-      try{
-        var d = JSON.parse(ev.target.result);
-        if(!confirm('Import this file? Current state will be replaced.')) return;
-        autoSnapBefore('Before: Import – ' + nowIso());
-        _undoStack = []; _redoStack = []; persistUndoSession();
-        C.setState(d); save(); C.onStateApplied();
-        C.notify('✅ Imported!');
-      }catch(e2){ alert('Invalid file — could not parse JSON.'); }
+  function importState(){
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json';
+    inp.onchange = function(e){
+      var file = e.target.files[0]; if(!file) return;
+      var r = new FileReader();
+      r.onload = function(ev){
+        try{
+          var d = JSON.parse(ev.target.result);
+          if(!confirm('Import this file? Current state will be replaced.')) return;
+          autoSnapBefore('Before: Import – ' + nowIso());
+          _undoStack = []; _redoStack = []; persistUndoSession();
+          C.setState(d); save(); C.onStateApplied();
+          C.notify('✅ Imported!'); closeModal();
+        }catch(e2){ alert('Invalid file — could not parse JSON.'); }
+      };
+      r.readAsText(file);
     };
-    r.readAsText(file);
+    inp.click();
+  }
+
+  // ── FORCE PULL / PUSH (cloud override — only relevant if cloud enabled) ──
+  function forcePushToCloud(){
+    if(!_cloudEnabled || !_stateRef){ C.notify('⚠️ Not connected to a cloud document.'); return; }
+    if(!confirm('Push your local state to the cloud?\n\nThis will overwrite the cloud version with your current local state.')) return;
+    autoSnapBefore('Before: Manual force-push to cloud – ' + nowIso());
+    C.updateSyncBadge('syncing');
+    _pendingWrites++;
+    var state = C.getState(); state.lastModified = Date.now(); save();
+    _stateRef.set(state).then(function(){
+      _pendingWrites = Math.max(0, _pendingWrites - 1);
+      setRemoteBaseline(state);
+      C.updateSyncBadge('synced');
+      C.notify('☁ State pushed to cloud.');
+      if(document.getElementById('modal-root').querySelector('.overlay')) showBackupModal();
+    }).catch(function(err){
+      _pendingWrites = Math.max(0, _pendingWrites - 1);
+      C.updateSyncBadge('error');
+      C.notify('❌ Push failed: ' + err.message);
+    });
+  }
+  function forcePullFromCloud(){
+    if(!_cloudEnabled || !_stateRef){ C.notify('⚠️ Not connected to a cloud document.'); return; }
+    if(!confirm('Pull the cloud state to this device?\n\nThis will replace your current local state with the cloud version.')) return;
+    autoSnapBefore('Before: Manual force-pull from cloud – ' + nowIso());
+    C.updateSyncBadge('syncing');
+    _stateRef.once('value').then(function(snap){
+      var remote = snap.val();
+      if(!remote){ C.notify('⚠️ No cloud data found.'); C.updateSyncBadge('synced'); return; }
+      setRemoteBaseline(remote);
+      C.setState(remote); C.onStateApplied();
+      _skipCloudWrite = true; save(); _skipCloudWrite = false;
+      C.updateSyncBadge('synced');
+      C.notify('⬇ Pulled from cloud.');
+      if(document.getElementById('modal-root').querySelector('.overlay')) showBackupModal();
+    }).catch(function(err){
+      C.updateSyncBadge('error');
+      C.notify('❌ Pull failed: ' + err.message);
+    });
   }
 
   // ── DIFF VIEWER ───────────────────────────────────────────────────────
-  // Generic: relies entirely on C.diffItems(state) -> [{id,label,data}, ...]
-  function diffSnapshots(snapA, snapB){
-    var stateA = JSON.parse(snapA.data), stateB = JSON.parse(snapB.data);
+  // Generic: relies entirely on C.diffItems(state) -> [{id,label,data,container?}, ...]
+  function computeDiff(stateA, stateB){
     var itemsA = C.diffItems(stateA), itemsB = C.diffItems(stateB);
     var mapA = {}, mapB = {};
     itemsA.forEach(function(i){ mapA[i.id] = i; });
@@ -568,6 +691,236 @@ var DSK = (function(){
     }, C.autoSnapCloudDebounceMs);
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     BACKUP UI — cloned from Flowboard's showBackupModal()/showDiffPicker()/
+     showSnapshotDiff(). The markup, class names, and layout are the same;
+     only the data source (DSK's generic getters instead of Flowboard's
+     getBaks()/getAutoBaks()/S) and the omission of Flowboard's USB-drive
+     section (a hardware-file-access feature this generic kit doesn't
+     implement) differ from the original.
+     ══════════════════════════════════════════════════════════════════════ */
+  function setModal(html, w, cb){
+    var root = document.getElementById('modal-root'); root.innerHTML = '';
+    var ov = document.createElement('div'); ov.className = 'overlay'; ov.onclick = closeModal;
+    var m = document.createElement('div'); m.className = 'modal';
+    if(w) m.style.width = w;
+    m.onclick = function(e){ e.stopPropagation(); };
+    m.innerHTML = html;
+    ov.appendChild(m); root.appendChild(ov);
+    if(cb) setTimeout(cb, 10);
+  }
+  function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+  function triggerBadge(trigger){
+    var map = {
+      session:     { label:'Session start',  bg:'rgba(96,165,250,.15)',  color:'#3b82f6' },
+      idle:        { label:'Idle checkpoint', bg:'rgba(168,85,247,.15)', color:'#a855f7' },
+      destructive: { label:'Before delete',   bg:'rgba(244,63,94,.12)',  color:'#f43f5e' },
+      auto:        { label:'Auto',            bg:'rgba(148,163,184,.15)', color:'#6b7280' }
+    };
+    var t = map[trigger] || map.auto;
+    return '<span class="auto-trigger-badge" style="background:' + t.bg + ';color:' + t.color + '">' + t.label + '</span>';
+  }
+
+  function showBackupModal(){
+    var baks = getManualSnapshots();
+    var autos = getAutoSnapshots();
+
+    var autoHtml = autos.length === 0
+      ? '<div style="color:var(--txt-dd);font-size:13px;padding:12px 0 4px">No auto-snapshots yet — they appear after your first session.</div>'
+      : autos.map(function(b){
+        return '<div class="auto-bak-item">' +
+          '<div style="flex:1">' +
+            '<div class="bak-name" style="cursor:default">' + esc(b.name) + '</div>' +
+            '<div class="bak-date">' + new Date(b.ts).toLocaleString() + ' &middot; ' + b.units + ' item' + (b.units !== 1 ? 's' : '') + ' &middot; ' + triggerBadge(b.trigger) + '</div>' +
+          '</div>' +
+          '<div class="bak-actions">' +
+            '<button onclick="DSK.restoreAutoSnapshot(\'' + b.id + '\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>' +
+            '<button onclick="DSK.deleteAutoSnapshot(\'' + b.id + '\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>' +
+          '</div></div>';
+      }).join('');
+
+    var bakHtml = baks.length === 0
+      ? '<div style="color:var(--txt-dd);font-size:13px;padding:16px 0 8px">No snapshots yet.</div>'
+      : baks.map(function(b){
+        return '<div class="bak-item">' +
+          '<div style="flex:1"><div id="bakname_' + b.id + '" class="bak-name" ondblclick="DSK.renameManualSnapshot(\'' + b.id + '\')" title="Double-click to rename">' + esc(b.name) + '</div>' +
+          '<div class="bak-date">' + new Date(b.ts).toLocaleString() + ' &middot; ' + b.units + ' item' + (b.units !== 1 ? 's' : '') + '</div></div>' +
+          '<div class="bak-actions">' +
+            '<button onclick="DSK.restoreManualSnapshot(\'' + b.id + '\')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>' +
+            '<button onclick="DSK.exportState(\'' + b.id + '\')" style="background:var(--surf3);color:var(--txt-m)">Export</button>' +
+            '<button onclick="DSK.deleteManualSnapshot(\'' + b.id + '\')" style="background:rgba(225,29,72,.1);color:#e11d48">Delete</button>' +
+          '</div></div>';
+      }).join('');
+
+    var ul = _undoStack.length, rl = _redoStack.length;
+    var undoBar = '<div style="display:flex;gap:8px;align-items:center;padding:9px 13px;background:var(--surf2);border:1px solid var(--bd);border-radius:10px;margin-bottom:18px;font-size:12px;color:var(--txt-m)">' +
+      '<span style="flex:1">↩ <strong style="color:var(--txt)">' + ul + '</strong> undo step' + (ul !== 1 ? 's' : '') + ' in memory' +
+      (rl > 0 ? ' &nbsp;&middot;&nbsp; ↪ <strong style="color:var(--txt)">' + rl + '</strong> redo step' + (rl !== 1 ? 's' : '') : '') + '</span>' +
+      (ul > 0 ? '<button class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="DSK.undo();DSK.showBackupModal()">↩ Undo</button>' : '') + '</div>';
+
+    var _totalSnaps = baks.length + autos.length;
+    setModal(
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">' +
+        '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">💾 Backup &amp; Restore</div>' +
+        '<div style="display:flex;gap:6px">' +
+          (_totalSnaps >= 2 ? '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="DSK.showDiffPicker()">⇄ Compare</button>' : '') +
+          '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="DSK.closeModal()">✕</button>' +
+        '</div>' +
+      '</div>' +
+      undoBar +
+      '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:13px;color:#10b981">' +
+        '✅ <strong>Auto-save is ON</strong> — every change saves instantly to local storage' + (_cloudEnabled ? ' and cloud' : '.') +
+      '</div>' +
+      (_cloudEnabled ?
+        '<label class="lbl">Cloud Sync Override</label>' +
+        '<div style="display:flex;gap:9px;margin-bottom:20px">' +
+          '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="DSK.forcePullFromCloud()">⬇ Pull from Cloud</button>' +
+          '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="DSK.forcePushToCloud()">⬆ Push to Cloud</button>' +
+        '</div>'
+      : '') +
+      '<label class="lbl">Auto Snapshots (' + autos.length + '/' + C.maxAutoSnapshots + ')</label>' +
+      '<div style="max-height:180px;overflow-y:auto;padding-right:2px;margin-bottom:20px">' + autoHtml + '</div>' +
+      '<label class="lbl">Save Manual Snapshot</label>' +
+      '<div style="display:flex;gap:9px;margin-bottom:18px">' +
+        '<input id="bak-n" class="finput" placeholder="Snapshot name…" style="flex:1" onkeydown="if(event.key===\'Enter\')DSK.createManualSnapshot(document.getElementById(\'bak-n\').value)">' +
+        '<button class="btn btn-green" onclick="DSK.createManualSnapshot(document.getElementById(\'bak-n\').value)">📌 Save</button>' +
+      '</div>' +
+      '<label class="lbl">Transfer Data</label>' +
+      '<div style="display:flex;gap:9px;margin-bottom:22px">' +
+        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="DSK.exportState()">⬇ Export .json</button>' +
+        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="DSK.importState()">⬆ Import .json</button>' +
+      '</div>' +
+      '<label class="lbl">Manual Snapshots (' + baks.length + '/' + C.maxManualSnapshots + ')</label>' +
+      '<div style="max-height:240px;overflow-y:auto;padding-right:2px">' + bakHtml + '</div>' +
+      '<div style="margin-top:14px;padding:11px 13px;background:var(--surf2);border-radius:10px;font-size:12px;color:var(--txt-d);line-height:1.8">' +
+        '<strong style="color:var(--txt-m)">💡 Transfer your data:</strong><br>' +
+        '1. Export as .json → save to USB or email<br>' +
+        '2. On another device: open this app → Import .json' +
+      '</div>',
+    '580px', function(){ var i = document.getElementById('bak-n'); if(i) i.focus(); });
+  }
+
+  function showDiffPicker(){
+    var allSnaps = [];
+    getManualSnapshots().forEach(function(b){ allSnaps.push({ id: b.id, label: b.name, ts: b.ts, src: 'm' }); });
+    getAutoSnapshots().forEach(function(b){ allSnaps.push({ id: b.id, label: b.name, ts: b.ts, src: 'a' }); });
+    allSnaps.sort(function(a, b){ return b.ts - a.ts; });
+    if(allSnaps.length < 2){ C.notify('⚠️ Need at least 2 snapshots to compare.'); return; }
+    var opts = allSnaps.map(function(s){ return '<option value="' + s.id + '|' + s.src + '">' + esc(s.label) + ' — ' + new Date(s.ts).toLocaleString() + '</option>'; }).join('');
+    var opts2 = allSnaps.map(function(s, i){ return '<option value="' + s.id + '|' + s.src + '"' + (i === 1 ? ' selected' : '') + '>' + esc(s.label) + ' — ' + new Date(s.ts).toLocaleString() + '</option>'; }).join('');
+    setModal(
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">' +
+        '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Compare Snapshots</div>' +
+        '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="DSK.showBackupModal()">← Back</button>' +
+      '</div>' +
+      '<label class="lbl">Snapshot A <span style="font-weight:400;color:var(--txt-dd)">(older / before)</span></label>' +
+      '<select id="diff-sel-a" class="finput" style="width:100%;margin-bottom:14px">' + opts + '</select>' +
+      '<label class="lbl">Snapshot B <span style="font-weight:400;color:var(--txt-dd)">(newer / after)</span></label>' +
+      '<select id="diff-sel-b" class="finput" style="width:100%;margin-bottom:22px">' + opts2 + '</select>' +
+      '<button class="btn btn-green" style="width:100%;font-size:13px" onclick="DSK.runSnapshotDiff()">⚡ Show Diff</button>',
+    '540px');
+  }
+
+  function runSnapshotDiff(){
+    var selA = document.getElementById('diff-sel-a'), selB = document.getElementById('diff-sel-b');
+    if(!selA || !selB) return;
+    var partsA = selA.value.split('|'), partsB = selB.value.split('|');
+    var idA = partsA[0], idB = partsB[0];
+    if(idA === idB){ C.notify('⚠️ Please select two different snapshots.'); return; }
+    showSnapshotDiff(idA, idB);
+  }
+
+  function showSnapshotDiff(idA, idB){
+    var all = getManualSnapshots().concat(getAutoSnapshots());
+    var snapA = all.find(function(x){ return x.id === idA; });
+    var snapB = all.find(function(x){ return x.id === idB; });
+    if(!snapA || !snapB){ C.notify('⚠️ Snapshot not found.'); return; }
+    var stateA = JSON.parse(snapA.data), stateB = JSON.parse(snapB.data);
+    var diff = computeDiff(stateA, stateB);
+    var total = diff.added.length + diff.modified.length + diff.deleted.length;
+    var fmtTs = function(ts){ var d = new Date(ts); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+    var trunc = function(s, n){ s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+
+    var header =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">⇄ Snapshot Diff</div>' +
+        '<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="DSK.showDiffPicker()">← Back</button>' +
+      '</div>' +
+      '<div style="font-size:12px;padding:8px 10px;background:var(--surf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;line-height:1.7">' +
+        '<span style="color:var(--txt-d)">A:</span> <strong>' + esc(snapA.name) + '</strong> <span style="color:var(--txt-dd)">' + fmtTs(snapA.ts) + '</span><br>' +
+        '<span style="color:var(--txt-d)">B:</span> <strong>' + esc(snapB.name) + '</strong> <span style="color:var(--txt-dd)">' + fmtTs(snapB.ts) + '</span>' +
+      '</div>';
+
+    var statsBar =
+      '<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap">' +
+        '<span style="background:rgba(16,185,129,.15);color:#10b981;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">+' + diff.added.length + ' added</span>' +
+        '<span style="background:rgba(245,158,11,.15);color:#b45309;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">~' + diff.modified.length + ' modified</span>' +
+        '<span style="background:rgba(225,29,72,.12);color:#e11d48;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700">–' + diff.deleted.length + ' deleted</span>' +
+      '</div>';
+
+    if(total === 0){
+      setModal(header + statsBar + '<div style="text-align:center;padding:28px;color:var(--txt-d);font-size:13px">✓ Snapshots are identical — no differences found.</div>', '580px');
+      return;
+    }
+
+    // Group by container when the diffItems adapter supplies one (mirrors
+    // Flowboard grouping by column); otherwise render one flat "Items" sheet.
+    var sheets = {}, order = [];
+    function addToSheet(name, entry){ name = name || 'Items'; if(!sheets[name]){ sheets[name] = []; order.push(name); } sheets[name].push(entry); }
+    diff.modified.forEach(function(item){ addToSheet((item.after && item.after.container) || (item.before && item.before.container), { type: 'mod', item: item }); });
+    diff.added.forEach(function(item){ addToSheet(item.container, { type: 'add', item: item }); });
+    diff.deleted.forEach(function(item){ addToSheet(item.container, { type: 'del', item: item }); });
+
+    _diffRows = {};
+    var rn = 0, rows = '';
+    order.forEach(function(sheet){
+      rows += '<div class="diff-sheet-header">Sheet: ' + esc(sheet) + '</div>';
+      sheets[sheet].forEach(function(entry){
+        rn++;
+        var n = rn, type = entry.type, item = entry.item;
+        if(type === 'add'){
+          var t = item.label || '(empty)';
+          _diffRows[n] = { type: 'add', textA: '', textB: t };
+          rows += '<div class="diff-row diff-add"><span class="diff-type-badge diff-badge-add">+</span><span class="diff-rownum">#' + n + '</span>' +
+            '<span class="diff-content" id="dc-' + n + '" style="flex:1">' + esc(trunc(t, 80)) + '</span>' +
+            '<button class="diff-expand-btn" onclick="DSK.diffExpand(' + n + ')" title="Toggle full text">▼</button></div>';
+        }else if(type === 'del'){
+          var t2 = item.label || '(empty)';
+          _diffRows[n] = { type: 'del', textA: t2, textB: '' };
+          rows += '<div class="diff-row diff-del"><span class="diff-type-badge diff-badge-del">–</span><span class="diff-rownum">#' + n + '</span>' +
+            '<span class="diff-content" id="dc-' + n + '" style="flex:1">' + esc(trunc(t2, 80)) + '</span>' +
+            '<button class="diff-expand-btn" onclick="DSK.diffExpand(' + n + ')" title="Toggle full text">▼</button></div>';
+        }else{
+          var tA = (item.before && item.before.label) || '(empty)', tB = (item.after && item.after.label) || '(empty)';
+          _diffRows[n] = { type: 'mod', textA: tA, textB: tB };
+          rows += '<div class="diff-row diff-mod"><span class="diff-type-badge diff-badge-mod">~</span><span class="diff-rownum">#' + n + '</span>' +
+            '<span class="diff-content" id="dc-' + n + '" style="flex:1"><span style="opacity:.55">was: </span>' + esc(trunc(tA, 40)) + '<br><span style="opacity:.55">now: </span>' + esc(trunc(tB, 40)) + '</span>' +
+            '<button class="diff-expand-btn" onclick="DSK.diffExpand(' + n + ')" title="Toggle full text">▼</button></div>';
+        }
+      });
+    });
+
+    setModal(header + statsBar + '<div style="max-height:380px;overflow-y:auto;padding-right:2px">' + rows + '</div>', '640px');
+  }
+
+  function diffExpand(n){
+    if(!_diffRows || !_diffRows[n]) return;
+    var d = _diffRows[n];
+    var el = document.getElementById('dc-' + n);
+    if(!el) return;
+    var expanded = el.dataset.expanded === '1';
+    if(d.type === 'mod'){
+      el.innerHTML = expanded
+        ? '<span style="opacity:.55">was: </span>' + esc(d.textA.slice(0, 40)) + (d.textA.length > 40 ? '…' : '') + '<br><span style="opacity:.55">now: </span>' + esc(d.textB.slice(0, 40)) + (d.textB.length > 40 ? '…' : '')
+        : '<span style="opacity:.55">was: </span>' + esc(d.textA) + '<br><span style="opacity:.55">now: </span>' + esc(d.textB);
+    }else{
+      var full = d.type === 'add' ? d.textB : d.textA;
+      el.textContent = expanded ? (full.length > 80 ? full.slice(0, 80) + '…' : full) : full;
+    }
+    el.dataset.expanded = expanded ? '0' : '1';
+  }
+
   // ── INIT ──────────────────────────────────────────────────────────────
   function load(){
     try{
@@ -587,10 +940,13 @@ var DSK = (function(){
   return {
     init: init, save: save,
     pushUndo: pushUndo, undo: undo, redo: redo,
-    createManualSnapshot: createManualSnapshot, restoreManualSnapshot: restoreManualSnapshot, deleteManualSnapshot: deleteManualSnapshot, getManualSnapshots: getManualSnapshots,
-    createAutoSnapshot: createAutoSnapshot, autoSnapBefore: autoSnapBefore, getAutoSnapshots: getAutoSnapshots,
+    createManualSnapshot: createManualSnapshot, renameManualSnapshot: renameManualSnapshot, restoreManualSnapshot: restoreManualSnapshot, deleteManualSnapshot: deleteManualSnapshot, getManualSnapshots: getManualSnapshots,
+    createAutoSnapshot: createAutoSnapshot, autoSnapBefore: autoSnapBefore, restoreAutoSnapshot: restoreAutoSnapshot, deleteAutoSnapshot: deleteAutoSnapshot, getAutoSnapshots: getAutoSnapshots,
     exportState: exportState, importState: importState,
-    diffSnapshots: diffSnapshots,
+    forcePushToCloud: forcePushToCloud, forcePullFromCloud: forcePullFromCloud,
+    diffSnapshots: computeDiff,
+    showBackupModal: showBackupModal, showDiffPicker: showDiffPicker, runSnapshotDiff: runSnapshotDiff, showSnapshotDiff: showSnapshotDiff, diffExpand: diffExpand,
+    closeModal: closeModal,
     get undoStack(){ return _undoStack; }, get redoStack(){ return _redoStack; }
   };
 })();
@@ -598,7 +954,8 @@ var DSK = (function(){
 /* ════════════════════════════════════════════════════════════════════════
    DEMO APP — a minimal task list wired to DSK, purely to prove the module
    works end to end. This whole section is throwaway in a real integration;
-   only DSK_CONFIG and the DSK module above are meant to survive porting.
+   only DSK_CONFIG, the DSK module, and its Backup-UI markup above are
+   meant to survive porting.
    ════════════════════════════════════════════════════════════════════════ */
 var AppState = { items: [], lastModified: 0 };
 
@@ -611,32 +968,12 @@ function renderDemo(){
     var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = it.done;
     cb.onchange = function(){ demoToggleItem(it.id); };
     var span = document.createElement('span'); span.className = 'txt'; span.textContent = it.text;
-    var del = document.createElement('button'); del.className = 'small danger'; del.textContent = '✕';
+    var del = document.createElement('button'); del.className = 'btn btn-danger'; del.style.cssText = 'padding:3px 8px;font-size:11px'; del.textContent = '✕';
     del.onclick = function(){ demoDeleteItem(it.id); };
     li.appendChild(cb); li.appendChild(span); li.appendChild(del);
     ul.appendChild(li);
   });
-  document.getElementById('undo-count').textContent =
-    DSK.undoStack.length + ' undo step' + (DSK.undoStack.length !== 1 ? 's' : '') + ' · ' +
-    DSK.redoStack.length + ' redo step' + (DSK.redoStack.length !== 1 ? 's' : '');
-  renderSnapshotList();
 }
-function renderSnapshotList(){
-  var el = document.getElementById('snap-list');
-  var manual = DSK.getManualSnapshots(), auto = DSK.getAutoSnapshots();
-  var rows = manual.map(function(s){ return snapRowHtml(s, 'manual'); })
-    .concat(auto.map(function(s){ return snapRowHtml(s, 'auto'); }));
-  el.innerHTML = rows.length ? rows.join('') : '<div class="snap-meta">No snapshots yet.</div>';
-}
-function snapRowHtml(s, kind){
-  return '<div class="snap-row"><div>' + (kind === 'auto' ? '🤖 ' : '📌 ') + esc(s.name) +
-    '<div class="snap-meta">' + new Date(s.ts).toLocaleString() + ' · ' + s.units + ' item' + (s.units !== 1 ? 's' : '') + '</div></div>' +
-    '<div class="row" style="margin:0"><button class="small" onclick="DSK.restoreManualSnapshot(\'' + s.id + '\')">Restore</button>' +
-    '<button class="small" onclick="DSK.exportState(\'' + s.id + '\')">Export</button>' +
-    (kind === 'manual' ? '<button class="small danger" onclick="DSK.deleteManualSnapshot(\'' + s.id + '\');renderSnapshotList()">✕</button>' : '') +
-    '</div></div>';
-}
-function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
 function demoAddItem(){
   var inp = document.getElementById('new-item');
