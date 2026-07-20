@@ -2520,11 +2520,26 @@ function _migrateAllBackupsToIdb(){
     try{localStorage.setItem('fb4_idb_migrated','1');}catch(e){}
   });
 }
+// Ask the browser to mark this origin's storage "persistent" so IndexedDB
+// isn't silently evicted under disk pressure. Best-effort: some browsers
+// auto-grant, some prompt, some ignore it — we never block on the result.
+// (Does not defend against Safari/iOS's 7-day inactivity purge; the cloud
+// sync + export paths remain the real backstop there.)
+function _requestPersistentStorage(){
+  try{
+    if(navigator.storage&&navigator.storage.persist&&navigator.storage.persisted){
+      navigator.storage.persisted().then(function(already){
+        if(!already)navigator.storage.persist().then(function(g){console.log('[Backups] persistent storage '+(g?'granted':'not granted'));}).catch(function(){});
+      }).catch(function(){});
+    }
+  }catch(e){}
+}
 // Boot entry point: decide backend, migrate, hydrate current board's mirrors.
 function _initBackupStore(){
   return _idbCheckUsable().then(function(usable){
     _backupsUseIdb=!!usable;
     if(!usable)return; // stay on localStorage — original behavior, nothing to migrate
+    _requestPersistentStorage();
     return _migrateAllBackupsToIdb().then(function(){
       return Promise.all([_hydrateManualMirror(),_hydrateAutoMirror()]);
     });
