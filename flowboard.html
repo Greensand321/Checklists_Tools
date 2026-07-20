@@ -252,6 +252,8 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .modal{background:var(--modal);border:1px solid var(--bd);border-radius:18px;padding:26px;width:510px;max-width:100%;max-height:92vh;overflow-y:auto;position:relative;user-select:text;-webkit-user-select:text}
 .modal-resize-handle{position:absolute;bottom:5px;right:5px;width:17px;height:17px;cursor:nwse-resize;z-index:10;flex-shrink:0;opacity:.35;transition:opacity .18s;background-image:radial-gradient(var(--txt-m) 1.3px,transparent 1.4px);background-size:6px 6px;background-position:1px 1px;clip-path:polygon(100% 0,100% 100%,0 100%)}
 .modal-resize-handle:hover{opacity:.85}
+.desc-resize-handle{position:absolute;bottom:3px;right:3px;width:34px;height:34px;cursor:ns-resize;z-index:5;opacity:.45;transition:opacity .18s;background-image:radial-gradient(var(--txt-m) 1.5px,transparent 1.6px);background-size:7px 7px;background-position:2px 2px;clip-path:polygon(100% 0,100% 100%,0 100%);border-bottom-right-radius:9px;touch-action:none}
+.desc-resize-handle:hover{opacity:.9}
 .modal-title{font-size:17px;font-weight:800;color:var(--txt-b);margin-bottom:18px}
 .lbl{display:block;font-size:10px;color:var(--txt-d);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
 .finput{background:var(--inp);border:1px solid var(--bd-i);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none;width:100%;font-family:inherit;transition:border-color .18s,box-shadow .18s}
@@ -409,7 +411,7 @@ input[type="date"]{color-scheme:dark}
   <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
   <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">⚙ Settings</button>
 </div>
-<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div><div class="tp-title" style="margin-top:12px">Archive</div><div class="archive-row" id="archive-row"></div></div>
+<div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div><div class="tp-title" style="margin-top:12px">UI Scale</div><div id="uiscale-row"></div><div class="tp-title" style="margin-top:12px">Archive</div><div class="archive-row" id="archive-row"></div></div>
 <div id="board"></div>
 <div id="modal-root"></div>
 <div id="notif"></div>
@@ -623,7 +625,7 @@ function toggleThemePanel(){
   var p=document.getElementById('theme-panel'),btn=document.getElementById('theme-btn');
   if(p.classList.contains('open')){p.classList.remove('open');return;}
   var r=btn.getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=(window.innerWidth-r.right)+'px';
-  p.classList.add('open');renderThemeGrid();renderDateFmtRow();renderArchiveRow();
+  p.classList.add('open');renderThemeGrid();renderDateFmtRow();renderUiScaleRow();renderArchiveRow();
 }
 function renderArchiveRow(){
   var row=document.getElementById('archive-row');if(!row)return;
@@ -648,6 +650,45 @@ function setDateFormat(fmt){
   if(!S.prefs)S.prefs={};
   S.prefs.dateFormat=fmt;
   save();render();renderDateFmtRow();
+}
+
+// ── UI SCALE (per-device: auto-seeded from screen size, manual override) ──
+// Stored in localStorage (NOT S.prefs) deliberately: the right scale differs
+// per machine (home vs work monitor), so it must never sync across devices.
+var _uiScale=null;
+function _autoUiScale(){
+  var w=window.screen.width;
+  if(w>=2400)return 1.1;
+  if(w>=1700)return 1;
+  if(w>=1300)return 0.9;
+  return 0.85;
+}
+function _applyUiScale(){document.body.style.zoom=_uiScale;}
+function initUiScale(){
+  var stored=parseFloat(localStorage.getItem('fb4_uiscale'));
+  _uiScale=(stored&&stored>=0.6&&stored<=1.5)?stored:_autoUiScale();
+  _applyUiScale();
+}
+function setUiScale(v){
+  _uiScale=Math.round(Math.max(0.6,Math.min(1.5,v))*100)/100;
+  localStorage.setItem('fb4_uiscale',_uiScale);
+  _applyUiScale();renderUiScaleRow();
+}
+function resetUiScale(){
+  localStorage.removeItem('fb4_uiscale');
+  _uiScale=_autoUiScale();
+  _applyUiScale();renderUiScaleRow();
+}
+function renderUiScaleRow(){
+  var row=document.getElementById('uiscale-row');if(!row)return;
+  var isAuto=!localStorage.getItem('fb4_uiscale');
+  row.innerHTML=
+    '<div style="display:flex;align-items:center;gap:7px">'+
+      '<button class="btn btn-ghost" style="padding:3px 10px;font-size:13px" onclick="setUiScale(_uiScale-0.05)">−</button>'+
+      '<span style="min-width:44px;text-align:center;font-size:12px;font-weight:700;color:var(--txt)">'+Math.round(_uiScale*100)+'%</span>'+
+      '<button class="btn btn-ghost" style="padding:3px 10px;font-size:13px" onclick="setUiScale(_uiScale+0.05)">+</button>'+
+      '<button class="btn btn-ghost" style="padding:3px 10px;font-size:11px;margin-left:auto'+(isAuto?';color:#10b981;border-color:rgba(16,185,129,.4)':'')+'" title="Match this screen automatically" onclick="resetUiScale()">'+(isAuto?'✓ Auto':'Auto')+'</button>'+
+    '</div>';
 }
 function closeThemePanel(){
   document.getElementById('theme-panel')?.classList.remove('open');
@@ -1135,40 +1176,72 @@ function initSync(){
   });
 }
 
+function _isQuotaErr(e){return e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014||e.name==='NS_ERROR_DOM_QUOTA_REACHED');}
+// TRUE origin-wide localStorage usage (every key). The old gauge summed only
+// the current board's 3 keys, so it stayed green while OTHER boards' backups
+// silently filled the shared ~5MB quota — which is why the hard failure came
+// as a surprise instead of a warning.
+function _lsBytes(){
+  var total=0;
+  for(var i=0;i<localStorage.length;i++){
+    var kk=localStorage.key(i);
+    total+=new Blob([kk]).size+new Blob([localStorage.getItem(kk)||'']).size;
+  }
+  return total;
+}
+function _reportLocalSaveError(e,data){
+  console.error('[Save] Local (localStorage) write failed:',e);
+  var boardKB=data?Math.round(new Blob([data]).size/1024):'?';
+  var totalKB=Math.round(_lsBytes()/1024);
+  var isSecurity=e&&e.name==='SecurityError';
+  var msg;
+  if(_isQuotaErr(e)){
+    msg='❌ Local save FAILED — browser storage full ('+totalKB+'KB across all boards; this board ~'+boardKB+'KB). Auto-cleanup could not free enough. Export a backup and delete old snapshots NOW — this edit is in memory only, will be LOST on reload, and is deliberately NOT syncing to cloud so it can’t desync your other devices.';
+  }else if(isSecurity){
+    msg='❌ Local save FAILED — this browser is blocking local storage (private/incognito mode, or site data disabled). This edit is NOT saved on this device.';
+  }else{
+    msg='❌ Local save FAILED — '+(e&&e.name?e.name:'unknown error')+(e&&e.message?': '+e.message:'')+'. This edit may NOT be saved — see console for details.';
+  }
+  notify(msg);
+}
 function save(){
+  var _prevLM=S.lastModified;
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   var data;
+  try{data=JSON.stringify(S);}catch(e){console.error('[Save] serialize failed:',e);return;}
+  var localOk=false;
   try{
-    data=JSON.stringify(S);localStorage.setItem('fb4',data);
-    // Keep the key entry's boardId in sync so the modal can show it for sync-off boards
-    var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
-    if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
-    var used=new Blob([data]).size
-      +new Blob([localStorage.getItem(_bakKey())||'']).size
-      +new Blob([localStorage.getItem(_autoKey())||'']).size;
-    if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage nearly full ('+Math.round(used/1024/1024*10)/10+'MB used) — export a backup soon!');}
-    else if(used<=4*1024*1024){save._warned=false;}
+    localStorage.setItem('fb4',data);localOk=true;
   }catch(e){
-    // Give an accurate diagnosis instead of a generic "storage may be full" guess —
-    // this is a LOCAL (browser-disk) failure, entirely separate from cloud sync,
-    // so it's reported distinctly rather than folded into the sync status badge.
-    console.error('[Save] Local (localStorage) write failed:',e);
-    var boardKB=data?Math.round(new Blob([data]).size/1024):'?';
-    var bakKB=0,autoKB=0;
-    try{bakKB=Math.round(new Blob([localStorage.getItem(_bakKey())||'']).size/1024);}catch(e2){}
-    try{autoKB=Math.round(new Blob([localStorage.getItem(_autoKey())||'']).size/1024);}catch(e2){}
-    var isQuota=e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014||e.name==='NS_ERROR_DOM_QUOTA_REACHED');
-    var isSecurity=e&&e.name==='SecurityError';
-    var msg;
-    if(isQuota){
-      msg='❌ Local save FAILED — browser storage quota exceeded (board ~'+boardKB+'KB + snapshots ~'+bakKB+'KB + auto-snaps ~'+autoKB+'KB). Delete old backups/snapshots or export a backup now — this edit is NOT saved on this device.';
-    }else if(isSecurity){
-      msg='❌ Local save FAILED — this browser is blocking local storage (private/incognito mode, or site data disabled). This edit is NOT saved on this device.';
-    }else{
-      msg='❌ Local save FAILED — '+(e&&e.name?e.name:'unknown error')+(e&&e.message?': '+e.message:'')+'. This edit may NOT be saved — see console for details.';
+    // Quota hit: try to reclaim space (drop disposable auto-snapshots) and
+    // retry ONCE before giving up. This is the auto-cull safety valve.
+    if(_isQuotaErr(e)){
+      var freed=_reclaimSpace();
+      if(freed>0){
+        try{localStorage.setItem('fb4',data);localOk=true;
+          notify('♻ Storage was full — auto-removed '+freed+' old auto-snapshot'+(freed!==1?'s':'')+' so your work could save.');
+        }catch(e2){}
+      }
     }
-    notify(msg);
+    if(!localOk)_reportLocalSaveError(e,data);
   }
+  if(!localOk){
+    // Unrecoverable local persistence failure. CRITICAL fix: on a real edit,
+    // do NOT advance lastModified or push to the cloud. The old code fell
+    // through and pushed anyway, leaving this device's disk behind the cloud
+    // and silently desyncing it on the next reload — the "sync stopped working
+    // after switching devices" bug. Keep the edit in memory only, loudly
+    // flagged, until the user frees space.
+    if(!_skipFbWrite){S.lastModified=_prevLM;updateSyncStatus('error');}
+    return;
+  }
+  // Local write succeeded — keep the key entry's boardId in sync + warn on the
+  // TRUE origin-wide usage, not just this board's slice of it.
+  var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
+  if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
+  var used=_lsBytes();
+  if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage at '+Math.round(used/1024/1024*10)/10+'MB of ~5MB (all boards) — export a backup or clear old snapshots soon.');}
+  else if(used<=4*1024*1024){save._warned=false;}
   // ── Idle auto-snapshot: fires 20min after the last real user action ──
   if(!_skipFbWrite&&!_undoInProgress){
     _savesSinceAutoSnap++;
@@ -2182,6 +2255,48 @@ function importBak(){
 
 // ── AUTO-SNAPSHOT STORE ──
 function _autoKey(){return 'fb4_auto_'+(_activeKey||'local');}
+// Remove auto-snapshot stores for boards no longer known to this device. Only
+// touches DISPOSABLE auto-snaps keyed by share-key — never user-created manual
+// snapshots — so it can't destroy anything explicitly saved. Runs on load and
+// as the first step of quota reclamation.
+function _purgeOrphanAutoSnaps(){
+  try{
+    var valid={local:1};
+    getKeys().forEach(function(k){if(k.key)valid[k.key]=1;});
+    if(_activeKey)valid[_activeKey]=1;
+    var sk=localStorage.getItem('fb4_active_key');if(sk)valid[sk]=1;
+    var orphans=[];
+    for(var i=0;i<localStorage.length;i++){
+      var lk=localStorage.key(i);
+      if(lk&&lk.indexOf('fb4_auto_')===0&&!valid[lk.slice(9)])orphans.push(lk);
+    }
+    orphans.forEach(function(lk){try{localStorage.removeItem(lk);}catch(e){}});
+    return orphans.length;
+  }catch(e){return 0;}
+}
+// Reclaim localStorage after a quota failure: first drop orphaned auto-snap
+// stores, then trim every board's auto-snaps down to the 3 newest (auto-snaps
+// are self-regenerating, so this is the safest thing to shed). Never touches
+// manual snapshots. Returns the number of snapshots removed.
+function _reclaimSpace(){
+  var removed=_purgeOrphanAutoSnaps();
+  var autoKeys=[];
+  for(var i=0;i<localStorage.length;i++){
+    var lk=localStorage.key(i);
+    if(lk&&lk.indexOf('fb4_auto_')===0)autoKeys.push(lk);
+  }
+  autoKeys.forEach(function(lk){
+    try{
+      var arr=JSON.parse(localStorage.getItem(lk)||'[]');
+      if(arr.length>3){
+        arr.sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+        removed+=arr.length-3;
+        localStorage.setItem(lk,JSON.stringify(arr.slice(0,3)));
+      }
+    }catch(e){}
+  });
+  return removed;
+}
 function getAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
 function setAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
 
@@ -2786,15 +2901,21 @@ function closeAllPops(){document.querySelectorAll('.wip-pop').forEach(function(x
 
 // ── TOOLTIP ──
 var _tip=null;
-function showTip(e,text){
-  if(e.target.scrollWidth<=e.target.clientWidth)return;
-  if(!_tip){_tip=document.createElement('div');_tip.className='chk-tip';document.body.appendChild(_tip);}
-  _tip.textContent=text;_tip.style.opacity='1';
-  _tip.style.background=isLight()?'#fff':'#1e2d42';
-  _tip.style.color=isLight()?'#1d1d1f':'#e2e8f0';
-  _tip.style.borderColor=isLight()?'rgba(0,0,0,.12)':'rgba(255,255,255,.1)';
-  var x=Math.min(e.clientX+14,window.innerWidth-280),y=e.clientY+14;
-  _tip.style.left=x+'px';_tip.style.top=y+'px';
+// Sub-pixel truncation test. scrollWidth/clientWidth are integers, so text
+// overflowing by <1px shows an ellipsis while the naive comparison says it
+// fits; measuring the text node via a Range catches that.
+function _chkTxtTruncated(el){
+  if(el.scrollWidth>el.clientWidth)return true;
+  var r=document.createRange();r.selectNodeContents(el);
+  return r.getBoundingClientRect().width>el.getBoundingClientRect().width+0.5;
+}
+// Row-level preview: bound to the whole .chk-row, not just the text span, so
+// hovering the chevron/✕/badge zone (where the ellipsis actually sits) still
+// previews the full text.
+function showChkTip(e,row){
+  var span=row.querySelector('.chk-txt');
+  if(!span||!_chkTxtTruncated(span))return;
+  showTipAlways(e,span.textContent);
 }
 function hideTip(){if(_tip)_tip.style.opacity='0';}
 function showTipAlways(e,text){
@@ -2818,6 +2939,12 @@ function toggleCMColor(e){
   _cmColorOpen=!_cmColorOpen;
   document.getElementById('cm-color-drop')?.classList.toggle('open',_cmColorOpen);
 }
+// Card-modal background tinted by card color — works in BOTH dark and light
+// themes (light previously skipped the tint, leaving every card modal white).
+function _cmModalBg(color){
+  if(isLight())return color?'color-mix(in srgb, '+color+' 8%, #fff)':'';
+  return color?'color-mix(in srgb, '+color+' 10%, #1a2538)':'#243650';
+}
 function setCMColor(color){
   EC.color=color;saveCard(EC);
   var circle=document.getElementById('cm-color-circle');
@@ -2825,7 +2952,7 @@ function setCMColor(color){
   var bar=document.getElementById('cm-bar');
   if(bar)bar.style.background=color||(PRI[EC.pri]||PRI[0]).d;
   var m=document.querySelector('#modal-root .modal');
-  if(m&&!isLight())m.style.background=color?'color-mix(in srgb, '+color+' 10%, #1a2538)':'#243650';
+  if(m)m.style.background=_cmModalBg(color);
   document.querySelectorAll('#cm-color-drop .cm-cdrop-dot').forEach(function(d){
     d.classList.toggle('on',(d.dataset.color||null)===color);
   });
@@ -2978,13 +3105,14 @@ function mkChkHtml(colId){
     var expanded=_expandedChk.has(i);
     return '<div class="chk-row-group">'+
       '<div class="chk-row" draggable="true"'+
+      ' onmouseenter="showChkTip(event,this)" onmouseleave="hideTip()"'+
       ' ondragstart="chkDragStart(event,'+i+')"'+
       ' ondragover="chkDragOver(event)"'+
       ' ondrop="chkDrop(event,'+i+',\''+colId+'\')"'+
       ' ondragend="chkDragEnd()">'+
       '<span class="chk-handle">⠿</span>'+
       '<div class="checkbox '+(done?'on':'')+'" onclick="toggleCMItem('+i+',\''+colId+'\')">'+(done?'<span style="color:#fff;font-size:10px;font-weight:900">✓</span>':'')+' </div>'+
-      '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" onmouseenter="showTip(event,\''+escA(it)+'\')" onmouseleave="hideTip()" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
+      '<span class="chk-txt" ondblclick="editCMItem('+i+',\''+colId+'\')" style="flex:1;font-size:13px;color:'+(done?'var(--txt-d)':'var(--txt)')+';text-decoration:'+(done?'line-through':'none')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:text">'+esc(it)+'</span>'+
       mkChkBadges(meta,done)+
       '<span class="chk-chevron-wrap"><button class="chk-chevron'+(expanded?' open':'')+'" onclick="toggleChkPanel('+i+',\''+colId+'\')" title="Item details">▾</button></span>'+
       '<span class="chk-x" onclick="removeCMItem('+i+',\''+colId+'\')" title="Remove item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 5L19 19M19 5L5 19"/></svg></span>'+
@@ -3286,6 +3414,59 @@ function updateDropIndicator(el,x,y){
 var _swipe={active:false,x:0,y:0,vx:0,vy:0,time:0,target:null,moved:false,dir:null};
 var _momentumTimer=null;
 
+// ── EDGE AUTO-SCROLL DURING DRAG ──
+// While a column/card drag is active and the pointer sits near the edge of a
+// scrollable container, scroll it so drags can reach off-screen destinations.
+// Runs as a rAF loop (not per-pointermove) so scrolling continues while the
+// pointer is held still inside the edge zone.
+var _dragScrollRAF=null;
+function _startDragScroll(){
+  if(_dragScrollRAF)return;
+  _dragScrollRAF=requestAnimationFrame(_dragScrollTick);
+}
+function _dragScrollTick(){
+  if(!_pd||!_pd.moved||_pd.curX===undefined){_dragScrollRAF=null;return;}
+  var EDGE=70,MAX=16,x=_pd.curX,y=_pd.curY,scrolled=false;
+  // speed ramps from 0 at the zone boundary to MAX at the container edge
+  function spd(depth){return Math.ceil(Math.min(1,depth/EDGE)*MAX);}
+  // horizontal: the column row under the pointer
+  // returns true only if the container actually scrolled (clamped no-ops don't count)
+  function nudge(el,prop,delta){var b=el[prop];el[prop]=b+delta;return el[prop]!==b;}
+  var row=_pd.lastHit&&_pd.lastHit.closest?_pd.lastHit.closest('.group-cols'):null;
+  if(row){
+    var r=row.getBoundingClientRect();
+    var right=Math.min(r.right,window.innerWidth),left=Math.max(r.left,0);
+    if(x>right-EDGE)scrolled=nudge(row,'scrollLeft',spd(x-(right-EDGE)))||scrolled;
+    else if(x<left+EDGE)scrolled=nudge(row,'scrollLeft',-spd((left+EDGE)-x))||scrolled;
+  }
+  // vertical: a card drag inside a height-limited column body (card drags
+  // carry a cid; column drags carry type:'col')
+  if(_pd.cid){
+    var body=_pd.lastHit&&_pd.lastHit.closest?_pd.lastHit.closest('.col-body'):null;
+    if(body&&body.scrollHeight>body.clientHeight){
+      var b=body.getBoundingClientRect();
+      if(y>b.bottom-40)scrolled=nudge(body,'scrollTop',spd(y-(b.bottom-40)))||scrolled;
+      else if(y<b.top+40)scrolled=nudge(body,'scrollTop',-spd((b.top+40)-y))||scrolled;
+    }
+  }
+  // vertical: the board itself (groups stacked beyond the viewport)
+  var board=document.getElementById('board');
+  if(board){
+    var br=board.getBoundingClientRect();
+    if(y>br.bottom-EDGE)scrolled=nudge(board,'scrollTop',spd(y-(br.bottom-EDGE)))||scrolled;
+    else if(y<br.top+EDGE)scrolled=nudge(board,'scrollTop',-spd((br.top+EDGE)-y))||scrolled;
+  }
+  // content moved under a stationary pointer — refresh the hit + drop indicator
+  if(scrolled&&_pd.ghost){
+    _pd.ghost.style.display='none';
+    var hit=document.elementFromPoint(x,y);
+    _pd.ghost.style.display='';
+    _pd.lastHit=hit;
+    updateDropIndicator(hit,x,y);
+  }
+  _dragScrollRAF=requestAnimationFrame(_dragScrollTick);
+}
+
 function initPointerDrag(){
   document.addEventListener('pointerdown',function(e){
     if(e.button!==0||e.target.closest('input,textarea,button,select,a,.cpicker,.cm-col-drop,.cm-color-drop'))return;
@@ -3328,6 +3509,8 @@ function initPointerDrag(){
       _pd.ghost.style.display='none';
       var hit=document.elementFromPoint(e.clientX,e.clientY);
       _pd.ghost.style.display='';
+      _pd.curX=e.clientX;_pd.curY=e.clientY;_pd.lastHit=hit;
+      _startDragScroll();
       updateDropIndicator(hit,e.clientX,e.clientY);
       return;
     }
@@ -4077,11 +4260,25 @@ function _mkDueActionsHtml(c,colId){
   var doneBtn=c.completed
     ?'<button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">↩ Reopen</button>'
     :'<button class="btn btn-green" style="padding:4px 9px;font-size:11px;flex-shrink:0" onclick="markCMDone(\''+colId+'\')">✓ Done</button>';
-  if(c.dueAuto)return c.due?doneBtn:'';
+  // When due dates are synced from items, offer a one-click escape hatch that
+  // clears every item's due date (sync itself stays intact — the card due
+  // simply mirrors the now-empty item dues).
+  var clearAllBtn='<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" title="Clear due dates on all checklist items" onclick="clearAllItemDues(\''+colId+'\')">✕</button>';
+  if(c.dueAuto)return (c.due?doneBtn:'')+clearAllBtn;
   return (c.due?
         doneBtn+
         '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
+}
+function clearAllItemDues(colId){
+  if(!confirm('Clear the due dates on all checklist items?\n\nThe card’s synced due date will clear with them.'))return;
+  _autoSnapBefore('Before: Clear all item due dates – '+new Date().toLocaleTimeString());
+  _ensureItemMeta(EC);
+  EC.itemMeta.forEach(function(m){if(m)m.due='';});
+  _syncCardDueFromItems(EC);
+  EC.due=''; // sync leaves the stale derived date in place once no item has a due
+  saveCard(EC);
+  renderCM(colId);
 }
 function _mkDueCalHtml(c,colId){
   if(c.dueAuto){
@@ -4143,7 +4340,10 @@ function renderCM(colId){
       '<span id="cm-due-label">'+dueLabelHtml+'</span>'+
     '</div>';
 
-  var descHtml='<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="margin-bottom:18px'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>';
+  var descHtml='<div style="position:relative;margin-bottom:18px">'+
+    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="display:block'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
+    '<div id="cm-desc-handle" class="desc-resize-handle" title="Drag to resize description"></div>'+
+  '</div>';
 
   var tagsTriggerHtml='<div class="cm-tags-wrap">'+
         '<div class="cm-tags-trigger" onclick="toggleCMTags(event)">'+
@@ -4214,12 +4414,34 @@ function renderCM(colId){
     var m=document.querySelector('#modal-root .modal');
     if(m){
       m.scrollTop=prevScroll;
-      if(!isLight()){
-        m.style.background=c.color?'color-mix(in srgb, '+c.color+' 10%, #1a2538)':'#243650';
-        m.style.backdropFilter='none';
-      }
+      m.style.background=_cmModalBg(c.color);
+      if(!isLight())m.style.backdropFilter='none';
     }
+    _initDescResize();
   },true);
+}
+
+// Custom oversized grab handle for the description box (the native
+// resize:vertical corner is ~17px and unstylable cross-browser; this one is
+// double the size, always visible, and pointer-based so it also works with
+// touch). Height persists through the same EC.descH path the native corner
+// uses, which stays enabled as a fallback.
+function _initDescResize(){
+  var h=document.getElementById('cm-desc-handle'),ta=document.getElementById('cm-desc');
+  if(!h||!ta)return;
+  h.onpointerdown=function(e){
+    e.preventDefault();e.stopPropagation();
+    var sy=e.clientY,sh=ta.getBoundingClientRect().height;
+    var onMove=function(ev){ta.style.height=Math.max(72,sh+ev.clientY-sy)+'px';};
+    var onUp=function(){
+      document.removeEventListener('pointermove',onMove);
+      document.removeEventListener('pointerup',onUp);
+      var nh=Math.round(ta.getBoundingClientRect().height);
+      if(nh!==Math.round(sh)){EC.descH=nh;saveCard(EC);}
+    };
+    document.addEventListener('pointermove',onMove);
+    document.addEventListener('pointerup',onUp);
+  };
 }
 
 function setCMPri(p,cid){EC.pri=p;saveCard(EC);renderCM(cid);}
@@ -5017,7 +5239,7 @@ document.addEventListener('keydown',function(e){
   }
 });
 
-load();loadTheme();loadModalSize();render();initPointerDrag();
+load();_purgeOrphanAutoSnaps();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();
 _sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
