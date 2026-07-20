@@ -2396,24 +2396,49 @@ function importBak(){
 
 // ── AUTO-SNAPSHOT STORE ──
 function _autoKey(){return 'fb4_auto_'+(_activeKey||'local');}
-// Remove auto-snapshot stores for boards no longer known to this device. Only
-// touches DISPOSABLE auto-snaps keyed by share-key — never user-created manual
-// snapshots — so it can't destroy anything explicitly saved. Runs on load and
-// as the first step of quota reclamation.
-function _purgeOrphanAutoSnaps(){
+// Auto-snapshot stores for boards no longer known to this device (share key
+// removed, or a local-only board this device lost track of). DETECTION only
+// — never deletes. Used both to build the boot-time review modal and by the
+// emergency reclaim path below.
+function _findOrphanAutoSnaps(){
+  var groups=[];
   try{
     var valid={local:1};
     getKeys().forEach(function(k){if(k.key)valid[k.key]=1;});
     if(_activeKey)valid[_activeKey]=1;
     var sk=localStorage.getItem('fb4_active_key');if(sk)valid[sk]=1;
-    var orphans=[];
     for(var i=0;i<localStorage.length;i++){
       var lk=localStorage.key(i);
-      if(lk&&lk.indexOf('fb4_auto_')===0&&!valid[lk.slice(9)])orphans.push(lk);
+      if(!lk||lk.indexOf('fb4_auto_')!==0)continue;
+      var boardKey=lk.slice(9);
+      if(valid[boardKey])continue;
+      try{
+        var arr=JSON.parse(localStorage.getItem(lk)||'[]');
+        if(!arr.length)continue;
+        var tss=arr.map(function(s){return s.ts||0;});
+        groups.push({
+          storageKey:lk,boardKey:boardKey,count:arr.length,
+          sizeBytes:new Blob([localStorage.getItem(lk)||'']).size,
+          oldest:Math.min.apply(null,tss),newest:Math.max.apply(null,tss)
+        });
+      }catch(e){}
     }
-    orphans.forEach(function(lk){try{localStorage.removeItem(lk);}catch(e){}});
-    return orphans.length;
-  }catch(e){return 0;}
+  }catch(e){}
+  return groups;
+}
+// Silently delete ALL currently-orphaned auto-snap stores. Only DISPOSABLE
+// auto-snaps keyed by share-key — never user-created manual snapshots — so
+// it can't destroy anything explicitly saved. Used ONLY by the emergency
+// quota-reclaim path below, where there's no time for a user prompt; the
+// resulting cull is still reported afterward via the cull log/banner (item 2).
+// The boot-time path (_checkOrphanSnapshots) NEVER calls this — it always
+// requires explicit per-group user action. Returns snapshots removed.
+function _purgeOrphanAutoSnaps(){
+  var total=0;
+  _findOrphanAutoSnaps().forEach(function(g){
+    try{localStorage.removeItem(g.storageKey);total+=g.count;}catch(e){}
+  });
+  return total;
 }
 // Reclaim localStorage after a quota failure: first drop orphaned auto-snap
 // stores, then trim every board's auto-snaps down to the 3 newest (auto-snaps
@@ -2480,6 +2505,90 @@ function deleteAutoBak(id){
   setAutoBaks(remaining);
   _pushAutoSnapsToCloud(remaining);
   showBackupModal();
+}
+
+// ── ORPHANED AUTO-SNAPSHOT REVIEW (item 4) ──
+// Runs once per fresh page load (see boot sequence). Never deletes anything
+// automatically — every deletion here requires an explicit click. If the
+// user dismisses without acting, nothing changes, and the exact same groups
+// are found and re-shown on the NEXT startup, for as long as they exist.
+function _checkOrphanSnapshots(){
+  var groups=_findOrphanAutoSnaps();
+  if(groups.length)showOrphanSnapshotsModal(groups);
+}
+function _getOrphanGroupData(storageKey){
+  try{return JSON.parse(localStorage.getItem(storageKey)||'[]');}catch(e){return[];}
+}
+function showOrphanSnapshotsModal(groups){
+  var rows=groups.map(function(g){
+    var kb=Math.round(g.sizeBytes/1024);
+    var dateRange=new Date(g.oldest).toLocaleDateString()+' – '+new Date(g.newest).toLocaleDateString();
+    var snaps=_getOrphanGroupData(g.storageKey);
+    var snapRows=snaps.map(function(s,si){
+      return '<div class="bak-item" style="margin-bottom:5px">'+
+        '<div style="flex:1"><div class="bak-name" style="cursor:default">'+esc(s.name||'Snapshot')+'</div>'+
+        '<div class="bak-date">'+new Date(s.ts).toLocaleString()+' &middot; '+(s.cards||0)+' card'+(s.cards!==1?'s':'')+'</div></div>'+
+        '<div class="bak-actions">'+
+          '<button onclick="restoreOrphanSnap(\''+escA(g.storageKey)+'\','+si+')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
+          '<button onclick="exportOrphanSnap(\''+escA(g.storageKey)+'\','+si+')" style="background:var(--surf3);color:var(--txt-m)">Export</button>'+
+        '</div></div>';
+    }).join('');
+    return '<div style="border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--surf2)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+        '<div style="font-weight:700;font-size:13px;color:var(--txt-b)">📦 Board '+esc(g.boardKey.slice(0,10))+(g.boardKey.length>10?'…':'')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt-d)">'+g.count+' snapshot'+(g.count!==1?'s':'')+' &middot; '+kb+'KB</div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--txt-d);margin-bottom:8px">'+dateRange+' — this board is no longer on this device’s board list.</div>'+
+      '<details><summary style="cursor:pointer;color:#3b82f6;font-size:12px;font-weight:600">Review '+g.count+' snapshot'+(g.count!==1?'s':'')+' individually</summary>'+
+      '<div style="margin-top:8px">'+snapRows+'</div></details>'+
+      '<div style="display:flex;gap:8px;margin-top:10px">'+
+        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="exportOrphanGroup(\''+escA(g.storageKey)+'\')">⬇ Export All</button>'+
+        '<button class="btn btn-danger" style="flex:1;font-size:12px" onclick="deleteOrphanGroup(\''+escA(g.storageKey)+'\')">🗑 Delete This Group</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  setModal(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+      '<div style="font-size:17px;font-weight:800;color:var(--txt-b)">🗂 Orphaned Auto-Snapshots Found</div>'+
+    '</div>'+
+    '<div style="font-size:12.5px;color:var(--txt-m);margin-bottom:16px;line-height:1.6">These auto-snapshots belong to boards no longer in your board list on this device. They are <strong>not</strong> deleted automatically — review each group below, then export, delete, or leave them for later. If you leave any, this same list reappears next time you open FlowBoard.</div>'+
+    rows+
+    '<div style="display:flex;justify-content:flex-end;margin-top:6px">'+
+      '<button class="btn btn-ghost" onclick="closeModal()">Keep All For Now</button>'+
+    '</div>',
+  '560px');
+}
+function restoreOrphanSnap(storageKey,idx){
+  var arr=_getOrphanGroupData(storageKey);
+  var snap=arr[idx];if(!snap)return;
+  if(!confirm('Restore "'+snap.name+'" into your CURRENT board?\n\nYour current board will be replaced. (A safety snapshot of your current board is taken first.)'))return;
+  _autoSnapBefore('Before: Restore orphaned snapshot – '+new Date().toLocaleTimeString());
+  _undoStack=[];_redoStack=[];_persistUndoSession();_updateUndoUI();
+  S=JSON.parse(snap.data);save();render();closeModal();notify('✅ Restored orphaned snapshot into current board!');
+}
+function exportOrphanSnap(storageKey,idx){
+  var arr=_getOrphanGroupData(storageKey);
+  var snap=arr[idx];if(!snap)return;
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([snap.data],{type:'application/json'}));
+  a.download=(snap.name||'snapshot').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json';
+  a.click();
+}
+function exportOrphanGroup(storageKey){
+  var arr=_getOrphanGroupData(storageKey);
+  if(!arr.length)return;
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(arr)],{type:'application/json'}));
+  a.download='orphan_snapshots_'+storageKey.replace('fb4_auto_','').slice(0,10)+'_'+Date.now()+'.json';
+  a.click();
+  notify('⬇ Exported '+arr.length+' snapshot'+(arr.length!==1?'s':'')+'.');
+}
+function deleteOrphanGroup(storageKey){
+  if(!confirm('Delete these auto-snapshots permanently? This cannot be undone.'))return;
+  try{localStorage.removeItem(storageKey);}catch(e){}
+  notify('🗑 Orphaned snapshots deleted.');
+  var remaining=_findOrphanAutoSnaps();
+  if(remaining.length)showOrphanSnapshotsModal(remaining);else closeModal();
 }
 
 // ── SNAPSHOT DIFF VIEWER ──
@@ -5424,7 +5533,9 @@ document.addEventListener('keydown',function(e){
   }
 });
 
-load();_purgeOrphanAutoSnaps();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
+load();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
+// Slight delay so this doesn't compete with initial paint / sync connect / USB reconnect banner.
+setTimeout(_checkOrphanSnapshots,400);
 _sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
