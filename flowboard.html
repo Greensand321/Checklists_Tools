@@ -476,7 +476,9 @@ var _USB_IDB_NAME='fb4_usb';var _USB_IDB_STORE='handles';var _USB_IDB_KEY='dir';
 
 // ── IndexedDB helpers for persisting the USB directory handle across sessions ──
 function _usbIDB(cb){
-  var req=indexedDB.open(_USB_IDB_NAME,1);
+  if(typeof indexedDB==='undefined'||!indexedDB){cb(new Error('IndexedDB unavailable'));return;}
+  var req;
+  try{req=indexedDB.open(_USB_IDB_NAME,1);}catch(e){cb(e);return;}
   req.onupgradeneeded=function(e){e.target.result.createObjectStore(_USB_IDB_STORE);};
   req.onsuccess=function(e){cb(null,e.target.result);};
   req.onerror=function(e){cb(e);};
@@ -1012,35 +1014,44 @@ function connectToKey(key){
   // ── Auto-snapshots cloud sync ──
   // Separate Firebase path — independent of the main board-state listener.
   // Bidirectional merge: remote-only snaps come down, local-only snaps (created offline) go up.
-  _autoSnapsRef=_db.ref('boards/'+key+'/autoSnaps');
-  _autoSnapsListener=_autoSnapsRef.on('value',function(snap){
-    if(_autoSnapsPending>0)return; // our own write in-flight — ignore echo
-    var remote=snap.val();
-    // Firebase may return a sparse-key object instead of an array for edge cases — normalise.
-    if(remote&&!Array.isArray(remote))remote=Object.values(remote).filter(Boolean);
-    var local=getAutoBaks();
-    if(!remote||remote.length===0){
-      // No cloud snaps yet — push local ones up (e.g. first time connecting from this device)
-      if(local.length>0)_pushAutoSnapsToCloud(local);
-      return;
-    }
-    // Compute what's in remote but not local, and vice-versa
-    var localIds=local.map(function(x){return x.id;});
-    var remoteIds=remote.map(function(x){return x.id;});
-    var remoteOnly=remote.filter(function(x){return localIds.indexOf(x.id)===-1;});
-    var localOnly=local.filter(function(x){return remoteIds.indexOf(x.id)===-1;});
-    if(remoteOnly.length===0&&localOnly.length===0)return; // fully in sync — nothing to do
-    // Merge: take everything from both sides, sort newest-first, cap at 15
-    var merged=remote.concat(localOnly);
-    merged.sort(function(a,b){return b.ts-a.ts;});
-    if(merged.length>15)merged.splice(15);
-    setAutoBaks(merged);
-    if(localOnly.length>0){
-      // Push merged set back so local-only snaps (created offline) reach the cloud
-      _pushAutoSnapsToCloud(merged);
-    }
-  },function(err){
-    console.warn('[AutoSnap] Cloud read failed — using local cache:',err);
+  // CRITICAL (IDB migration): the merge reads the local auto mirror and, if it
+  // ran before the mirror was hydrated for THIS board, would see an empty local
+  // set and overwrite un-pushed local-only snaps. So attach the listener only
+  // AFTER _hydrateAutoMirror() resolves, and guard against a board switch that
+  // superseded us in the meantime (capturedKey pattern, same as the main listener).
+  var _autoCapKey=key;
+  _hydrateAutoMirror().then(function(){
+    if(_activeKey!==_autoCapKey)return; // a newer connectToKey already took over
+    _autoSnapsRef=_db.ref('boards/'+key+'/autoSnaps');
+    _autoSnapsListener=_autoSnapsRef.on('value',function(snap){
+      if(_autoSnapsPending>0)return; // our own write in-flight — ignore echo
+      var remote=snap.val();
+      // Firebase may return a sparse-key object instead of an array for edge cases — normalise.
+      if(remote&&!Array.isArray(remote))remote=Object.values(remote).filter(Boolean);
+      var local=getAutoBaks();
+      if(!remote||remote.length===0){
+        // No cloud snaps yet — push local ones up (e.g. first time connecting from this device)
+        if(local.length>0)_pushAutoSnapsToCloud(local);
+        return;
+      }
+      // Compute what's in remote but not local, and vice-versa
+      var localIds=local.map(function(x){return x.id;});
+      var remoteIds=remote.map(function(x){return x.id;});
+      var remoteOnly=remote.filter(function(x){return localIds.indexOf(x.id)===-1;});
+      var localOnly=local.filter(function(x){return remoteIds.indexOf(x.id)===-1;});
+      if(remoteOnly.length===0&&localOnly.length===0)return; // fully in sync — nothing to do
+      // Merge: take everything from both sides, sort newest-first, cap at 15
+      var merged=remote.concat(localOnly);
+      merged.sort(function(a,b){return b.ts-a.ts;});
+      if(merged.length>15)merged.splice(15);
+      setAutoBaks(merged);
+      if(localOnly.length>0){
+        // Push merged set back so local-only snaps (created offline) reach the cloud
+        _pushAutoSnapsToCloud(merged);
+      }
+    },function(err){
+      console.warn('[AutoSnap] Cloud read failed — using local cache:',err);
+    });
   });
 }
 
@@ -1101,6 +1112,11 @@ function disconnectSync(){
 function _applyRemote(remote){
   _setRemoteBaseline(remote);
   S=remote;
+  // Board identity may have changed (switch/join) — re-hydrate the manual
+  // backup mirror for the new board so the Backup modal shows its snapshots,
+  // not the previous board's. (getBaks also self-heals on stale reads, but
+  // doing it here avoids a one-render empty flash.)
+  if(_backupsUseIdb)_hydrateManualMirror();
   // Remote state replaces local — the existing undo stack belongs to the old S and
   // would produce incorrect results if applied to the new remote state. Clear it.
   _undoStack=[];_redoStack=[];
@@ -2432,9 +2448,85 @@ function _idbCheckUsable(){
   }).catch(function(){return false;});
   return _idbUsable;
 }
+// ── SYNCHRONOUS MIRROR over the async IDB backend ──────────────────────────
+// getBaks/getAutoBaks stay synchronous (call sites unchanged) by returning an
+// in-memory array that mirrors the current board's IDB record. Writes update
+// the mirror and persist to IDB immediately (puts are cheap; no debounce, so
+// there's no "lost on tab close" window). If IDB is unusable, _backupsUseIdb
+// stays false and every function falls back to the original localStorage path.
+var _backupsUseIdb=false;
+var _baksMirror=null,_baksMirrorKey=null,_hydratingManual=null;
+var _autoMirror=null,_autoMirrorKey=null,_hydratingAuto=null;
+function _hydrateManualMirror(){
+  var k=_bakKey();
+  if(_baksMirrorKey===k)return Promise.resolve();
+  if(_hydratingManual&&_hydratingManual._k===k)return _hydratingManual;
+  var p=_idbGet('manual',k).then(function(arr){_baksMirror=arr||[];_baksMirrorKey=k;})
+    .catch(function(){_baksMirror=[];_baksMirrorKey=k;})
+    .then(function(){if(_hydratingManual===p)_hydratingManual=null;});
+  p._k=k;_hydratingManual=p;return p;
+}
+function _hydrateAutoMirror(){
+  var k=_autoKey();
+  if(_autoMirrorKey===k)return Promise.resolve();
+  if(_hydratingAuto&&_hydratingAuto._k===k)return _hydratingAuto;
+  var p=_idbGet('auto',k).then(function(arr){_autoMirror=arr||[];_autoMirrorKey=k;})
+    .catch(function(){_autoMirror=[];_autoMirrorKey=k;})
+    .then(function(){if(_hydratingAuto===p)_hydratingAuto=null;});
+  p._k=k;_hydratingAuto=p;return p;
+}
+// One-time move of EVERY board's backups from localStorage into IDB. Sequential
+// (bounded memory, no txn storm), verified round-trip before each original is
+// deleted, corrupt entries left untouched. Gated by a flag so it runs once.
+function _migrateAllBackupsToIdb(){
+  if(localStorage.getItem('fb4_idb_migrated')==='1')return Promise.resolve();
+  var jobs=[];
+  for(var i=0;i<localStorage.length;i++){
+    var lk=localStorage.key(i);if(!lk)continue;
+    if(lk.indexOf('fb4_baks_')===0)jobs.push({store:'manual',key:lk});
+    else if(lk.indexOf('fb4_auto_')===0)jobs.push({store:'auto',key:lk});
+  }
+  return jobs.reduce(function(chain,job){
+    return chain.then(function(){
+      var raw=localStorage.getItem(job.key);if(raw==null)return;
+      var parsed;try{parsed=JSON.parse(raw);}catch(e){return;} // corrupt — leave in place
+      return _idbPut(job.store,job.key,parsed).then(function(ok){
+        if(!ok)return; // put failed — keep the localStorage original, retry next boot
+        return _idbGet(job.store,job.key).then(function(verify){
+          if(verify!=null){try{localStorage.removeItem(job.key);}catch(e){}} // verified copy → reclaim space
+        });
+      });
+    });
+  },Promise.resolve()).then(function(){
+    try{localStorage.setItem('fb4_idb_migrated','1');}catch(e){}
+  });
+}
+// Boot entry point: decide backend, migrate, hydrate current board's mirrors.
+function _initBackupStore(){
+  return _idbCheckUsable().then(function(usable){
+    _backupsUseIdb=!!usable;
+    if(!usable)return; // stay on localStorage — original behavior, nothing to migrate
+    return _migrateAllBackupsToIdb().then(function(){
+      return Promise.all([_hydrateManualMirror(),_hydrateAutoMirror()]);
+    });
+  }).catch(function(){_backupsUseIdb=false;});
+}
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
-function getBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
-function setBaks(a){localStorage.setItem(_bakKey(),JSON.stringify(a));}
+function _lsGetBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
+function _lsSetBaks(a){try{localStorage.setItem(_bakKey(),JSON.stringify(a));}catch(e){}}
+function getBaks(){
+  if(!_backupsUseIdb)return _lsGetBaks();
+  if(_baksMirrorKey!==_bakKey()){_hydrateManualMirror();return[];} // stale/unhydrated → safe empty until hydrated
+  return _baksMirror||[];
+}
+function setBaks(a){
+  if(!_backupsUseIdb)return _lsSetBaks(a);
+  var k=_bakKey();
+  if(_baksMirrorKey!==k){ // mirror not hydrated for this board — never persist, would risk clobbering unloaded data
+    console.warn('[Backups] setBaks skipped — mirror not hydrated for '+k);_hydrateManualMirror();return;
+  }
+  _baksMirror=a;_idbPut('manual',k,a);
+}
 function createBak(name){
   var a=getBaks(),tc=S.cols.reduce(function(n,c){return n+c.cards.length;},0);
   a.unshift({id:uid(),name:name||'Snapshot '+new Date().toLocaleString(),ts:Date.now(),cards:tc,data:JSON.stringify(S)});
@@ -2494,43 +2586,65 @@ function _autoKey(){return 'fb4_auto_'+(_activeKey||'local');}
 // removed, or a local-only board this device lost track of). DETECTION only
 // — never deletes. Used both to build the boot-time review modal and by the
 // emergency reclaim path below.
+// DETECTION only — never deletes. Returns a Promise of groups, each carrying
+// its full snaps array (so the review modal renders synchronously). Reads the
+// IDB 'auto' store when active, else the localStorage fallback.
 function _findOrphanAutoSnaps(){
-  var groups=[];
-  try{
-    var valid={local:1};
-    getKeys().forEach(function(k){if(k.key)valid[k.key]=1;});
-    if(_activeKey)valid[_activeKey]=1;
-    var sk=localStorage.getItem('fb4_active_key');if(sk)valid[sk]=1;
+  var valid={local:1};
+  getKeys().forEach(function(k){if(k.key)valid[k.key]=1;});
+  if(_activeKey)valid[_activeKey]=1;
+  var sk=localStorage.getItem('fb4_active_key');if(sk)valid[sk]=1;
+  function pack(boardKey,storageKey,arr){
+    if(!arr||!arr.length)return null;
+    var tss=arr.map(function(s){return s.ts||0;});
+    return{storageKey:storageKey,boardKey:boardKey,count:arr.length,snaps:arr,
+      sizeBytes:new Blob([JSON.stringify(arr)]).size,
+      oldest:Math.min.apply(null,tss),newest:Math.max.apply(null,tss)};
+  }
+  if(!_backupsUseIdb){
+    var groups=[];
     for(var i=0;i<localStorage.length;i++){
       var lk=localStorage.key(i);
       if(!lk||lk.indexOf('fb4_auto_')!==0)continue;
-      var boardKey=lk.slice(9);
-      if(valid[boardKey])continue;
-      try{
-        var arr=JSON.parse(localStorage.getItem(lk)||'[]');
-        if(!arr.length)continue;
-        var tss=arr.map(function(s){return s.ts||0;});
-        groups.push({
-          storageKey:lk,boardKey:boardKey,count:arr.length,
-          sizeBytes:new Blob([localStorage.getItem(lk)||'']).size,
-          oldest:Math.min.apply(null,tss),newest:Math.max.apply(null,tss)
-        });
-      }catch(e){}
+      var bk=lk.slice(9);if(valid[bk])continue;
+      var arr;try{arr=JSON.parse(localStorage.getItem(lk)||'[]');}catch(e){continue;}
+      var g=pack(bk,lk,arr);if(g)groups.push(g);
     }
-  }catch(e){}
-  return groups;
+    return Promise.resolve(groups);
+  }
+  return _idbKeys('auto').then(function(keys){
+    var orphanKeys=keys.filter(function(kk){return kk.indexOf('fb4_auto_')===0&&!valid[kk.slice(9)];});
+    return orphanKeys.reduce(function(chain,kk){
+      return chain.then(function(acc){
+        return _idbGet('auto',kk).then(function(arr){var g=pack(kk.slice(9),kk,arr);if(g)acc.push(g);return acc;});
+      });
+    },Promise.resolve([]));
+  });
 }
-// Silently delete ALL currently-orphaned auto-snap stores. Only DISPOSABLE
-// auto-snaps keyed by share-key — never user-created manual snapshots — so
-// it can't destroy anything explicitly saved. Used ONLY by the emergency
-// quota-reclaim path below, where there's no time for a user prompt; the
-// resulting cull is still reported afterward via the cull log/banner (item 2).
-// The boot-time path (_checkOrphanSnapshots) NEVER calls this — it always
-// requires explicit per-group user action. Returns snapshots removed.
+// Delete one orphan store (dispatches IDB vs localStorage). Returns a Promise.
+function _deleteOrphanStore(storageKey){
+  if(_backupsUseIdb)return _idbDelete('auto',storageKey);
+  try{localStorage.removeItem(storageKey);}catch(e){}
+  return Promise.resolve(true);
+}
+// Sync emergency-path purge (save() quota catch). localStorage ONLY — after IDB
+// migration there are no fb4_auto_* keys in localStorage, so this naturally
+// finds nothing (culling IDB can't free the localStorage quota that triggered
+// the failure anyway, and the live board is tiny). Still does real work under
+// the localStorage-fallback backend. Never touches manual snapshots.
 function _purgeOrphanAutoSnaps(){
   var total=0;
-  _findOrphanAutoSnaps().forEach(function(g){
-    try{localStorage.removeItem(g.storageKey);total+=g.count;}catch(e){}
+  var valid={local:1};
+  getKeys().forEach(function(k){if(k.key)valid[k.key]=1;});
+  if(_activeKey)valid[_activeKey]=1;
+  var sk=localStorage.getItem('fb4_active_key');if(sk)valid[sk]=1;
+  var orphans=[];
+  for(var i=0;i<localStorage.length;i++){
+    var lk=localStorage.key(i);
+    if(lk&&lk.indexOf('fb4_auto_')===0&&!valid[lk.slice(9)])orphans.push(lk);
+  }
+  orphans.forEach(function(lk){
+    try{var n=JSON.parse(localStorage.getItem(lk)||'[]').length;localStorage.removeItem(lk);total+=n;}catch(e){}
   });
   return total;
 }
@@ -2557,8 +2671,19 @@ function _reclaimSpace(){
   });
   return removed;
 }
-function getAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
-function setAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+function _lsGetAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
+function _lsSetAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+function getAutoBaks(){
+  if(!_backupsUseIdb)return _lsGetAutoBaks();
+  if(_autoMirrorKey!==_autoKey()){_hydrateAutoMirror();return[];}
+  return _autoMirror||[];
+}
+function setAutoBaks(a){
+  if(!_backupsUseIdb)return _lsSetAutoBaks(a);
+  var k=_autoKey();
+  if(_autoMirrorKey!==k){console.warn('[AutoSnap] setAutoBaks skipped — mirror not hydrated for '+k);_hydrateAutoMirror();return;}
+  _autoMirror=a;_idbPut('auto',k,a);
+}
 
 function _createAutoSnap(name,trigger){
   var tc=_syncCardCount(S);
@@ -2606,25 +2731,28 @@ function deleteAutoBak(id){
 // automatically — every deletion here requires an explicit click. If the
 // user dismisses without acting, nothing changes, and the exact same groups
 // are found and re-shown on the NEXT startup, for as long as they exist.
+// Detection is async (IDB); results are cached in _orphanGroups so the modal
+// and its click handlers stay synchronous against in-memory data. Each group
+// carries its full snaps array. Only the actual delete touches storage (async).
+var _orphanGroups=[];
 function _checkOrphanSnapshots(){
-  var groups=_findOrphanAutoSnaps();
-  if(groups.length)showOrphanSnapshotsModal(groups);
+  _findOrphanAutoSnaps().then(function(groups){
+    if(groups&&groups.length){_orphanGroups=groups;showOrphanSnapshotsModal();}
+  });
 }
-function _getOrphanGroupData(storageKey){
-  try{return JSON.parse(localStorage.getItem(storageKey)||'[]');}catch(e){return[];}
-}
-function showOrphanSnapshotsModal(groups){
-  var rows=groups.map(function(g){
+function showOrphanSnapshotsModal(){
+  var groups=_orphanGroups;
+  if(!groups.length){closeModal();return;}
+  var rows=groups.map(function(g,gi){
     var kb=Math.round(g.sizeBytes/1024);
     var dateRange=new Date(g.oldest).toLocaleDateString()+' – '+new Date(g.newest).toLocaleDateString();
-    var snaps=_getOrphanGroupData(g.storageKey);
-    var snapRows=snaps.map(function(s,si){
+    var snapRows=(g.snaps||[]).map(function(s,si){
       return '<div class="bak-item" style="margin-bottom:5px">'+
         '<div style="flex:1"><div class="bak-name" style="cursor:default">'+esc(s.name||'Snapshot')+'</div>'+
         '<div class="bak-date">'+new Date(s.ts).toLocaleString()+' &middot; '+(s.cards||0)+' card'+(s.cards!==1?'s':'')+'</div></div>'+
         '<div class="bak-actions">'+
-          '<button onclick="restoreOrphanSnap(\''+escA(g.storageKey)+'\','+si+')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
-          '<button onclick="exportOrphanSnap(\''+escA(g.storageKey)+'\','+si+')" style="background:var(--surf3);color:var(--txt-m)">Export</button>'+
+          '<button onclick="restoreOrphanSnap('+gi+','+si+')" style="background:rgba(96,165,250,.15);color:#3b82f6">Restore</button>'+
+          '<button onclick="exportOrphanSnap('+gi+','+si+')" style="background:var(--surf3);color:var(--txt-m)">Export</button>'+
         '</div></div>';
     }).join('');
     return '<div style="border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--surf2)">'+
@@ -2636,8 +2764,8 @@ function showOrphanSnapshotsModal(groups){
       '<details><summary style="cursor:pointer;color:#3b82f6;font-size:12px;font-weight:600">Review '+g.count+' snapshot'+(g.count!==1?'s':'')+' individually</summary>'+
       '<div style="margin-top:8px">'+snapRows+'</div></details>'+
       '<div style="display:flex;gap:8px;margin-top:10px">'+
-        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="exportOrphanGroup(\''+escA(g.storageKey)+'\')">⬇ Export All</button>'+
-        '<button class="btn btn-danger" style="flex:1;font-size:12px" onclick="deleteOrphanGroup(\''+escA(g.storageKey)+'\')">🗑 Delete This Group</button>'+
+        '<button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="exportOrphanGroup('+gi+')">⬇ Export All</button>'+
+        '<button class="btn btn-danger" style="flex:1;font-size:12px" onclick="deleteOrphanGroup('+gi+')">🗑 Delete This Group</button>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -2652,37 +2780,36 @@ function showOrphanSnapshotsModal(groups){
     '</div>',
   '560px');
 }
-function restoreOrphanSnap(storageKey,idx){
-  var arr=_getOrphanGroupData(storageKey);
-  var snap=arr[idx];if(!snap)return;
+function restoreOrphanSnap(gi,idx){
+  var g=_orphanGroups[gi];if(!g)return;var snap=g.snaps[idx];if(!snap)return;
   if(!confirm('Restore "'+snap.name+'" into your CURRENT board?\n\nYour current board will be replaced. (A safety snapshot of your current board is taken first.)'))return;
   _autoSnapBefore('Before: Restore orphaned snapshot – '+new Date().toLocaleTimeString());
   _undoStack=[];_redoStack=[];_persistUndoSession();_updateUndoUI();
   S=JSON.parse(snap.data);save();render();closeModal();notify('✅ Restored orphaned snapshot into current board!');
 }
-function exportOrphanSnap(storageKey,idx){
-  var arr=_getOrphanGroupData(storageKey);
-  var snap=arr[idx];if(!snap)return;
+function exportOrphanSnap(gi,idx){
+  var g=_orphanGroups[gi];if(!g)return;var snap=g.snaps[idx];if(!snap)return;
   var a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([snap.data],{type:'application/json'}));
   a.download=(snap.name||'snapshot').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_')+'_'+Date.now()+'.json';
   a.click();
 }
-function exportOrphanGroup(storageKey){
-  var arr=_getOrphanGroupData(storageKey);
-  if(!arr.length)return;
+function exportOrphanGroup(gi){
+  var g=_orphanGroups[gi];if(!g||!g.snaps.length)return;
   var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(arr)],{type:'application/json'}));
-  a.download='orphan_snapshots_'+storageKey.replace('fb4_auto_','').slice(0,10)+'_'+Date.now()+'.json';
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(g.snaps)],{type:'application/json'}));
+  a.download='orphan_snapshots_'+g.boardKey.slice(0,10)+'_'+Date.now()+'.json';
   a.click();
-  notify('⬇ Exported '+arr.length+' snapshot'+(arr.length!==1?'s':'')+'.');
+  notify('⬇ Exported '+g.snaps.length+' snapshot'+(g.snaps.length!==1?'s':'')+'.');
 }
-function deleteOrphanGroup(storageKey){
+function deleteOrphanGroup(gi){
+  var g=_orphanGroups[gi];if(!g)return;
   if(!confirm('Delete these auto-snapshots permanently? This cannot be undone.'))return;
-  try{localStorage.removeItem(storageKey);}catch(e){}
-  notify('🗑 Orphaned snapshots deleted.');
-  var remaining=_findOrphanAutoSnaps();
-  if(remaining.length)showOrphanSnapshotsModal(remaining);else closeModal();
+  _deleteOrphanStore(g.storageKey).then(function(){
+    notify('🗑 Orphaned snapshots deleted.');
+    _orphanGroups=_orphanGroups.filter(function(x){return x!==g;});
+    if(_orphanGroups.length)showOrphanSnapshotsModal();else closeModal();
+  });
 }
 
 // ── SNAPSHOT DIFF VIEWER ──
@@ -5628,12 +5755,22 @@ document.addEventListener('keydown',function(e){
 });
 
 load();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
-// Slight delay so this doesn't compete with initial paint / sync connect / USB reconnect banner.
-setTimeout(_checkOrphanSnapshots,400);
-_sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
-initSync();
+// Backups now live in IndexedDB (with a localStorage fallback). Initialise that
+// store — probe usability, migrate any existing localStorage backups, hydrate
+// the current board's mirrors — BEFORE anything that reads/writes backups:
+// session-start snapshot, orphan review, and cloud sync (whose auto-snap
+// listener merges against the local mirror and must not run before hydration).
+function _bootAfterBackupStore(){
+  _sessionStartSnap();                          // auto-snapshot the session's opening state
+  setTimeout(_checkOrphanSnapshots,400);        // slight delay so it doesn't compete with paint/USB banner
+  initSync();                                   // connect last, so the auto-snap listener sees a hydrated mirror
+}
+_initBackupStore().then(_bootAfterBackupStore).catch(function(e){
+  console.error('[Backups] store init failed, continuing on localStorage:',e);
+  _backupsUseIdb=false;_bootAfterBackupStore();
+});
 </script>
 </body>
 </html>
