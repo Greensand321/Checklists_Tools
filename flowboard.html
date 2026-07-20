@@ -279,6 +279,10 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .chk-sort-opt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;transition:background .12s;font-family:inherit}
 .chk-sort-opt:hover{background:var(--surf3)}
 .chk-sort-opt.on{background:rgba(96,165,250,.15);color:#60a5fa}
+.chk-sort-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 9px 9px;margin-bottom:5px;border-bottom:1px solid var(--bd)}
+.chk-sort-toggle-label{font-size:11.5px;font-weight:600;color:var(--txt-m);line-height:1.3;max-width:130px}
+.chk-sort-toggle-btn{flex-shrink:0;border:1px solid var(--bd-i);border-radius:20px;background:var(--surf2);color:var(--txt-d);font-size:10px;font-weight:800;padding:4px 9px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;font-family:inherit}
+.chk-sort-toggle-btn.on{background:rgba(96,165,250,.18);color:#60a5fa;border-color:rgba(96,165,250,.4)}
 .chk-badges{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .chk-badge{display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--txt-dd);white-space:nowrap;line-height:1}
 .chk-badge-pri{width:7px;height:7px;border-radius:50%;padding:0}
@@ -1324,18 +1328,33 @@ function _ackCullLog(){
 }
 
 // ── BACKUPS BUTTON STATE (item 2) ──
+// Backend visibility (Q1 gap fix): _backupsUseIdb flips silently between
+// devices/browsers — nothing used to surface which mode is active. Returns
+// a description used by both the button tooltip and the modal's bar section.
+function _backupModeInfo(){
+  if(_idbUsable===null||_idbUsable===undefined){
+    return{usingIdb:null,label:'Checking storage backend…',warn:false};
+  }
+  if(_backupsUseIdb){
+    return{usingIdb:true,label:'IndexedDB (large capacity)',warn:false};
+  }
+  return{usingIdb:false,
+    label:'⚠ Limited local storage only (~5MB) — IndexedDB unavailable in this browser/context',
+    warn:true};
+}
 function _updateBackupsBtnState(){
   var btn=document.getElementById('backups-btn');if(!btn)return;
   var stats=_storageStats();
   var dot=document.getElementById('backups-btn-dot');
   var unacked=_hasUnackedCull();
+  var mode=_backupModeInfo();
   var cls='btn-green',state='ok';
   if(unacked||stats.pct>=90){cls='btn-red-warn';state='red';}
-  else if(stats.pct>=70){cls='btn-amber-warn';state='amber';}
+  else if(stats.pct>=70||mode.warn){cls='btn-amber-warn';state='amber';}
   btn.className='btn '+cls;
   if(dot)dot.style.display=unacked?'block':'none';
   var mb=function(b){return Math.round(b/1024/1024*10)/10;};
-  btn.title='Storage: '+mb(stats.used)+'MB of '+(stats.isEstimate?'~':'')+mb(stats.ceiling)+'MB used ('+stats.pct+'%)'+(unacked?' — auto-cleanup ran recently, click to review':'');
+  btn.title='Storage backend: '+mode.label+'\nUsage: '+mb(stats.used)+'MB of '+(stats.isEstimate?'~':'')+mb(stats.ceiling)+'MB used ('+stats.pct+'%)'+(unacked?'\nAuto-cleanup ran recently — click to review':'');
 }
 
 // ── PERSISTENT SAVE-ERROR BANNER (item 1) ──
@@ -2557,7 +2576,9 @@ function setBaks(a){
   if(!_backupsUseIdb)return _lsSetBaks(a);
   var k=_bakKey();
   if(_baksMirrorKey!==k){ // mirror not hydrated for this board — never persist, would risk clobbering unloaded data
-    console.warn('[Backups] setBaks skipped — mirror not hydrated for '+k);_hydrateManualMirror();return;
+    console.warn('[Backups] setBaks skipped — mirror not hydrated for '+k);
+    notify('⚠️ Snapshot action skipped — storage was still loading for this board. Please try again.');
+    _hydrateManualMirror();return;
   }
   _baksMirror=a;_idbPut('manual',k,a);
 }
@@ -2715,7 +2736,11 @@ function getAutoBaks(){
 function setAutoBaks(a){
   if(!_backupsUseIdb)return _lsSetAutoBaks(a);
   var k=_autoKey();
-  if(_autoMirrorKey!==k){console.warn('[AutoSnap] setAutoBaks skipped — mirror not hydrated for '+k);_hydrateAutoMirror();return;}
+  if(_autoMirrorKey!==k){
+    console.warn('[AutoSnap] setAutoBaks skipped — mirror not hydrated for '+k);
+    notify('⚠️ Auto-snapshot skipped — storage was still loading. It will retry on the next save.');
+    _hydrateAutoMirror();return;
+  }
   _autoMirror=a;_idbPut('auto',k,a);
 }
 
@@ -3715,16 +3740,38 @@ function closeChkSortMenu(){
     _chkSortDismiss=null;
   }
 }
+// Whether checking an item live-moves it toward the done block. OFF by
+// default: checked items now stay put until the user explicitly opts in
+// here, instead of silently disappearing to the bottom on every check.
+// Persisted per-board in S.prefs (same convention as chkAlwaysExpanded).
+function _chkAutoResortEnabled(){return !!(S.prefs&&S.prefs.chkAutoResort);}
+function _chkSortDropHtml(colId){
+  var autoOn=_chkAutoResortEnabled();
+  var toggleRow='<div class="chk-sort-toggle-row">'+
+      '<span class="chk-sort-toggle-label">Auto-move checked items to bottom</span>'+
+      '<button class="chk-sort-toggle-btn'+(autoOn?' on':'')+'" onclick="toggleChkAutoResort(\''+colId+'\')" title="'+(autoOn?'On — checking an item immediately moves it toward the done section':'Off — checking an item leaves it in place until you reopen the card or apply a sort')+'">'+(autoOn?'✓ ON':'OFF')+'</button>'+
+    '</div>';
+  var html=toggleRow+CHK_SORT_OPTS.map(function(o){
+    return '<button class="chk-sort-opt'+(_chkSortMode===o.id?' on':'')+'" onclick="applyChkSort(\''+o.id+'\',\''+colId+'\')">'+o.label+'</button>';
+  }).join('');
+  if(_chkSorted)html+='<button class="chk-sort-opt" onclick="applyChkSort(null,\''+colId+'\')">↺ Original Order</button>';
+  return html;
+}
+// Flips the pref and refreshes the already-open dropdown IN PLACE (no
+// close/reopen) so toggling feels like a real switch, not a menu action.
+function toggleChkAutoResort(colId){
+  if(!S.prefs)S.prefs={};
+  S.prefs.chkAutoResort=!S.prefs.chkAutoResort;
+  save();
+  var d=document.getElementById('chk-sort-drop');
+  if(d)d.innerHTML=_chkSortDropHtml(colId);
+}
 function toggleChkSortMenu(e,colId){
   e.stopPropagation();
   if(document.getElementById('chk-sort-drop')){closeChkSortMenu();return;}
   var btn=e.currentTarget,r=btn.getBoundingClientRect();
   var d=document.createElement('div');d.id='chk-sort-drop';d.className='chk-sort-drop';
-  var html=CHK_SORT_OPTS.map(function(o){
-    return '<button class="chk-sort-opt'+(_chkSortMode===o.id?' on':'')+'" onclick="applyChkSort(\''+o.id+'\',\''+colId+'\')">'+o.label+'</button>';
-  }).join('');
-  if(_chkSorted)html+='<button class="chk-sort-opt" onclick="applyChkSort(null,\''+colId+'\')">↺ Original Order</button>';
-  d.innerHTML=html;
+  d.innerHTML=_chkSortDropHtml(colId);
   d.style.top=(r.bottom+6)+'px';
   document.body.appendChild(d);
   var dw=d.offsetWidth;
@@ -5155,7 +5202,7 @@ function toggleCMItem(idx,cid){
   EC.itemMeta[idx].completedAt=nowDone?Date.now():null;
   var dueChanged=_syncCardDueFromItems(EC);
   if(dueChanged)refreshCMDue(cid);
-  if(!_chkSorted&&_autoResortDone(idx)!==null){refreshChk(cid);return;}
+  if(!_chkSorted&&_chkAutoResortEnabled()&&_autoResortDone(idx)!==null){refreshChk(cid);return;}
   var chk=document.getElementById('cm-chk');
   if(chk){
     var row=chk.querySelectorAll('.chk-row')[idx];
@@ -5358,15 +5405,19 @@ function renderStorageBar(){
   var fmtCeil=function(b){return b>=1024*1024*1024?(Math.round(b/1024/1024/1024*10)/10)+'GB':mb(b)+'MB';};
   var draw=function(){
     var s=_storageStats();
+    var mode=_backupModeInfo();
     var color=s.pct>=90?'#e11d48':s.pct>=70?'#f59e0b':'#10b981';
     var barPct=Math.max(s.pct,s.used>0?1:0); // keep a sliver visible when usage is tiny vs a huge quota
     var note=s.source==='estimate'?' (IndexedDB + localStorage)':(s.isEstimate?' — estimated':'');
-    wrap.innerHTML=
+    var modeLine='<div style="font-size:11px;margin-bottom:6px;color:'+(mode.warn?'#b45309':'var(--txt-d)')+'">'+
+      (mode.warn?'⚠ ':'✅ ')+'Backup storage: <strong>'+mode.label+'</strong></div>';
+    wrap.innerHTML=modeLine+
       '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)">'+
         '<span>'+mb(s.used)+'MB of '+(s.source==='estimate'?'':'~')+fmtCeil(s.ceiling)+' ('+s.pct+'%)'+note+'</span>'+
         '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_refreshStorageEstimate().then(renderStorageBar)" title="Re-measure storage usage">↻ Recalculate</button>'+
       '</div>'+
-      '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div></div>';
+      '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div></div>'+
+      (mode.warn?'<div style="font-size:11px;color:var(--txt-d);margin-top:6px;line-height:1.5">Your backups are still saving — just on the browser\'s older, smaller local storage (~5MB total) instead of the larger IndexedDB store. This can happen in private/incognito mode, some strict privacy settings, or certain ways of opening this file. Export a backup regularly on this device/browser as a precaution.</div>':'');
     _updateBackupsBtnState();
   };
   if(!_estimateCache){
@@ -5801,6 +5852,15 @@ _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved 
 // listener merges against the local mirror and must not run before hydration).
 function _bootAfterBackupStore(){
   _refreshStorageEstimate();                    // seed the real (IDB+LS) usage gauge
+  _updateBackupsBtnState();                     // reflect the now-known backend (was "checking…" before this resolved)
+  // Silent fallback was the #1 gap: a device stuck on the old ~5MB localStorage
+  // path looked identical to one on IndexedDB unless you opened Backups. Warn
+  // once per browser session (not every reload of the same session) so it's
+  // seen without being repeated on every page load.
+  if(!_backupsUseIdb&&sessionStorage.getItem('fb4_fallback_warned')!=='1'){
+    try{sessionStorage.setItem('fb4_fallback_warned','1');}catch(e){}
+    notify('⚠️ Backups are using this browser’s limited local storage (~5MB) — IndexedDB isn’t available here. See 💾 Backups for details.');
+  }
   _sessionStartSnap();                          // auto-snapshot the session's opening state
   setTimeout(_checkOrphanSnapshots,400);        // slight delay so it doesn't compete with paint/USB banner
   initSync();                                   // connect last, so the auto-snap listener sees a hydrated mirror
