@@ -346,6 +346,22 @@ input,textarea,select,[contenteditable]{user-select:text;-webkit-user-select:tex
 .key-actions button:hover{opacity:.82}
 #notif{position:fixed;bottom:22px;right:22px;background:var(--surf);border:1px solid var(--bd-i);border-radius:12px;padding:11px 17px;font-size:13px;font-weight:600;color:var(--txt);z-index:999;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.34,1.3,.64,1);transform:translateY(12px)}
 #notif.show{opacity:1;transform:translateY(0)}
+/* Persistent local-save-failure banner — unlike #notif, this does NOT
+   auto-hide on a timer. It stays until the problem resolves (a later save
+   succeeds) or the user dismisses it, so a missed toast can't hide data loss. */
+#save-err-banner{position:fixed;top:0;left:0;right:0;z-index:998;display:none;background:rgba(225,29,72,.97);color:#fff;padding:11px 18px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);align-items:center;gap:12px;flex-wrap:wrap}
+#save-err-banner.show{display:flex}
+#save-err-banner .seb-msg{flex:1;min-width:220px;line-height:1.5}
+#save-err-banner button{border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+#save-err-banner .seb-action{background:#fff;color:#e11d48}
+#save-err-banner .seb-dismiss{background:rgba(255,255,255,.18);color:#fff}
+.backups-btn-dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#e11d48;border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(225,29,72,.5)}
+.btn-amber-warn{background:rgba(245,158,11,.16);color:#b45309;border:1px solid rgba(245,158,11,.4)}
+.btn-red-warn{background:rgba(225,29,72,.16);color:#e11d48;border:1px solid rgba(225,29,72,.4);animation:btnRedPulse 2s ease-in-out infinite}
+@keyframes btnRedPulse{0%,100%{box-shadow:0 0 0 rgba(225,29,72,0)}50%{box-shadow:0 0 8px rgba(225,29,72,.5)}}
+.storage-bar-track{height:8px;border-radius:99px;background:var(--surf2);overflow:hidden;margin:6px 0 4px}
+.storage-bar-fill{height:100%;border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1),background .3s}
+.storage-cull-banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:12.5px;color:#b45309;line-height:1.6}
 .col-move-btns{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}
 .col-move-btn{border-radius:8px;border:1px solid var(--bd-i);background:var(--inp);color:var(--txt-d);padding:5px 11px;cursor:pointer;font-size:11px;font-weight:600;transition:all .18s}
 .col-move-btn:hover{transform:translateY(-1px)}
@@ -407,13 +423,14 @@ input[type="date"]{color-scheme:dark}
   <span id="sync-status" class="sync-pill">💾 Local</span>
   <button class="btn btn-ghost" onclick="showKeysModal()">☁ Sync</button>
   <div class="tb-sep"></div>
-  <button class="btn btn-green" onclick="showBackupModal()">💾 Backups</button>
+  <button class="btn btn-green" id="backups-btn" onclick="showBackupModal()" style="position:relative">💾 Backups<span id="backups-btn-dot" class="backups-btn-dot" style="display:none"></span></button>
   <button class="btn btn-ghost" onclick="showReportModal()">📋 Report</button>
   <button class="btn btn-ghost" id="theme-btn" onclick="toggleThemePanel()">⚙ Settings</button>
 </div>
 <div id="theme-panel"><div class="tp-title">Board Theme</div><div class="theme-grid" id="theme-grid"></div><div class="tp-title" style="margin-top:12px">Date Format</div><div class="date-fmt-row" id="date-fmt-row"></div><div class="tp-title" style="margin-top:12px">UI Scale</div><div id="uiscale-row"></div><div class="tp-title" style="margin-top:12px">Archive</div><div class="archive-row" id="archive-row"></div></div>
 <div id="board"></div>
 <div id="modal-root"></div>
+<div id="save-err-banner"></div>
 <div id="notif"></div>
 
 <script>
@@ -1189,20 +1206,137 @@ function _lsBytes(){
   }
   return total;
 }
+// ── STORAGE CAPACITY PROBE ──
+// localStorage exposes no standard "how much can I have" API, and the real
+// ceiling differs by browser/version (commonly ~5-10MB, never guaranteed).
+// Rather than hardcode a per-browser guess that drifts out of date, measure
+// it empirically on THIS browser/profile: binary-search-write a throwaway
+// key until it fails, cache the result. Cheap (well under a second even at
+// multi-MB scale) and self-corrects if a browser changes its limit later.
+var _PROBE_KEY='__fb4_cap_probe_tmp__';
+var _PROBE_CACHE_KEY='fb4_cap_probe';
+var _PROBE_MAX=64*1024*1024; // don't bother probing past 64MB — well beyond any real localStorage ceiling
+function _probeStorageCapacity(){
+  function tryWrite(n){
+    try{localStorage.setItem(_PROBE_KEY,'x'.repeat(n));return true;}
+    catch(e){return false;}
+  }
+  var lastOk=0,size=65536,hitCap=false;
+  try{
+    while(size<_PROBE_MAX){
+      if(!tryWrite(size))break;
+      lastOk=size;size*=2;
+    }
+    if(size>=_PROBE_MAX){
+      // never failed even at the cap — don't binary-search against an
+      // unverified upper bound, just report "at least" the cap.
+      hitCap=tryWrite(_PROBE_MAX);
+      if(hitCap)lastOk=_PROBE_MAX;
+    }else{
+      var lo=lastOk,hi=size;
+      for(var iter=0;iter<20&&hi-lo>4096;iter++){
+        var mid=Math.floor((lo+hi)/2);
+        if(tryWrite(mid))lo=mid;else hi=mid;
+      }
+      lastOk=lo;
+    }
+  }finally{
+    try{localStorage.removeItem(_PROBE_KEY);}catch(e){}
+  }
+  // ceiling = everything else currently stored + the extra room just found.
+  // _lsBytes() here excludes the probe key since it was just removed.
+  var result={ceiling:_lsBytes()+lastOk,measuredAt:Date.now(),atLeast:hitCap};
+  try{localStorage.setItem(_PROBE_CACHE_KEY,JSON.stringify(result));}catch(e){}
+  return result;
+}
+function _invalidateCapacityProbe(){try{localStorage.removeItem(_PROBE_CACHE_KEY);}catch(e){}}
+function _cachedCeiling(){
+  try{
+    var c=JSON.parse(localStorage.getItem(_PROBE_CACHE_KEY)||'null');
+    if(c&&c.ceiling>0)return c;
+  }catch(e){}
+  return null;
+}
+// Single source of truth for usage/ceiling/percentage — drives the save()
+// warning threshold, the Backups button color, and the storage bar, so they
+// can never disagree with each other.
+function _storageStats(){
+  var used=_lsBytes();
+  var cached=_cachedCeiling();
+  var ceiling=cached?cached.ceiling:5*1024*1024; // conservative default until first probe
+  var pct=ceiling>0?Math.min(100,Math.round(used/ceiling*100)):0;
+  return{used:used,ceiling:ceiling,pct:pct,isEstimate:!cached};
+}
+
+// ── CULL LOG (auto-cull visibility) ──
+var _CULL_LOG_KEY='fb4_cull_log',_CULL_ACK_KEY='fb4_cull_ack';
+function _getCullLog(){try{return JSON.parse(localStorage.getItem(_CULL_LOG_KEY)||'[]');}catch(e){return[];}}
+function _logCullEvent(removed){
+  var log=_getCullLog();
+  log.unshift({ts:Date.now(),removed:removed});
+  if(log.length>10)log.splice(10);
+  try{localStorage.setItem(_CULL_LOG_KEY,JSON.stringify(log));}catch(e){}
+  _updateBackupsBtnState();
+}
+function _hasUnackedCull(){
+  var log=_getCullLog();if(!log.length)return false;
+  var ack=parseInt(localStorage.getItem(_CULL_ACK_KEY)||'0');
+  return log[0].ts>ack;
+}
+function _ackCullLog(){
+  try{localStorage.setItem(_CULL_ACK_KEY,String(Date.now()));}catch(e){}
+  _updateBackupsBtnState();
+}
+
+// ── BACKUPS BUTTON STATE (item 2) ──
+function _updateBackupsBtnState(){
+  var btn=document.getElementById('backups-btn');if(!btn)return;
+  var stats=_storageStats();
+  var dot=document.getElementById('backups-btn-dot');
+  var unacked=_hasUnackedCull();
+  var cls='btn-green',state='ok';
+  if(unacked||stats.pct>=90){cls='btn-red-warn';state='red';}
+  else if(stats.pct>=70){cls='btn-amber-warn';state='amber';}
+  btn.className='btn '+cls;
+  if(dot)dot.style.display=unacked?'block':'none';
+  var mb=function(b){return Math.round(b/1024/1024*10)/10;};
+  btn.title='Storage: '+mb(stats.used)+'MB of '+(stats.isEstimate?'~':'')+mb(stats.ceiling)+'MB used ('+stats.pct+'%)'+(unacked?' — auto-cleanup ran recently, click to review':'');
+}
+
+// ── PERSISTENT SAVE-ERROR BANNER (item 1) ──
+function _showSaveErrorBanner(html){
+  var el=document.getElementById('save-err-banner');if(!el)return;
+  el.innerHTML=html;el.classList.add('show');
+}
+function _hideSaveErrorBanner(){
+  var el=document.getElementById('save-err-banner');if(!el)return;
+  el.classList.remove('show');el.innerHTML='';
+}
 function _reportLocalSaveError(e,data){
   console.error('[Save] Local (localStorage) write failed:',e);
   var boardKB=data?Math.round(new Blob([data]).size/1024):'?';
   var totalKB=Math.round(_lsBytes()/1024);
   var isSecurity=e&&e.name==='SecurityError';
-  var msg;
+  var msg,bannerMsg,actions;
   if(_isQuotaErr(e)){
-    msg='❌ Local save FAILED — browser storage full ('+totalKB+'KB across all boards; this board ~'+boardKB+'KB). Auto-cleanup could not free enough. Export a backup and delete old snapshots NOW — this edit is in memory only, will be LOST on reload, and is deliberately NOT syncing to cloud so it can’t desync your other devices.';
+    // The cached ceiling turned out to be wrong (or auto-cull couldn't free
+    // enough) — invalidate it so the next Backup-modal open re-measures.
+    _invalidateCapacityProbe();
+    msg='❌ Local save FAILED — browser storage full ('+totalKB+'KB across all boards; this board ~'+boardKB+'KB). Export a backup and delete old snapshots NOW — this edit is in memory only, will be LOST on reload, and is deliberately NOT syncing to cloud so it can’t desync your other devices.';
+    bannerMsg='❌ <strong>Storage is full — this change is only in memory and will be lost on reload.</strong> Free up space now.';
+    actions='<button class="seb-action" onclick="exportBak(null)">⬇ Export Backup Now</button><button class="seb-action" onclick="showBackupModal()">💾 Open Backups</button>';
   }else if(isSecurity){
     msg='❌ Local save FAILED — this browser is blocking local storage (private/incognito mode, or site data disabled). This edit is NOT saved on this device.';
+    bannerMsg='❌ <strong>This browser is blocking local storage</strong> (private/incognito mode, or site data disabled) — nothing will save here until that changes.';
+    actions='';
   }else{
     msg='❌ Local save FAILED — '+(e&&e.name?e.name:'unknown error')+(e&&e.message?': '+e.message:'')+'. This edit may NOT be saved — see console for details.';
+    bannerMsg='❌ <strong>Unexpected save error</strong> ('+(e&&e.name?e.name:'unknown')+') — this edit may not be saved.';
+    actions='<button class="seb-action" onclick="exportBak(null)">⬇ Export Backup Now</button>';
   }
   notify(msg);
+  _showSaveErrorBanner('<span class="seb-msg">'+bannerMsg+'</span>'+actions+'<button class="seb-dismiss" onclick="_hideSaveErrorBanner()">✕</button>');
+  _updateBackupsBtnState();
 }
 function save(){
   var _prevLM=S.lastModified;
@@ -1220,6 +1354,7 @@ function save(){
       if(freed>0){
         try{localStorage.setItem('fb4',data);localOk=true;
           notify('♻ Storage was full — auto-removed '+freed+' old auto-snapshot'+(freed!==1?'s':'')+' so your work could save.');
+          _logCullEvent(freed);
         }catch(e2){}
       }
     }
@@ -1235,13 +1370,19 @@ function save(){
     if(!_skipFbWrite){S.lastModified=_prevLM;updateSyncStatus('error');}
     return;
   }
-  // Local write succeeded — keep the key entry's boardId in sync + warn on the
-  // TRUE origin-wide usage, not just this board's slice of it.
+  // Local write succeeded — clear any stale failure banner, keep the key
+  // entry's boardId in sync, and warn using the SAME percentage-based
+  // ceiling that drives the Backups button and storage bar (no more
+  // separately-hardcoded thresholds that can disagree with each other).
+  _hideSaveErrorBanner();
   var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
   if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
-  var used=_lsBytes();
-  if(used>4*1024*1024&&!save._warned){save._warned=true;notify('⚠️ Storage at '+Math.round(used/1024/1024*10)/10+'MB of ~5MB (all boards) — export a backup or clear old snapshots soon.');}
-  else if(used<=4*1024*1024){save._warned=false;}
+  var stats=_storageStats();
+  if(stats.pct>=80&&!save._warned){
+    save._warned=true;
+    notify('⚠️ Storage at '+stats.pct+'% ('+Math.round(stats.used/1024/1024*10)/10+'MB of '+(stats.isEstimate?'~':'')+Math.round(stats.ceiling/1024/1024*10)/10+'MB, all boards) — export a backup or clear old snapshots soon.');
+  }else if(stats.pct<80){save._warned=false;}
+  _updateBackupsBtnState();
   // ── Idle auto-snapshot: fires 20min after the last real user action ──
   if(!_skipFbWrite&&!_undoInProgress){
     _savesSinceAutoSnap++;
@@ -4784,6 +4925,17 @@ function showBackupModal(){
       '</div>'
     );
 
+  // ── Auto-cull history banner (item 2) — shown until acknowledged by opening this modal ──
+  var cullLog=_getCullLog();
+  var cullBannerHtml='';
+  if(cullLog.length&&_hasUnackedCull()){
+    var last=cullLog[0];
+    cullBannerHtml='<div class="storage-cull-banner">♻ <strong>Storage auto-cleanup ran</strong> on '+new Date(last.ts).toLocaleString()+
+      ' — '+last.removed+' old auto-snapshot'+(last.removed!==1?'s were':' was')+' automatically removed so a save could go through. Manual snapshots were never touched.'+
+      (cullLog.length>1?' ('+(cullLog.length-1)+' earlier cleanup'+(cullLog.length-1!==1?'s':'')+' also on record.)':'')+
+    '</div>';
+  }
+
   var _totalSnaps=baks.length+autos.length;
   setModal(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
@@ -4795,9 +4947,12 @@ function showBackupModal(){
     '</div>'+
     usbSection+
     undoBar+
+    cullBannerHtml+
     '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;margin-bottom:18px;font-size:13px;color:#10b981">'+
       '✅ <strong>Auto-save is ON</strong> — every change saves instantly to local storage'+(_activeKey?' and cloud':'.')+
     '</div>'+
+    '<label class="lbl">Storage Used</label>'+
+    '<div id="storage-bar-wrap" style="margin-bottom:20px">Measuring…</div>'+
     (_activeKey?
       '<label class="lbl">Cloud Sync Override</label>'+
       '<div style="display:flex;gap:9px;margin-bottom:20px">'+
@@ -4824,7 +4979,37 @@ function showBackupModal(){
       '1. Export as .json → save to USB or email<br>'+
       '2. On another device: open FlowBoard → Import .json'+
     '</div>',
-  '580px',function(){var i=document.getElementById('bak-n');if(i)i.focus();});
+  '580px',function(){
+    var i=document.getElementById('bak-n');if(i)i.focus();
+    _ackCullLog(); // opening Backups counts as reviewing the cleanup notice — clears the red button state
+    renderStorageBar();
+  });
+}
+// Renders (or lazily probes then renders) the storage usage bar inside the
+// open Backup modal. Kept separate from showBackupModal's cb so a manual
+// "Recalculate" click can call it again without rebuilding the whole modal.
+function renderStorageBar(){
+  var wrap=document.getElementById('storage-bar-wrap');if(!wrap)return;
+  var draw=function(){
+    var s=_storageStats();
+    var color=s.pct>=90?'#e11d48':s.pct>=70?'#f59e0b':'#10b981';
+    var mb=function(b){return Math.round(b/1024/1024*10)/10;};
+    wrap.innerHTML=
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)">'+
+        '<span>'+mb(s.used)+'MB of '+(s.isEstimate?'~':'')+mb(s.ceiling)+'MB ('+s.pct+'%)'+(s.isEstimate?' — estimated, not yet measured':'')+'</span>'+
+        '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_probeStorageCapacity();renderStorageBar()" title="Re-measure this browser storage ceiling">↻ Recalculate</button>'+
+      '</div>'+
+      '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+s.pct+'%;background:'+color+'"></div></div>';
+    _updateBackupsBtnState();
+  };
+  if(!_cachedCeiling()){
+    // First-ever measurement: probe off the initial render tick so opening
+    // the modal never visibly blocks on the (typically sub-100ms) probe.
+    wrap.innerHTML='<div style="font-size:12px;color:var(--txt-d)">Measuring…</div>';
+    setTimeout(function(){_probeStorageCapacity();draw();},0);
+  }else{
+    draw();
+  }
 }
 
 function showReportModal(){
@@ -5239,7 +5424,7 @@ document.addEventListener('keydown',function(e){
   }
 });
 
-load();_purgeOrphanAutoSnaps();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();
+load();_purgeOrphanAutoSnaps();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
 _sessionStartSnap();   // auto-snapshot the board state at session start (runs after load())
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
