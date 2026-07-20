@@ -1276,12 +1276,31 @@ function _cachedCeiling(){
 // Single source of truth for usage/ceiling/percentage — drives the save()
 // warning threshold, the Backups button color, and the storage bar, so they
 // can never disagree with each other.
+// Origin-wide usage/quota from the Storage API — the real numbers now that
+// backups live in IndexedDB (disk-backed). navigator.storage.estimate() is
+// async, so it's cached; _storageStats() reads the cache synchronously (the
+// gauge doesn't need byte-accuracy on every keystroke). Falls back to the
+// localStorage probe before the first estimate resolves or where the Storage
+// API is unavailable (e.g. some file:// contexts).
+var _estimateCache=null; // {usage, quota}
+function _refreshStorageEstimate(){
+  if(!navigator.storage||!navigator.storage.estimate)return Promise.resolve(null);
+  return navigator.storage.estimate().then(function(est){
+    if(est&&est.quota>0){_estimateCache={usage:est.usage||0,quota:est.quota};_updateBackupsBtnState();}
+    return _estimateCache;
+  }).catch(function(){return null;});
+}
 function _storageStats(){
+  if(_estimateCache&&_estimateCache.quota>0){
+    var u=_estimateCache.usage,c=_estimateCache.quota;
+    return{used:u,ceiling:c,pct:Math.min(100,Math.round(u/c*100)),isEstimate:false,source:'estimate'};
+  }
+  // Fallback: localStorage-only figure (pre-estimate, or Storage API absent).
   var used=_lsBytes();
   var cached=_cachedCeiling();
-  var ceiling=cached?cached.ceiling:5*1024*1024; // conservative default until first probe
+  var ceiling=cached?cached.ceiling:5*1024*1024;
   var pct=ceiling>0?Math.min(100,Math.round(used/ceiling*100)):0;
-  return{used:used,ceiling:ceiling,pct:pct,isEstimate:!cached};
+  return{used:used,ceiling:ceiling,pct:pct,isEstimate:true,source:'ls'};
 }
 
 // ── CULL LOG (auto-cull visibility) ──
@@ -5320,23 +5339,26 @@ function showBackupModal(){
 // "Recalculate" click can call it again without rebuilding the whole modal.
 function renderStorageBar(){
   var wrap=document.getElementById('storage-bar-wrap');if(!wrap)return;
+  var mb=function(b){return b>=1024*1024*100?Math.round(b/1024/1024):Math.round(b/1024/1024*10)/10;};
+  var fmtCeil=function(b){return b>=1024*1024*1024?(Math.round(b/1024/1024/1024*10)/10)+'GB':mb(b)+'MB';};
   var draw=function(){
     var s=_storageStats();
     var color=s.pct>=90?'#e11d48':s.pct>=70?'#f59e0b':'#10b981';
-    var mb=function(b){return Math.round(b/1024/1024*10)/10;};
+    var barPct=Math.max(s.pct,s.used>0?1:0); // keep a sliver visible when usage is tiny vs a huge quota
+    var note=s.source==='estimate'?' (IndexedDB + localStorage)':(s.isEstimate?' — estimated':'');
     wrap.innerHTML=
       '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)">'+
-        '<span>'+mb(s.used)+'MB of '+(s.isEstimate?'~':'')+mb(s.ceiling)+'MB ('+s.pct+'%)'+(s.isEstimate?' — estimated, not yet measured':'')+'</span>'+
-        '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_probeStorageCapacity();renderStorageBar()" title="Re-measure this browser storage ceiling">↻ Recalculate</button>'+
+        '<span>'+mb(s.used)+'MB of '+(s.source==='estimate'?'':'~')+fmtCeil(s.ceiling)+' ('+s.pct+'%)'+note+'</span>'+
+        '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_refreshStorageEstimate().then(renderStorageBar)" title="Re-measure storage usage">↻ Recalculate</button>'+
       '</div>'+
-      '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+s.pct+'%;background:'+color+'"></div></div>';
+      '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div></div>';
     _updateBackupsBtnState();
   };
-  if(!_cachedCeiling()){
-    // First-ever measurement: probe off the initial render tick so opening
-    // the modal never visibly blocks on the (typically sub-100ms) probe.
+  if(!_estimateCache){
+    // First measurement: fetch the Storage API estimate off the initial render
+    // tick so opening the modal never visibly blocks on it.
     wrap.innerHTML='<div style="font-size:12px;color:var(--txt-d)">Measuring…</div>';
-    setTimeout(function(){_probeStorageCapacity();draw();},0);
+    _refreshStorageEstimate().then(draw);
   }else{
     draw();
   }
@@ -5763,6 +5785,7 @@ _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved 
 // session-start snapshot, orphan review, and cloud sync (whose auto-snap
 // listener merges against the local mirror and must not run before hydration).
 function _bootAfterBackupStore(){
+  _refreshStorageEstimate();                    // seed the real (IDB+LS) usage gauge
   _sessionStartSnap();                          // auto-snapshot the session's opening state
   setTimeout(_checkOrphanSnapshots,400);        // slight delay so it doesn't compete with paint/USB banner
   initSync();                                   // connect last, so the auto-snap listener sees a hydrated mirror
