@@ -2338,6 +2338,100 @@ function load(){
   S=defaultState();_skipFbWrite=true;save();_skipFbWrite=false;
 }
 
+// ── BACKUP STORAGE BACKEND (IndexedDB, with localStorage fallback) ──────────
+// Backups (manual + auto snapshots) are full board copies — dozens of them —
+// and are what fills the ~5MB localStorage quota. They belong in IndexedDB
+// (disk-backed, far larger) instead. The LIVE board (fb4) intentionally stays
+// in localStorage so it loads synchronously at boot; a total IDB failure can
+// therefore never block the app, only cost backup history. This layer is
+// async; a synchronous in-memory mirror (added in the next commit) sits in
+// front of it so the existing call sites stay unchanged.
+//
+// Every operation degrades safely: if IndexedDB is unavailable or the
+// file:// origin doesn't persist it, _idbAvailable() reports false and the
+// caller falls back to the original localStorage path. Nothing throws.
+var _idb=null,_idbReady=null,_idbUsable=null;
+var IDB_NAME='flowboard_backups',IDB_VER=1,IDB_STORES=['manual','auto'];
+function _openIdb(){
+  if(_idbReady)return _idbReady;
+  _idbReady=new Promise(function(resolve){
+    if(typeof indexedDB==='undefined'||!indexedDB){resolve(null);return;}
+    var req;
+    try{req=indexedDB.open(IDB_NAME,IDB_VER);}catch(e){resolve(null);return;}
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      IDB_STORES.forEach(function(s){if(!db.objectStoreNames.contains(s))db.createObjectStore(s);});
+    };
+    req.onsuccess=function(e){_idb=e.target.result;resolve(_idb);};
+    req.onerror=function(){resolve(null);};
+    req.onblocked=function(){resolve(null);};
+  });
+  return _idbReady;
+}
+function _idbTx(store,mode){
+  return _openIdb().then(function(db){
+    if(!db)return null;
+    try{return db.transaction(store,mode).objectStore(store);}catch(e){return null;}
+  });
+}
+function _idbGet(store,key){
+  return _idbTx(store,'readonly').then(function(os){
+    if(!os)return null;
+    return new Promise(function(resolve){
+      try{var r=os.get(key);r.onsuccess=function(){resolve(r.result==null?null:r.result);};r.onerror=function(){resolve(null);};}
+      catch(e){resolve(null);}
+    });
+  });
+}
+function _idbPut(store,key,val){
+  return _idbTx(store,'readwrite').then(function(os){
+    if(!os)return false;
+    return new Promise(function(resolve){
+      try{
+        var tx=os.transaction;os.put(val,key);
+        tx.oncomplete=function(){resolve(true);};
+        tx.onerror=function(){resolve(false);};
+        tx.onabort=function(){resolve(false);};
+      }catch(e){resolve(false);}
+    });
+  });
+}
+function _idbDelete(store,key){
+  return _idbTx(store,'readwrite').then(function(os){
+    if(!os)return false;
+    return new Promise(function(resolve){
+      try{
+        var tx=os.transaction;os.delete(key);
+        tx.oncomplete=function(){resolve(true);};
+        tx.onerror=function(){resolve(false);};
+      }catch(e){resolve(false);}
+    });
+  });
+}
+function _idbKeys(store){
+  return _idbTx(store,'readonly').then(function(os){
+    if(!os)return[];
+    return new Promise(function(resolve){
+      try{var r=os.getAllKeys();r.onsuccess=function(){resolve(r.result||[]);};r.onerror=function(){resolve([]);};}
+      catch(e){resolve([]);}
+    });
+  });
+}
+// One-time usability probe: IndexedDB can exist but silently fail to persist
+// (private mode, or opaque file:// origins that reset per load). We verify with
+// a real round-trip write/read/delete before trusting it. Cached for the session.
+function _idbCheckUsable(){
+  if(_idbUsable)return _idbUsable;
+  var probeKey='__idb_probe__',probeVal={t:1};
+  _idbUsable=_idbPut('manual',probeKey,probeVal).then(function(ok){
+    if(!ok)return false;
+    return _idbGet('manual',probeKey).then(function(got){
+      var good=!!(got&&got.t===1);
+      return _idbDelete('manual',probeKey).then(function(){return good;});
+    });
+  }).catch(function(){return false;});
+  return _idbUsable;
+}
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
 function getBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
 function setBaks(a){localStorage.setItem(_bakKey(),JSON.stringify(a));}
