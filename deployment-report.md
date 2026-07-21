@@ -1,8 +1,8 @@
-# FlowBoard — Sync & Android Deployment Report
+# FlowBoard — Sync Deployment Report
 
 **Version:** 1.0  
 **Date:** March 2026  
-**Scope:** Real-time cross-device sync via Firebase, Android PWA packaging, and Board Key access model
+**Scope:** Real-time cross-device sync via Firebase and Board Key access model
 
 ---
 
@@ -13,7 +13,6 @@ FlowBoard currently runs as a self-contained single HTML file using `localStorag
 - Real-time cross-device sync via Firebase Realtime Database
 - A Board Key access model (no user accounts required)
 - Offline support with automatic reconnect sync
-- Android PWA installation (home screen, fullscreen, no Play Store required)
 
 The goal is to preserve the single-file nature of the desktop app while enabling it to optionally connect to a cloud backend when configured.
 
@@ -343,91 +342,10 @@ The panel follows the same modal pattern already used throughout FlowBoard.
 
 ---
 
-## 8. Android PWA
-
-### What Is a PWA?
-A Progressive Web App is a website that Android Chrome can install to the home screen. Once installed it:
-- Launches fullscreen with no browser chrome
-- Has its own icon and splash screen
-- Caches assets for offline launch
-- Behaves like a native app
-
-### Required Files
-
-You need two additional files alongside the HTML file when hosting:
-
-**`manifest.json`**
-```json
-{
-  "name": "FlowBoard",
-  "short_name": "FlowBoard",
-  "description": "Personal Kanban board with cloud sync",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#060d18",
-  "theme_color": "#060d18",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
-}
-```
-
-**`sw.js`** (Service Worker — enables offline launch)
-```javascript
-var CACHE = 'flowboard-v1';
-var ASSETS = ['/', '/index.html', '/manifest.json'];
-
-self.addEventListener('install', function(e) {
-  e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(ASSETS); }));
-});
-
-self.addEventListener('fetch', function(e) {
-  e.respondWith(
-    caches.match(e.request).then(function(r) { return r || fetch(e.request); })
-  );
-});
-```
-
-**In the HTML `<head>`:**
-```html
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#060d18">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-```
-
-**Register the service worker (end of `<body>`):**
-```javascript
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
-}
-```
-
-### Hosting Options
-
-The HTML file must be served over HTTPS for PWA installation to work. Free options:
-
-| Service | Notes |
-|---|---|
-| **GitHub Pages** | Free, HTTPS automatic, push to deploy. Ideal for this use case. |
-| **Netlify** | Free tier, drag-and-drop deploy, HTTPS automatic |
-| **Cloudflare Pages** | Free, very fast CDN, HTTPS automatic |
-
-For GitHub Pages: create a repo, push `index.html`, `manifest.json`, `sw.js`, and two icon PNGs, enable Pages in repo settings — done.
-
-### Installing on Android
-1. Open the hosted URL in Chrome on Android
-2. Chrome shows an **"Add to Home screen"** banner automatically after a few visits, or
-3. Tap the three-dot menu → **Add to Home screen**
-4. The app installs with an icon, opens fullscreen on next launch
-
----
-
-## 9. Data Flow Summary
+## 8. Data Flow Summary
 
 ```
-[Desktop Browser]          [Android PWA]
+[Device A]                 [Device B]
       |                          |
    save()                     save()
       |                          |
@@ -441,7 +359,7 @@ Both clients write to Firebase on every change. Both listen for remote changes. 
 
 ---
 
-## 10. Implementation Order
+## 9. Implementation Order
 
 1. Set up Firebase project and Security Rules (5 min, one-time)
 2. Add Firebase SDK `<script>` tags to HTML
@@ -450,14 +368,10 @@ Both clients write to Firebase on every change. Both listen for remote changes. 
 5. Add sync status indicator to topbar
 6. Add Key Management modal
 7. Enable offline persistence
-8. Host on GitHub Pages (or equivalent)
-9. Add `manifest.json`, `sw.js`, icons
-10. Register service worker in HTML
-11. Test PWA install on Android Chrome
 
 ---
 
-## 11. Security Considerations
+## 10. Security Considerations
 
 - The Firebase API key is **not a secret** — it is a public project identifier. Access is controlled by Security Rules, not the key.
 - Board Keys should be treated like passwords — do not share publicly or commit to a public repo.
@@ -467,7 +381,7 @@ Both clients write to Firebase on every change. Both listen for remote changes. 
 
 ---
 
-## 12. Free Tier Limits (Firebase Spark Plan)
+## 11. Free Tier Limits (Firebase Spark Plan)
 
 | Resource | Limit | Expected Usage |
 |---|---|---|
