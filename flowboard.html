@@ -793,6 +793,14 @@ function _ensureItemMeta(k){
     if(m.completedAt===undefined)m.completedAt=null;
   });
 }
+// True when a card has a checklist and every item is checked off. The Done
+// pill and the `completed` flag are reconciled against this on every item
+// toggle, so a card becomes done the moment its last item is checked and
+// reopens the moment any item is unchecked. Item-less cards are governed
+// purely by the manual `completed` flag (markCMDone / Reopen).
+function _allItemsDone(card){
+  return !!(card.items&&card.items.length>0&&card.items.every(function(it){return card.done.includes(it);}));
+}
 // Keeps card.due in sync with the earliest due date among incomplete subtasks,
 // for as long as at least one checklist item has a due date set (card.dueAuto
 // is recomputed fresh on every call, so it can't get "stuck"). When every
@@ -3178,7 +3186,12 @@ function addCard(colId,t,color){
 function saveCard(card){
   _pushUndo();
   card.updatedAt=Date.now();
-  var allDone=card.items&&card.items.length>0&&card.items.every(function(it){return card.done.includes(it);});
+  var allDone=_allItemsDone(card);
+  // A card with an open checklist item can't be "done": clear a stale completed
+  // flag so the Done pill can't stick after an item is unchecked. We never
+  // auto-SET completed here — that stays an explicit action — so Reopen holds
+  // even while every item happens to be checked.
+  if(card.items&&card.items.length>0&&!allDone)card.completed=false;
   if((card.completed||allDone)&&!card.completedAt)card.completedAt=Date.now();
   else if(!card.completed&&!allDone)card.completedAt=null;
   for(var i=0;i<S.cols.length;i++){
@@ -3870,8 +3883,9 @@ function toggleAllItems(colId){
   }
   _cmDirty=true;
   var dueChanged=_syncCardDueFromItems(EC);
+  if(EC.items.length)EC.completed=_allItemsDone(EC);
   saveCard(EC);
-  if(dueChanged)refreshCMDue(colId);
+  refreshCMDue(colId);
   refreshChk(colId);
 }
 function clearCompleted(colId){
@@ -5201,7 +5215,12 @@ function toggleCMItem(idx,cid){
   var nowDone=!wasDone;
   EC.itemMeta[idx].completedAt=nowDone?Date.now():null;
   var dueChanged=_syncCardDueFromItems(EC);
-  if(dueChanged)refreshCMDue(cid);
+  // Keep the Done pill honest: checking the last item completes the card,
+  // unchecking any item reopens it. Refresh the header when either the pill
+  // state or the synced due date changed (not only on a due change).
+  var complWas=EC.completed;
+  if(EC.items.length)EC.completed=_allItemsDone(EC);
+  if(dueChanged||EC.completed!==complWas)refreshCMDue(cid);
   if(!_chkSorted&&_chkAutoResortEnabled()&&_autoResortDone(idx)!==null){refreshChk(cid);return;}
   var chk=document.getElementById('cm-chk');
   if(chk){
