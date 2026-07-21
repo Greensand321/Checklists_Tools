@@ -5456,7 +5456,7 @@ function showReportModal(){
         '<div style="font-size:28px;line-height:1">&#x1F5E3;</div>'+
         '<div>'+
           '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Meeting Agenda</div>'+
-          '<div style="font-size:12px;color:var(--txt-d)">Numbered agenda items with tasks and notes lines — print and bring to the table</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Projects and deliverables packed two-up, with checklist items and room for handwritten notes</div>'+
         '</div>'+
       '</div>'+
     '</div>',
@@ -5568,61 +5568,44 @@ function openReport(type, cardId){
     body='<div class="tl-cols"><div class="tl-col">'+dcols[0].html+'</div><div class="tl-col">'+dcols[1].html+'</div></div>';
   }
 
-  /* ── Meeting Agenda: First Fit Decreasing into 2 columns ──
-     Sort groups by estimated height largest-first, then greedily assign
-     each to whichever display column is currently shorter. This is the
-     classic "First Fit Decreasing" bin-packing heuristic — it produces
-     near-optimal column balance and prevents one column running many pages
-     longer than the other. Groups appear sorted by size, not board order. ── */
+  /* ── Meeting Agenda (M2): two-up newspaper flow, board order ──
+     Each column (project) becomes a section; its cards (deliverables) are
+     one line each with a dotted note-space to the right, and any checklist
+     items flow inline underneath. Layout is a CSS multi-column flow, so the
+     browser paginates it — no height estimation, no bin-packing, and no
+     injected "continued" headers. Cards never split (break-inside:avoid);
+     a section header stays attached to its first card (break-after:avoid);
+     a long project is free to flow across the two columns. Priority is
+     flagged only for High/Med (Low is the default and would be noise), and
+     progress counts are intentionally omitted. ── */
   if(type==='agenda'){
-    var n=0;
-    // H_CHARS_PER_LINE: print column is ~340px, ag-task font is 11px with ~8px/char
-    var H_SEP=28,H_CARD_HEAD=38,H_LINE=20,H_GAP=7,H_CHARS=42;
-    var agGroups=[];
-    cols.forEach(function(col,ci){
+    var agCols=cols.filter(function(col){return (col.cards||[]).filter(function(k){return !k.archived;}).length;});
+    body='<div class="ag2-flow">';
+    agCols.forEach(function(col,ci){
       var color=PALETTE[ci%PALETTE.length];
       var cards=(col.cards||[]).filter(function(k){return !k.archived;});
-      if(!cards.length)return;
-      var h=H_SEP;
+      body+='<div class="ag2-proj">';
+      body+='<div class="ag2-phead" style="border-left-color:'+color+';background:'+hexToRgba(color,.08)+'">'+xe(col.title)+'</div>';
       cards.forEach(function(card){
         var items=card.items||[];
-        var nl=items.length;
-        // Account for task text wrapping: long items take multiple lines in print
-        var tasksH=items.reduce(function(sum,item){
-          return sum+Math.max(1,Math.ceil((item||'').length/H_CHARS))*H_LINE;
-        },0);
-        var notesH=nl<=3?28:nl<=8?50:72;
-        h+=H_CARD_HEAD+tasksH+notesH+H_GAP;
-      });
-      agGroups.push({col:col,color:color,cards:cards,h:h,ci:ci});
-    });
-    // Sort largest-first for First Fit Decreasing
-    agGroups.sort(function(a,b){return b.h-a.h;});
-    // Greedy assign to shorter column
-    var dcols=[{html:'',h:0},{html:'',h:0}];
-    agGroups.forEach(function(g){
-      var side=dcols[0].h<=dcols[1].h?0:1;
-      var bg=hexToRgba(g.color,.06);
-      var h='<div class="ag-sep" style="border-left-color:'+g.color+';background:'+bg+'">'+xe(g.col.title)+'</div>';
-      g.cards.forEach(function(card){
-        n++;
-        h+='<div class="ag-item" style="border-left-color:'+g.color+'">';
-        h+='<div class="ag-ihead"><span class="ag-num" style="background:'+g.color+'">'+n+'</span><span class="ag-title">'+xe(card.title)+'</span></div>';
-        if(card.items&&card.items.length){
-          card.items.forEach(function(item){
+        var flag=card.pri===2?'<span class="ag2-flag ag2-hi">High</span>'
+                :card.pri===1?'<span class="ag2-flag ag2-med">Med</span>':'';
+        var due=card.due?'<span class="ag2-due">&#x23F0; '+xe(dueLabel(card.due))+'</span>':'';
+        body+='<div class="ag2-card">';
+        body+='<div class="ag2-cname"><span class="ag2-ctitle">'+xe(card.title)+'</span>'+flag+due+'<span class="ag2-dots"></span></div>';
+        if(items.length){
+          body+='<div class="ag2-items">';
+          items.forEach(function(item){
             var done=card.done&&card.done.indexOf(item)>=0;
-            h+='<div class="ag-task'+(done?' done':'')+'">'+cbHtml(done,g.color)+'<span class="ag-ttext">'+xe(item)+'</span></div>';
+            body+='<span class="ag2-item'+(done?' done':'')+'">'+cbHtml(done,color)+'<span class="ag2-itext">'+xe(item)+'</span></span>';
           });
+          body+='</div>';
         }
-        var _nl=card.items?card.items.length:0;var _nLines=_nl<=3?1:_nl<=8?2:3;
-        var _nHtml='';for(var _ni=0;_ni<_nLines;_ni++)_nHtml+='<div class="ag-nline"></div>';
-        h+='<div class="ag-notes">'+_nHtml+'</div>';
-        h+='</div>';
+        body+='</div>';
       });
-      dcols[side].html+=h;
-      dcols[side].h+=g.h;
+      body+='</div>';
     });
-    body='<div class="ag-cols"><div class="ag-col">'+dcols[0].html+'</div><div class="ag-col">'+dcols[1].html+'</div></div>';
+    body+='</div>';
   }
 
   var css=
@@ -5667,26 +5650,21 @@ function openReport(type, cardId){
     '.tl-task:last-child{border-bottom:none;}'+
     '.tl-task.done .tl-ttext{color:#bbb;text-decoration:line-through;}'+
     '.tl-notasks{font-size:10px;color:#ccc;font-style:italic;padding:4px 9px 6px;}'+
-    /* Agenda — row-by-row pairs */
-    '.ag-cols{display:flex;gap:14px;align-items:flex-start;}'+
-    '.ag-col{flex:1;min-width:0;padding:12px 12px 8px;}'+
-    '.ag-sep{display:flex;align-items:center;border-left:3px solid;padding:4px 9px;border-radius:0 4px 4px 0;margin:10px 0 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#333;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.ag-sep:first-child{margin-top:0;}'+
-    '.ag-item{display:block;border:2px solid #b0b8c4;border-left-width:3px;border-radius:0 5px 5px 0;margin-bottom:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.ag-ihead{display:flex;align-items:flex-start;gap:8px;padding:7px 9px 5px;background:#f9f9f9;border-bottom:1px solid #efefef;}'+
-    '.ag-num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9.5px;font-weight:800;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.ag-title{font-size:12px;font-weight:700;color:#111;line-height:1.25;padding-top:2px;}'+
-    '.ag-task{display:flex;align-items:flex-start;gap:7px;padding:3px 9px;border-bottom:1px solid #f5f5f5;font-size:11px;color:#333;line-height:1.4;}'+
-    '.ag-task.done .ag-ttext{color:#bbb;text-decoration:line-through;}'+
-    '.ag-notes{border-top:1px solid #f5f5f5;padding:3px 9px 6px;break-inside:avoid;break-before:avoid;}'+
-    '.ag-nline{border-bottom:1px solid #d4d4d4;height:22px;}'+
-    /* Continued header — hidden on screen, injected before print for cards that bleed across pages */
-    '.ag-cont-hdr{display:none;}'+
-    '@media print{'+
-      '.ag-cont-hdr{display:flex;align-items:center;gap:7px;padding:4px 9px;background:#f5f5f5;border-top:1px solid #e4e4e4;border-bottom:1px solid #e8e8e8;break-before:page;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-      '.ag-cont-ttl{font-size:11px;font-weight:700;color:#555;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'+
-      '.ag-cont-lbl{font-size:9px;color:#aaa;font-style:italic;white-space:nowrap;}'+
-    '}'+
+    /* Agenda M2 — two-up newspaper flow (project → deliverables → items) */
+    '.ag2-flow{column-count:2;column-gap:26px;}'+
+    '.ag2-proj{margin-bottom:11px;}'+
+    '.ag2-phead{border-left:3px solid;border-radius:0 4px 4px 0;padding:4px 9px;margin-bottom:5px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#222;break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag2-card{break-inside:avoid;margin:0 0 5px 3px;padding-bottom:1px;}'+
+    '.ag2-cname{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;}'+
+    '.ag2-ctitle{font-size:11.5px;font-weight:700;color:#111;line-height:1.25;overflow-wrap:anywhere;}'+
+    '.ag2-flag{font-size:7.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:1px 5px;border-radius:20px;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.ag2-hi{background:rgba(225,29,72,.14);color:#e11d48;}'+
+    '.ag2-med{background:rgba(245,158,11,.18);color:#b76c05;}'+
+    '.ag2-due{font-size:9px;color:#888;white-space:nowrap;flex-shrink:0;}'+
+    '.ag2-dots{flex:1;min-width:26px;border-bottom:1px dotted #c4c4c4;transform:translateY(-3px);}'+
+    '.ag2-items{display:flex;flex-wrap:wrap;gap:1px 13px;padding:2px 0 1px 4px;}'+
+    '.ag2-item{display:inline-flex;align-items:flex-start;gap:5px;font-size:10px;color:#333;line-height:1.55;}'+
+    '.ag2-item.done .ag2-itext{color:#b2b2b2;text-decoration:line-through;}'+
     /* Checkbox */
     '.cb{width:11px;height:11px;border:1.5px solid #d0d0d0;border-radius:2px;flex-shrink:0;margin-top:2px;position:relative;display:inline-flex;}'+
     '.cb.chk{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
@@ -5694,7 +5672,7 @@ function openReport(type, cardId){
     /* Print button screen only, no layout impact on print */
     '@media screen{.print-btn{position:fixed;top:16px;right:16px;background:#111;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.25);z-index:999;}}'+
     '@media screen{.print-btn:hover{background:#333;}}'+
-    '@media print{.print-btn{display:none;}.tl-sep,.ag-sep{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
+    '@media print{.print-btn{display:none;}.tl-sep,.ag2-phead{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
 
   var header=
     '<div class="hdr">'+
@@ -5709,73 +5687,11 @@ function openReport(type, cardId){
       '</div>'+
     '</div>';
 
-  // Script injected into the popup: detects ag-item elements that bleed across
-  // a page boundary and inserts a "Continued" header at the crossing point.
-  // Runs on DOMContentLoaded (so it's visible on screen too, hidden via CSS)
-  // and re-runs on beforeprint so print layout measurements are fresh.
-  var contScript=
-    '<script>(function(){'+
-      'var _inj=[];'+
-      // Measure printable page height: Letter (11in) minus 2 × 0.6in @page margins
-      'function pageH(){'+
-        'var r=document.createElement("div");'+
-        'r.style.cssText="position:absolute;top:-9999px;width:1in;height:0";'+
-        'document.body.appendChild(r);'+
-        'var d=r.offsetWidth||96;'+
-        'document.body.removeChild(r);'+
-        // Scale by 0.85: print columns are ~20% narrower than screen (340px vs 424px),
-        // so text wraps more and card heights are taller in print. Injecting earlier
-        // (smaller effective page) prevents the cont-hdr landing after the real break.
-        'return(11-1.2)*d*0.85;'+
-      '}'+
-      'function inject(){'+
-        // Remove previously injected elements
-        '_inj.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e);});_inj=[];'+
-        'var ph=pageH();'+
-        'var sy=window.pageYOffset||0;'+
-        '[].forEach.call(document.querySelectorAll(".ag-item"),function(item){'+
-          'var iTop=item.getBoundingClientRect().top+sy;'+
-          'var pg0=Math.floor(iTop/ph);'+
-          'var pg1=Math.floor((iTop+item.offsetHeight-1)/ph);'+
-          'if(pg1<=pg0)return;'+
-          // Skip ag-ihead (index 0) and any previously injected cont-hdrs
-          'var kids=[].slice.call(item.children).filter(function(k){return!k.classList.contains("ag-cont-hdr")&&!k.classList.contains("ag-ihead");});'+
-          'var target=null;'+
-          'for(var i=0;i<kids.length;i++){'+
-            'if(Math.floor((kids[i].getBoundingClientRect().top+sy)/ph)>pg0){target=kids[i];break;}'+
-          '}'+
-          'if(!target)return;'+
-          // If only the notes block crosses the boundary, don't inject —
-          // notes will flow naturally to the next page as a unit (break-inside:avoid).
-          // Injecting here would create a page that's almost entirely empty.
-          'if(target.classList.contains("ag-notes"))return;'+
-          'var te=item.querySelector(".ag-title");'+
-          'var ne=item.querySelector(".ag-num");'+
-          'var c=document.createElement("div");'+
-          'c.className="ag-cont-hdr";'+
-          'c.style.borderLeft="3px solid "+item.style.borderLeftColor;'+
-          'c.style.borderRadius="0 5px 0 0";'+
-          'c.innerHTML='+
-            '(ne?"<span class=\\"ag-num\\" style=\\"background:"+item.style.borderLeftColor+";opacity:.5\\">"+ne.textContent+"</span>":"")+'+
-            '"<span class=\\"ag-cont-ttl\\">"+(te?te.textContent:"")+"</span>"+'+
-            '"<span class=\\"ag-cont-lbl\\">continued ↑</span>";'+
-          'item.insertBefore(c,target);_inj.push(c);'+
-        '});'+
-      '}'+
-      'document.addEventListener("DOMContentLoaded",inject);'+
-      'window.addEventListener("beforeprint",inject);'+
-      'window.addEventListener("afterprint",function(){'+
-        '_inj.forEach(function(e){e.parentNode&&e.parentNode.removeChild(e);});_inj=[];'+
-      '});'+
-    '})();<\/script>';
-
-  var agendaScript=(type==='agenda')?contScript:'';
-
   var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
     '<title>'+xe(boardName)+' — '+xe(reportTitle)+'</title>'+
     '<style>'+css+'</style></head><body>'+
     '<button class="print-btn" onclick="window.print()">Print / Save PDF</button>'+
-    header+body+agendaScript+
+    header+body+
     '</body></html>';
 
   var win=window.open('','_blank');
