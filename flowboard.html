@@ -5478,11 +5478,172 @@ function showReportModal(){
           '<div style="font-size:12px;color:var(--txt-d)">Projects and deliverables packed two-up, with checklist items and room for handwritten notes</div>'+
         '</div>'+
       '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'developer\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F5A5;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Developer</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Every field as structured plain text — built for pasting into an AI, not for printing</div>'+
+        '</div>'+
+      '</div>'+
     '</div>',
   '480px');
 }
 
+/* ── Developer report ──────────────────────────────────────────────────────
+   A machine-first dump of the entire board as structured plain text. Unlike
+   the three print reports, this one is not styled for paper — it exists so the
+   whole board (every field, including the per-item metadata that normally only
+   lives inside the card modal) can be selected and pasted into an AI.
+
+   Format rules, kept deliberately boring so a parser never has to guess:
+     • indentation encodes hierarchy — group > column > card > item
+     • every line is `key: value`; keys are stable snake_case
+     • unset/empty fields are omitted rather than printed blank, so "absent"
+       and "empty string" stay distinguishable
+     • all timestamps are ISO 8601 UTC; due dates stay in the app's YYYY-MM-DD
+       form and carry a derived [overdue]/[due_soon] tag only while still open
+     • archived cards stay inline in their original column, flagged in place
+   ─────────────────────────────────────────────────────────────────────────── */
+function _devIso(ts){
+  if(!ts)return'';
+  try{var d=new Date(ts);return isNaN(d.getTime())?'':d.toISOString();}catch(e){return'';}
+}
+function _devDueTag(due,isDone){
+  if(!due||isDone)return'';
+  var dc=dueClass(due);
+  return dc==='over'?' [overdue]':dc==='soon'?' [due_soon]':'';
+}
+function openDevReport(cardId){
+  var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
+  var L=[];
+  function P(s){L.push(s==null?'':String(s));}
+
+  // Bucket columns under their group in board order. Columns whose gid doesn't
+  // resolve (or is null) collect in a trailing UNGROUPED bucket so a column can
+  // never be silently dropped from the export.
+  var buckets=(S.groups||[]).map(function(g){return{g:g,cols:[]};});
+  var byId={};
+  buckets.forEach(function(b){byId[b.g.id]=b;});
+  var loose={g:null,cols:[]};
+  (S.cols||[]).forEach(function(col){
+    if(cardId&&!(col.cards||[]).some(function(k){return k.id===cardId;}))return;
+    (byId[col.gid]||loose).cols.push(col);
+  });
+  buckets=buckets.filter(function(b){return b.cols.length;});
+  if(loose.cols.length)buckets.push(loose);
+
+  function cardsOf(col){
+    return (col.cards||[]).filter(function(k){return !cardId||k.id===cardId;});
+  }
+
+  var nCols=0,nCards=0,nArch=0,nItems=0,nDoneItems=0;
+  buckets.forEach(function(b){b.cols.forEach(function(col){
+    nCols++;
+    cardsOf(col).forEach(function(k){
+      nCards++;
+      if(k.archived)nArch++;
+      var items=k.items||[],done=k.done||[];
+      nItems+=items.length;
+      nDoneItems+=items.filter(function(it){return done.indexOf(it)>=0;}).length;
+    });
+  });});
+
+  P('FLOWBOARD DEVELOPER EXPORT');
+  P('schema: fb-dev-v1');
+  P('board: '+boardName);
+  P('generated: '+_devIso(Date.now()));
+  if(cardId)P('scope: single card ('+cardId+')');
+  else P('scope: full board');
+  P('groups: '+buckets.filter(function(b){return b.g;}).length);
+  P('columns: '+nCols);
+  P('cards: '+nCards+' (active '+(nCards-nArch)+', archived '+nArch+')');
+  P('items: '+nItems+' ('+nDoneItems+' done, '+(nItems-nDoneItems)+' open)');
+
+  function writeCard(k,pad){
+    if(!Array.isArray(k.done))k.done=[];
+    if(!Array.isArray(k.items))k.items=[];
+    var items=k.items,done=k.done;
+    var allDone=_allItemsDone(k);
+    var isDone=!!(k.completed||allDone);
+    P('');
+    P(pad+'CARD: '+(k.title||'(untitled)'));
+    P(pad+'  id: '+k.id);
+    P(pad+'  status: '+(isDone?'done':'open'));
+    if(k.archived){
+      P(pad+'  archived: true');
+      if(k.archivedAt)P(pad+'  archived_at: '+_devIso(k.archivedAt));
+      if(k.archivedFromCol)P(pad+'  archived_from_col: '+k.archivedFromCol);
+    }
+    if(PRI[k.pri])P(pad+'  priority: '+PRI[k.pri].l+' ('+k.pri+')');
+    if(k.color)P(pad+'  color: '+k.color);
+    if(k.tags&&k.tags.length)P(pad+'  tags: '+k.tags.join(', '));
+    if(k.due)P(pad+'  due: '+k.due+(k.dueAuto?' (derived from items)':'')+_devDueTag(k.due,isDone));
+    else if(k.dueAuto)P(pad+'  due: none (derived from items; all dated items complete)');
+    if(k.createdAt)P(pad+'  created: '+_devIso(k.createdAt));
+    if(k.updatedAt)P(pad+'  updated: '+_devIso(k.updatedAt));
+    if(k.completedAt)P(pad+'  completed_at: '+_devIso(k.completedAt));
+    if(items.length){
+      var dn=items.filter(function(it){return done.indexOf(it)>=0;}).length;
+      P(pad+'  progress: '+dn+'/'+items.length+' ('+Math.round(dn/items.length*100)+'%)');
+    }
+    if(k.desc){
+      P(pad+'  desc:');
+      String(k.desc).split(/\r?\n/).forEach(function(ln){P(pad+'    | '+ln);});
+    }
+    if(!items.length){
+      P(pad+'  items: none');
+      return;
+    }
+    _ensureItemMeta(k);
+    P(pad+'  items:');
+    items.forEach(function(it,i){
+      var itDone=done.indexOf(it)>=0;
+      var m=k.itemMeta[i]||{};
+      P(pad+'    ['+(itDone?'x':' ')+'] '+(i+1)+'. '+it);
+      var sub=pad+'        ';
+      if(m.due)P(sub+'due: '+m.due+_devDueTag(m.due,itDone));
+      if(m.pri!=null&&PRI[m.pri])P(sub+'priority: '+PRI[m.pri].l+' ('+m.pri+')');
+      if(m.createdAt)P(sub+'created: '+_devIso(m.createdAt));
+      if(itDone&&m.completedAt)P(sub+'completed_at: '+_devIso(m.completedAt));
+    });
+  }
+
+  buckets.forEach(function(b){
+    P('');
+    if(b.g)P('== GROUP: '+(b.g.title||'(untitled)')+' | id: '+b.g.id+' | collapsed: '+(!!b.g.col)+' ==');
+    else P('== GROUP: (ungrouped) ==');
+    b.cols.forEach(function(col){
+      var cards=cardsOf(col);
+      var archN=cards.filter(function(k){return k.archived;}).length;
+      P('');
+      P('  -- COLUMN: '+(col.title||'(untitled)')+' | id: '+col.id+
+        ' | wip_limit: '+(col.wip?col.wip:'none')+
+        ' | cards: '+cards.length+(archN?' ('+archN+' archived)':''));
+      if(col.archived)P('     column_archived: true'+(col.archivedAt?' | archived_at: '+_devIso(col.archivedAt):''));
+      if(!cards.length)P('     (no cards)');
+      cards.forEach(function(k){writeCard(k,'    ');});
+    });
+  });
+  P('');
+  P('END OF EXPORT');
+
+  var text=L.join('\n');
+  var esc=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var title=boardName+' — Developer Export';
+  var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
+    '<title>'+title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</title>'+
+    '<style>'+
+      'html,body{margin:0;padding:0;background:#fff;}'+
+      'pre{margin:0;padding:24px 28px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;'+
+        'font-size:12.5px;line-height:1.5;color:#111;white-space:pre-wrap;word-wrap:break-word;}'+
+    '</style></head><body><pre>'+esc+'</pre></body></html>';
+
+  var win=window.open('','_blank');
+  if(win){win.document.write(html);win.document.close();}
+}
+
 function openReport(type, cardId){
+  if(type==='developer')return openDevReport(cardId);
   var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
   var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
   var cols=(S.cols||[]).filter(function(c){return !c.archived;});
