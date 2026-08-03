@@ -1400,11 +1400,58 @@ function _reportLocalSaveError(e,data){
   _showSaveErrorBanner('<span class="seb-msg">'+bannerMsg+'</span>'+actions+'<button class="seb-dismiss" onclick="_hideSaveErrorBanner()">✕</button>');
   _updateBackupsBtnState();
 }
+// ── CROSS-TAB WRITE GUARD ──────────────────────────────────────────────────
+// Two tabs/windows of this file each hold their own in-memory S, and save()
+// writes the WHOLE board to localStorage['fb4']. With cloud sync on, Firebase
+// reconciles them. With it off there is nothing: the last writer silently wins
+// and the other tab's edits are destroyed with no warning — rename a card in
+// tab A, click anything in a stale tab B, and the rename is gone.
+//
+// A tiny token stamped on every successful write lets a tab detect that disk
+// moved underneath it and refuse the blind overwrite, rather than obliterating
+// the other tab's work. This mirrors the _remoteBaseline/_isSafeWrite gate the
+// Firebase path already has — the local store just never had an equivalent.
+var _lsToken=null;       // token this tab believes is currently on disk
+var _lsForceWrite=false; // set by the "keep my version" conflict action
+var _lsDiskAhead=false;  // another tab wrote; we're known-stale
+function _readLsToken(){try{return localStorage.getItem('fb4_wtoken');}catch(e){return null;}}
+function _stampLsToken(){
+  var t=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+  try{localStorage.setItem('fb4_wtoken',t);}catch(e){}
+  _lsToken=t;_lsDiskAhead=false;
+}
+function _lsConflict(){
+  notify('⚠ This board is open in another tab/window and was changed there — your last edit was NOT saved. Choose how to resolve it in the banner above.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">⚠ <strong>This board was changed in another tab or window.</strong> '+
+    'Saving from here would wipe those changes, so this edit was not written to disk.</span>'+
+    '<button class="seb-action" onclick="_lsReloadNewest()">↻ Load Newest (discard my edit)</button>'+
+    '<button class="seb-action" onclick="_lsKeepMine()">⚠ Keep My Version</button>');
+}
+function _lsReloadNewest(){location.reload();}
+function _lsKeepMine(){
+  _hideSaveErrorBanner();
+  _lsForceWrite=true;
+  try{save();}finally{_lsForceWrite=false;}
+  notify('✅ Your version was saved. The other tab still holds an older copy — reload it before editing there.');
+}
 function save(){
   var _prevLM=S.lastModified;
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   var data;
   try{data=JSON.stringify(S);}catch(e){console.error('[Save] serialize failed:',e);return;}
+  // Refuse to clobber a newer write from another tab. Skipped for remote-driven
+  // renders (_skipFbWrite): there the cloud is the authority and is already
+  // reconciling, so a local token mismatch isn't a conflict to resolve here.
+  if(!_skipFbWrite&&!_lsForceWrite&&_lsToken!==null){
+    var _diskTok=_readLsToken();
+    if(_diskTok!==null&&_diskTok!==_lsToken){
+      S.lastModified=_prevLM;
+      _lsDiskAhead=true;
+      _lsConflict();
+      return;
+    }
+  }
   var localOk=false;
   try{
     localStorage.setItem('fb4',data);localOk=true;
@@ -1436,6 +1483,7 @@ function save(){
   // entry's boardId in sync, and warn using the SAME percentage-based
   // ceiling that drives the Backups button and storage bar (no more
   // separately-hardcoded thresholds that can disagree with each other).
+  _stampLsToken(); // publish this write so other tabs can detect it
   _hideSaveErrorBanner();
   var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
   if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
@@ -2393,7 +2441,13 @@ function load(){
         _ensureItemMeta(k);
         _syncCardDueFromItems(k);
       });
-    });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
+    });if(!S.boardId)S.boardId=uid();
+    // Adopt whatever token is on disk as our baseline. If there isn't one yet
+    // (board predates the guard) stamp one now, so a second tab opened later
+    // reads the same value instead of both starting blind.
+    _lsToken=_readLsToken();
+    if(_lsToken===null)_stampLsToken();
+    return;}}catch(e){}
   // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
   // Keeping lastModified=0 ensures the Firebase listener sees the cloud as newer on first connect
   // and pulls the real board instead of overwriting it with this empty default.
@@ -4691,7 +4745,31 @@ document.addEventListener('click',function(e){
 },true);
 
 // ── MODALS ──
+// ── PENDING CARD-TEXT FLUSH ────────────────────────────────────────────────
+// The title input and description textarea persist through onblur. Closing the
+// modal wipes #modal-root, which DESTROYS the focused element rather than
+// moving focus off it — and whether `blur` fires on removal is browser-
+// specific (Chromium fires it, Firefox/Safari historically do not). That made
+// "rename a card, press Escape" a silent data-loss bug on those browsers.
+// These edits are now tracked explicitly and flushed on every close path, so
+// persistence no longer depends on teardown firing an event at all.
+var _cmTextDirty=false;
+function cmTextInput(field,v){
+  if(!EC)return;
+  EC[field]=v;
+  _cmTextDirty=true;
+}
+function cmFlushText(){
+  if(!EC||!_cmTextDirty)return;
+  // Read straight from the DOM as well — covers an input event we never saw
+  // (autofill, IME commit, paste handled by the browser).
+  var t=document.getElementById('cm-t');if(t)EC.title=t.value;
+  var d=document.getElementById('cm-desc');if(d)EC.desc=d.value;
+  _cmTextDirty=false;
+  saveCard(EC);
+}
 function closeModal(){
+  cmFlushText();
   var ni=document.getElementById('cm-ni');
   var draft=ni?ni.value.trim():'';
   if(draft){showDraftWarning();return;}
@@ -4701,6 +4779,10 @@ function closeModal(){
   document.getElementById('modal-root').innerHTML='';
 }
 function forceCloseModal(){
+  // Deliberately does NOT flush pending text — this is the discard/force path
+  // (Discard & Close, Delete, Archive). Drop the pending flag so a later flush
+  // can't write a stale EC over whatever card is opened next.
+  _cmTextDirty=false;
   _cmDirty=false;
   _closeItemCal();closeChkSortMenu();
   document.getElementById('modal-root').innerHTML='';
@@ -4747,6 +4829,11 @@ function showUnsavedWarning(){
 }
 function cmSave(){
   var ni=document.getElementById('cm-ni');if(ni&&ni.value.trim())addCMItem(EC);
+  // Pull any in-flight title/desc text in before the explicit save below, so
+  // Save persists it in one write rather than relying on a separate flush.
+  var _t=document.getElementById('cm-t');if(_t&&EC)EC.title=_t.value;
+  var _d=document.getElementById('cm-desc');if(_d&&EC)EC.desc=_d.value;
+  _cmTextDirty=false;
   _cmDirty=false;document.getElementById('modal-banner')?.remove();
   saveCard(EC);notify('✅ Card saved!');
   document.getElementById('modal-root').innerHTML='';
@@ -4800,7 +4887,7 @@ function showAddColModal(gid){
 function showCardModal(cardId,colId){
   var card=S.cols.reduce(function(a,c){return a.concat(c.cards);},[]).find(function(x){return x.id===cardId;});
   if(!card)return;
-  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
+  _cmDirty=false;_cmTextDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
   _expandedChk=(S.prefs&&S.prefs.chkAlwaysExpanded)
     ?new Set((card.items||[]).map(function(_,i){return i;}))
     :new Set(_expandedChkByCard[card.id]||[]);
@@ -4830,9 +4917,15 @@ function _mkDueActionsHtml(c,colId){
   // clears every item's due date (sync itself stays intact — the card due
   // simply mirrors the now-empty item dues).
   var clearAllBtn='<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" title="Clear due dates on all checklist items" onclick="clearAllItemDues(\''+colId+'\')">✕</button>';
-  if(c.dueAuto)return (c.due?doneBtn:'')+clearAllBtn;
-  return (c.due?
-        doneBtn+
+  // Done/Reopen is a property of the CARD, not of its deadline, so it renders
+  // unconditionally. It used to be gated on `c.due` being non-empty, which made
+  // a card unreopenable: marking an item-derived (dueAuto) card done checks off
+  // every item, and _syncCardDueFromItems then derives the due date from the
+  // *incomplete* items only — leaving c.due empty and taking the Reopen button
+  // down with it. The card was stuck completed with no way back. The gate also
+  // meant a card with no due date never got a Done button at all.
+  if(c.dueAuto)return doneBtn+clearAllBtn;
+  return doneBtn+(c.due?
         '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
 }
@@ -4902,12 +4995,12 @@ function renderCM(colId){
         '<div id="cm-color-circle" class="cm-color-circle" style="'+circleStyle+'" onclick="toggleCMColor(event)" title="Card color"></div>'+
         '<div id="cm-color-drop" class="cm-color-drop'+(_cmColorOpen?' open':'')+'">'+colorDropHtml+'</div>'+
       '</div>'+
-      '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
+      '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="cmTextInput(\'title\',this.value)" onblur="cmFlushText()">'+
       '<span id="cm-due-label">'+dueLabelHtml+'</span>'+
     '</div>';
 
   var descHtml='<div style="position:relative;margin-bottom:18px">'+
-    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="display:block'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
+    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="display:block'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="cmTextInput(\'desc\',this.value)" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;_cmTextDirty=true;} cmFlushText()">'+esc(c.desc||'')+'</textarea>'+
     '<div id="cm-desc-handle" class="desc-resize-handle" title="Drag to resize description"></div>'+
   '</div>';
 
@@ -5919,6 +6012,19 @@ function notify(msg,ms){
   clearTimeout(notify._t);
   notify._t=setTimeout(function(){el.classList.remove('show');},ms||7800);
 }
+// Passive half of the cross-tab guard: the storage event fires in OTHER tabs
+// only, so a tab learns it has gone stale the moment another one writes —
+// before the user has invested more edits in a copy that can't be saved. The
+// save() token check is the actual protection; this is the early warning.
+// (Not all browsers deliver storage events for file:// origins, which is why
+// it isn't relied on alone.)
+window.addEventListener('storage',function(e){
+  if(!e.key||e.key!=='fb4_wtoken')return;
+  if(!e.newValue||e.newValue===_lsToken)return;
+  if(_lsDiskAhead)return; // already warned for this stale period
+  _lsDiskAhead=true;
+  notify('⚠ This board was just changed in another tab or window. Reload to pick up those changes — edits made here will conflict until you do.');
+});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(_pd){if(_pd.ghost)_pd.ghost.remove();_pd.el.style.opacity='';var _i=document.getElementById('drop-ind');if(_i)_i.remove();document.body.style.userSelect='';_pd=null;return;}
