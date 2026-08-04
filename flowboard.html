@@ -1302,17 +1302,39 @@ function _refreshStorageEstimate(){
     return _estimateCache;
   }).catch(function(){return null;});
 }
-function _storageStats(){
-  if(_estimateCache&&_estimateCache.quota>0){
-    var u=_estimateCache.usage,c=_estimateCache.quota;
-    return{used:u,ceiling:c,pct:Math.min(100,Math.round(u/c*100)),isEstimate:false,source:'estimate'};
-  }
-  // Fallback: localStorage-only figure (pre-estimate, or Storage API absent).
+// Reports whichever store is closest to ITS OWN limit — the binding
+// constraint — not just the biggest number available.
+//
+// This used to return the Storage API estimate whenever it existed. That
+// number is the origin-wide DISK quota (often ~1GB) and says nothing about
+// localStorage, which has a separate hard ~5MB cap and is where the LIVE BOARD
+// is saved. Measured on a full store: localStorage at 4.94MB of 5MB — 100%
+// full and one edit away from failing — while the gauge read 0% of 934MB, no
+// warning fired, and the Backups button stayed green. The thresholds could
+// never fire for the limit that actually breaks saving.
+//
+// Both stores are now measured against their own ceiling and the worse one
+// drives the gauge, the 80% save warning and the Backups button color. Callers
+// that want a specific store can read .local / .idb.
+function _lsStats(){
   var used=_lsBytes();
   var cached=_cachedCeiling();
   var ceiling=cached?cached.ceiling:5*1024*1024;
   var pct=ceiling>0?Math.min(100,Math.round(used/ceiling*100)):0;
-  return{used:used,ceiling:ceiling,pct:pct,isEstimate:true,source:'ls'};
+  return{used:used,ceiling:ceiling,pct:pct,isEstimate:!cached,source:'ls'};
+}
+function _storageStats(){
+  var local=_lsStats();
+  var idb=null;
+  if(_estimateCache&&_estimateCache.quota>0){
+    var u=_estimateCache.usage,c=_estimateCache.quota;
+    idb={used:u,ceiling:c,pct:Math.min(100,Math.round(u/c*100)),isEstimate:false,source:'estimate'};
+  }
+  // Binding constraint = the fuller of the two, by percentage of its own cap.
+  var primary=(idb&&idb.pct>local.pct)?idb:local;
+  return{used:primary.used,ceiling:primary.ceiling,pct:primary.pct,
+         isEstimate:primary.isEstimate,source:primary.source,
+         local:local,idb:idb};
 }
 
 // ── CULL LOG (auto-cull visibility) ──
@@ -1362,7 +1384,10 @@ function _updateBackupsBtnState(){
   btn.className='btn '+cls;
   if(dot)dot.style.display=unacked?'block':'none';
   var mb=function(b){return Math.round(b/1024/1024*10)/10;};
-  btn.title='Storage backend: '+mode.label+'\nUsage: '+mb(stats.used)+'MB of '+(stats.isEstimate?'~':'')+mb(stats.ceiling)+'MB used ('+stats.pct+'%)'+(unacked?'\nAuto-cleanup ran recently — click to review':'');
+  btn.title='Storage backend: '+mode.label+
+    '\nBoard + settings (localStorage): '+mb(stats.local.used)+'MB of ~'+mb(stats.local.ceiling)+'MB ('+stats.local.pct+'%)'+
+    (stats.idb?'\nBackups (IndexedDB): '+mb(stats.idb.used)+'MB of '+mb(stats.idb.ceiling)+'MB ('+stats.idb.pct+'%)':'\nBackups: sharing localStorage — IndexedDB unavailable')+
+    (unacked?'\nAuto-cleanup ran recently — click to review':'');
 }
 
 // ── PERSISTENT SAVE-ERROR BANNER (item 1) ──
@@ -1400,11 +1425,58 @@ function _reportLocalSaveError(e,data){
   _showSaveErrorBanner('<span class="seb-msg">'+bannerMsg+'</span>'+actions+'<button class="seb-dismiss" onclick="_hideSaveErrorBanner()">✕</button>');
   _updateBackupsBtnState();
 }
+// ── CROSS-TAB WRITE GUARD ──────────────────────────────────────────────────
+// Two tabs/windows of this file each hold their own in-memory S, and save()
+// writes the WHOLE board to localStorage['fb4']. With cloud sync on, Firebase
+// reconciles them. With it off there is nothing: the last writer silently wins
+// and the other tab's edits are destroyed with no warning — rename a card in
+// tab A, click anything in a stale tab B, and the rename is gone.
+//
+// A tiny token stamped on every successful write lets a tab detect that disk
+// moved underneath it and refuse the blind overwrite, rather than obliterating
+// the other tab's work. This mirrors the _remoteBaseline/_isSafeWrite gate the
+// Firebase path already has — the local store just never had an equivalent.
+var _lsToken=null;       // token this tab believes is currently on disk
+var _lsForceWrite=false; // set by the "keep my version" conflict action
+var _lsDiskAhead=false;  // another tab wrote; we're known-stale
+function _readLsToken(){try{return localStorage.getItem('fb4_wtoken');}catch(e){return null;}}
+function _stampLsToken(){
+  var t=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+  try{localStorage.setItem('fb4_wtoken',t);}catch(e){}
+  _lsToken=t;_lsDiskAhead=false;
+}
+function _lsConflict(){
+  notify('⚠ This board is open in another tab/window and was changed there — your last edit was NOT saved. Choose how to resolve it in the banner above.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">⚠ <strong>This board was changed in another tab or window.</strong> '+
+    'Saving from here would wipe those changes, so this edit was not written to disk.</span>'+
+    '<button class="seb-action" onclick="_lsReloadNewest()">↻ Load Newest (discard my edit)</button>'+
+    '<button class="seb-action" onclick="_lsKeepMine()">⚠ Keep My Version</button>');
+}
+function _lsReloadNewest(){location.reload();}
+function _lsKeepMine(){
+  _hideSaveErrorBanner();
+  _lsForceWrite=true;
+  try{save();}finally{_lsForceWrite=false;}
+  notify('✅ Your version was saved. The other tab still holds an older copy — reload it before editing there.');
+}
 function save(){
   var _prevLM=S.lastModified;
   if(!_skipFbWrite)S.lastModified=Date.now(); // only stamp real local changes, not remote renders
   var data;
   try{data=JSON.stringify(S);}catch(e){console.error('[Save] serialize failed:',e);return;}
+  // Refuse to clobber a newer write from another tab. Skipped for remote-driven
+  // renders (_skipFbWrite): there the cloud is the authority and is already
+  // reconciling, so a local token mismatch isn't a conflict to resolve here.
+  if(!_skipFbWrite&&!_lsForceWrite&&_lsToken!==null){
+    var _diskTok=_readLsToken();
+    if(_diskTok!==null&&_diskTok!==_lsToken){
+      S.lastModified=_prevLM;
+      _lsDiskAhead=true;
+      _lsConflict();
+      return;
+    }
+  }
   var localOk=false;
   try{
     localStorage.setItem('fb4',data);localOk=true;
@@ -1436,13 +1508,16 @@ function save(){
   // entry's boardId in sync, and warn using the SAME percentage-based
   // ceiling that drives the Backups button and storage bar (no more
   // separately-hardcoded thresholds that can disagree with each other).
+  _stampLsToken(); // publish this write so other tabs can detect it
   _hideSaveErrorBanner();
   var _ck=_activeKey||(localStorage.getItem('fb4_active_key'));
   if(S.boardId&&_ck){var _klk=getKeys();var _kle=_klk.find(function(k){return k.key===_ck;});if(_kle&&_kle.boardId!==S.boardId){_kle.boardId=S.boardId;setKeys(_klk);}}
   var stats=_storageStats();
   if(stats.pct>=80&&!save._warned){
     save._warned=true;
-    notify('⚠️ Storage at '+stats.pct+'% ('+Math.round(stats.used/1024/1024*10)/10+'MB of '+(stats.isEstimate?'~':'')+Math.round(stats.ceiling/1024/1024*10)/10+'MB, all boards) — export a backup or clear old snapshots soon.');
+    notify('⚠️ '+(stats.source==='estimate'?'Backup storage (IndexedDB)':'Board storage (browser local storage)')+' at '+stats.pct+'% — '+
+      Math.round(stats.used/1024/1024*10)/10+'MB of '+(stats.isEstimate?'~':'')+Math.round(stats.ceiling/1024/1024*10)/10+'MB across all boards. '+
+      'Export a backup or clear old snapshots soon — saves start failing when this fills.');
   }else if(stats.pct<80){save._warned=false;}
   _updateBackupsBtnState();
   // ── Idle auto-snapshot: fires 20min after the last real user action ──
@@ -2359,8 +2434,55 @@ function handleUSBLost(){
 }
 
 
+// ── CORRUPT-BOARD QUARANTINE ───────────────────────────────────────────────
+// load() used to wrap everything in try{...}catch(e){} and fall through to
+// defaultState() on any failure. A truncated or malformed fb4 therefore came
+// back as the DEMO board — To Do / In Progress / Review / Done with ten sample
+// cards — with no banner, no dialog and no message, and the very next save()
+// overwrote the damaged bytes with that demo data, destroying the only copy.
+// For an offline user with no cloud backstop that is indistinguishable from
+// "my board vanished". The raw bytes are now preserved and the user is told.
+var _boardLoadError=null;   // {kind, detail, quarantineKey|null}
+var _corruptRawBoard=null;  // raw string kept in memory for manual export
+function _quarantineCorruptBoard(raw,err){
+  console.error('[Load] Board data unreadable:',err);
+  _corruptRawBoard=raw;
+  var key='fb4_corrupt_'+Date.now();
+  var saved=null;
+  try{localStorage.setItem(key,raw);saved=key;}catch(e){/* no room to copy it */}
+  _boardLoadError={kind:'corrupt',
+    detail:(err&&err.message)||'unreadable data',
+    quarantineKey:saved,
+    bytes:raw?raw.length:0};
+}
+function downloadCorruptBoard(){
+  if(!_corruptRawBoard){notify('⚠️ No damaged board data is held in memory.');return;}
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([_corruptRawBoard],{type:'application/json'}));
+  a.download='flowboard_damaged_'+Date.now()+'.json';a.click();
+}
+function _announceBoardLoadError(){
+  if(!_boardLoadError)return;
+  var e=_boardLoadError;
+  var where=e.quarantineKey
+    ?'The damaged data was kept in this browser under <code>'+e.quarantineKey+'</code>, and you can download it below.'
+    :'There was no room to copy it aside, so download it now before making changes.';
+  notify('❌ Your saved board could not be read and has NOT been loaded — the board you see is a blank starter board, not your data. Use the banner to restore from a snapshot.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">❌ <strong>Your saved board could not be read'+
+    (e.kind==='read'?' — this browser is blocking local storage.':' ('+esc(e.detail)+').')+'</strong> '+
+    'What you are looking at is a blank starter board, NOT your data. '+where+'</span>'+
+    '<button class="seb-action" onclick="showBackupModal()">💾 Restore a Snapshot</button>'+
+    '<button class="seb-action" onclick="downloadCorruptBoard()">⬇ Download Damaged Data</button>'+
+    '<button class="seb-action" onclick="importBak()">📥 Import a File</button>');
+}
 function load(){
-  try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
+  var raw=null;
+  try{raw=localStorage.getItem('fb4');}
+  catch(e){_boardLoadError={kind:'read',detail:(e&&e.message)||'storage blocked',quarantineKey:null,bytes:0};}
+  if(raw){
+   try{S=JSON.parse(raw);
+    if(!S||!Array.isArray(S.cols)||!Array.isArray(S.groups))throw new Error('board data is missing its columns');
     // migrate prefs from old localStorage keys if not yet in S
     if(!S.prefs){
       var _lsm={};try{_lsm=JSON.parse(localStorage.getItem('fb4_modal_size')||'{}');}catch(e){}
@@ -2393,11 +2515,24 @@ function load(){
         _ensureItemMeta(k);
         _syncCardDueFromItems(k);
       });
-    });if(!S.boardId)S.boardId=uid();return;}}catch(e){}
+    });if(!S.boardId)S.boardId=uid();
+    // Adopt whatever token is on disk as our baseline. If there isn't one yet
+    // (board predates the guard) stamp one now, so a second tab opened later
+    // reads the same value instead of both starting blind.
+    _lsToken=_readLsToken();
+    if(_lsToken===null)_stampLsToken();
+    return;
+   }catch(e){_quarantineCorruptBoard(raw,e);}
+  }
   // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
   // Keeping lastModified=0 ensures the Firebase listener sees the cloud as newer on first connect
   // and pulls the real board instead of overwriting it with this empty default.
-  S=defaultState();_skipFbWrite=true;save();_skipFbWrite=false;
+  S=defaultState();
+  // If we couldn't copy the damaged bytes aside, do NOT immediately write the
+  // starter board over them — that would be the last chance to recover, spent
+  // automatically. Leave the original on disk and let the banner drive.
+  if(_boardLoadError&&_boardLoadError.kind==='corrupt'&&!_boardLoadError.quarantineKey)return;
+  _skipFbWrite=true;save();_skipFbWrite=false;
 }
 
 // ── BACKUP STORAGE BACKEND (IndexedDB, with localStorage fallback) ──────────
@@ -2503,8 +2638,12 @@ function _idbCheckUsable(){
 var _backupsUseIdb=false;
 var _baksMirror=null,_baksMirrorKey=null,_hydratingManual=null;
 var _autoMirror=null,_autoMirrorKey=null,_hydratingAuto=null;
-function _hydrateManualMirror(){
+// force=true re-reads even when the mirror looks current — used after a failed
+// write, where the in-memory copy is known to disagree with disk and would
+// otherwise keep showing a snapshot that was never stored.
+function _hydrateManualMirror(force){
   var k=_bakKey();
+  if(force){_baksMirrorKey=null;_hydratingManual=null;}
   if(_baksMirrorKey===k)return Promise.resolve();
   if(_hydratingManual&&_hydratingManual._k===k)return _hydratingManual;
   var p=_idbGet('manual',k).then(function(arr){_baksMirror=arr||[];_baksMirrorKey=k;})
@@ -2512,8 +2651,9 @@ function _hydrateManualMirror(){
     .then(function(){if(_hydratingManual===p)_hydratingManual=null;});
   p._k=k;_hydratingManual=p;return p;
 }
-function _hydrateAutoMirror(){
+function _hydrateAutoMirror(force){
   var k=_autoKey();
+  if(force){_autoMirrorKey=null;_hydratingAuto=null;}
   if(_autoMirrorKey===k)return Promise.resolve();
   if(_hydratingAuto&&_hydratingAuto._k===k)return _hydratingAuto;
   var p=_idbGet('auto',k).then(function(arr){_autoMirror=arr||[];_autoMirrorKey=k;})
@@ -2573,27 +2713,66 @@ function _initBackupStore(){
   }).catch(function(){_backupsUseIdb=false;});
 }
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
+// ── SNAPSHOT WRITE REPORTING ───────────────────────────────────────────────
+// Snapshot writes used to fail silently in BOTH backends: _lsSetBaks swallowed
+// the quota error, and setBaks fired _idbPut without ever looking at its
+// result (it resolves false on failure). Either way the in-memory mirror was
+// updated, the snapshot appeared in the list, and the user was told
+// "📌 Snapshot saved!" with nothing on disk — the backup they took before
+// something risky would be gone on reload. Every write now reports honestly.
+function _bakWriteFailed(what){
+  notify('❌ '+what+' could NOT be saved — storage is full or unavailable. It is NOT on disk and will be gone when you reload. Export a backup file now.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">❌ <strong>'+what+' failed to write to storage.</strong> '+
+    'It is not saved and will disappear on reload — export a file instead.</span>'+
+    '<button class="seb-action" onclick="exportBak(null)">⬇ Export Backup File</button>'+
+    '<button class="seb-action" onclick="showBackupModal()">💾 Open Backups</button>'+
+    '<button class="seb-dismiss" onclick="_hideSaveErrorBanner()">✕</button>');
+  _invalidateCapacityProbe(); // cached ceiling was wrong — re-measure next time
+  _updateBackupsBtnState();
+}
 function _lsGetBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
-function _lsSetBaks(a){try{localStorage.setItem(_bakKey(),JSON.stringify(a));}catch(e){}}
+function _lsSetBaks(a){
+  try{localStorage.setItem(_bakKey(),JSON.stringify(a));return true;}
+  catch(e){console.warn('[Backups] localStorage write failed:',e);return false;}
+}
 function getBaks(){
   if(!_backupsUseIdb)return _lsGetBaks();
   if(_baksMirrorKey!==_bakKey()){_hydrateManualMirror();return[];} // stale/unhydrated → safe empty until hydrated
   return _baksMirror||[];
 }
+// Always returns a Promise<boolean> so callers can confirm the write landed.
+// A false result has already been reported to the user by the time it resolves.
 function setBaks(a){
-  if(!_backupsUseIdb)return _lsSetBaks(a);
+  if(!_backupsUseIdb){
+    var ok=_lsSetBaks(a);
+    if(!ok)_bakWriteFailed('Snapshot');
+    return Promise.resolve(ok);
+  }
   var k=_bakKey();
   if(_baksMirrorKey!==k){ // mirror not hydrated for this board — never persist, would risk clobbering unloaded data
     console.warn('[Backups] setBaks skipped — mirror not hydrated for '+k);
     notify('⚠️ Snapshot action skipped — storage was still loading for this board. Please try again.');
-    _hydrateManualMirror();return;
+    _hydrateManualMirror();
+    return Promise.resolve(false); // already reported above; not a write failure
   }
-  _baksMirror=a;_idbPut('manual',k,a);
+  _baksMirror=a;
+  return _idbPut('manual',k,a).then(function(ok){
+    if(ok)return true;
+    // Roll the mirror back to what is actually on disk before reporting, so
+    // the list can't keep showing a snapshot that was never stored.
+    return _hydrateManualMirror(true).then(function(){_bakWriteFailed('Snapshot');return false;});
+  });
 }
 function createBak(name){
   var a=getBaks(),tc=S.cols.reduce(function(n,c){return n+c.cards.length;},0);
   a.unshift({id:uid(),name:name||'Snapshot '+new Date().toLocaleString(),ts:Date.now(),cards:tc,data:JSON.stringify(S)});
-  if(a.length>25)a.splice(25);setBaks(a);notify('📌 Snapshot saved!');showBackupModal();
+  if(a.length>25)a.splice(25);
+  // Success is only announced once the write is confirmed on disk.
+  setBaks(a).then(function(ok){
+    if(ok)notify('📌 Snapshot saved!');
+    showBackupModal();
+  });
 }
 function renameBak(id){
   var baks=getBaks();
@@ -2735,21 +2914,43 @@ function _reclaimSpace(){
   return removed;
 }
 function _lsGetAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
-function _lsSetAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+function _lsSetAutoBaks(a){
+  try{localStorage.setItem(_autoKey(),JSON.stringify(a));return true;}
+  catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');return false;}
+}
 function getAutoBaks(){
   if(!_backupsUseIdb)return _lsGetAutoBaks();
   if(_autoMirrorKey!==_autoKey()){_hydrateAutoMirror();return[];}
   return _autoMirror||[];
 }
+// Auto-snapshots are the safety net that runs without the user asking, so a
+// silent failure is the worst case: the net is gone and nothing says so. These
+// report too, but at most once per session so a full disk can't spam a user
+// mid-work every 20 minutes.
+var _autoSnapFailWarned=false;
+function _autoSnapWriteFailed(){
+  if(_autoSnapFailWarned)return;
+  _autoSnapFailWarned=true;
+  _bakWriteFailed('Automatic snapshot');
+}
 function setAutoBaks(a){
-  if(!_backupsUseIdb)return _lsSetAutoBaks(a);
+  if(!_backupsUseIdb){
+    var ok=_lsSetAutoBaks(a);
+    if(!ok)_autoSnapWriteFailed();
+    return Promise.resolve(ok);
+  }
   var k=_autoKey();
   if(_autoMirrorKey!==k){
     console.warn('[AutoSnap] setAutoBaks skipped — mirror not hydrated for '+k);
     notify('⚠️ Auto-snapshot skipped — storage was still loading. It will retry on the next save.');
-    _hydrateAutoMirror();return;
+    _hydrateAutoMirror();
+    return Promise.resolve(false);
   }
-  _autoMirror=a;_idbPut('auto',k,a);
+  _autoMirror=a;
+  return _idbPut('auto',k,a).then(function(ok){
+    if(ok){_autoSnapFailWarned=false;return true;} // recovered — allow a future warning
+    return _hydrateAutoMirror(true).then(function(){_autoSnapWriteFailed();return false;});
+  });
 }
 
 function _createAutoSnap(name,trigger){
@@ -4691,7 +4892,31 @@ document.addEventListener('click',function(e){
 },true);
 
 // ── MODALS ──
+// ── PENDING CARD-TEXT FLUSH ────────────────────────────────────────────────
+// The title input and description textarea persist through onblur. Closing the
+// modal wipes #modal-root, which DESTROYS the focused element rather than
+// moving focus off it — and whether `blur` fires on removal is browser-
+// specific (Chromium fires it, Firefox/Safari historically do not). That made
+// "rename a card, press Escape" a silent data-loss bug on those browsers.
+// These edits are now tracked explicitly and flushed on every close path, so
+// persistence no longer depends on teardown firing an event at all.
+var _cmTextDirty=false;
+function cmTextInput(field,v){
+  if(!EC)return;
+  EC[field]=v;
+  _cmTextDirty=true;
+}
+function cmFlushText(){
+  if(!EC||!_cmTextDirty)return;
+  // Read straight from the DOM as well — covers an input event we never saw
+  // (autofill, IME commit, paste handled by the browser).
+  var t=document.getElementById('cm-t');if(t)EC.title=t.value;
+  var d=document.getElementById('cm-desc');if(d)EC.desc=d.value;
+  _cmTextDirty=false;
+  saveCard(EC);
+}
 function closeModal(){
+  cmFlushText();
   var ni=document.getElementById('cm-ni');
   var draft=ni?ni.value.trim():'';
   if(draft){showDraftWarning();return;}
@@ -4701,6 +4926,10 @@ function closeModal(){
   document.getElementById('modal-root').innerHTML='';
 }
 function forceCloseModal(){
+  // Deliberately does NOT flush pending text — this is the discard/force path
+  // (Discard & Close, Delete, Archive). Drop the pending flag so a later flush
+  // can't write a stale EC over whatever card is opened next.
+  _cmTextDirty=false;
   _cmDirty=false;
   _closeItemCal();closeChkSortMenu();
   document.getElementById('modal-root').innerHTML='';
@@ -4747,6 +4976,11 @@ function showUnsavedWarning(){
 }
 function cmSave(){
   var ni=document.getElementById('cm-ni');if(ni&&ni.value.trim())addCMItem(EC);
+  // Pull any in-flight title/desc text in before the explicit save below, so
+  // Save persists it in one write rather than relying on a separate flush.
+  var _t=document.getElementById('cm-t');if(_t&&EC)EC.title=_t.value;
+  var _d=document.getElementById('cm-desc');if(_d&&EC)EC.desc=_d.value;
+  _cmTextDirty=false;
   _cmDirty=false;document.getElementById('modal-banner')?.remove();
   saveCard(EC);notify('✅ Card saved!');
   document.getElementById('modal-root').innerHTML='';
@@ -4800,7 +5034,7 @@ function showAddColModal(gid){
 function showCardModal(cardId,colId){
   var card=S.cols.reduce(function(a,c){return a.concat(c.cards);},[]).find(function(x){return x.id===cardId;});
   if(!card)return;
-  _cmDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
+  _cmDirty=false;_cmTextDirty=false;_cmColorOpen=false;_cmColOpen=false;_cmTagsOpen=false;_chkSorted=false;_chkOrigItems=null;_chkOrigMeta=null;_chkSortMode=null;
   _expandedChk=(S.prefs&&S.prefs.chkAlwaysExpanded)
     ?new Set((card.items||[]).map(function(_,i){return i;}))
     :new Set(_expandedChkByCard[card.id]||[]);
@@ -4830,9 +5064,15 @@ function _mkDueActionsHtml(c,colId){
   // clears every item's due date (sync itself stays intact — the card due
   // simply mirrors the now-empty item dues).
   var clearAllBtn='<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" title="Clear due dates on all checklist items" onclick="clearAllItemDues(\''+colId+'\')">✕</button>';
-  if(c.dueAuto)return (c.due?doneBtn:'')+clearAllBtn;
-  return (c.due?
-        doneBtn+
+  // Done/Reopen is a property of the CARD, not of its deadline, so it renders
+  // unconditionally. It used to be gated on `c.due` being non-empty, which made
+  // a card unreopenable: marking an item-derived (dueAuto) card done checks off
+  // every item, and _syncCardDueFromItems then derives the due date from the
+  // *incomplete* items only — leaving c.due empty and taking the Reopen button
+  // down with it. The card was stuck completed with no way back. The gate also
+  // meant a card with no due date never got a Done button at all.
+  if(c.dueAuto)return doneBtn+clearAllBtn;
+  return doneBtn+(c.due?
         '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;flex-shrink:0" onclick="EC.due=\'\';EC.completed=false;EC.completedAt=null;saveCard(EC);renderCM(\''+colId+'\')">✕</button>'
       :'');
 }
@@ -4902,12 +5142,12 @@ function renderCM(colId){
         '<div id="cm-color-circle" class="cm-color-circle" style="'+circleStyle+'" onclick="toggleCMColor(event)" title="Card color"></div>'+
         '<div id="cm-color-drop" class="cm-color-drop'+(_cmColorOpen?' open':'')+'">'+colorDropHtml+'</div>'+
       '</div>'+
-      '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="EC.title=this.value" onblur="saveCard(EC)">'+
+      '<input id="cm-t" value="'+escA(c.title)+'" style="flex:1;background:transparent;border:none;border-bottom:2px solid var(--bd-i);color:var(--txt-b);font-size:19px;font-weight:700;padding:4px 0 10px;outline:none;font-family:inherit" oninput="cmTextInput(\'title\',this.value)" onblur="cmFlushText()">'+
       '<span id="cm-due-label">'+dueLabelHtml+'</span>'+
     '</div>';
 
   var descHtml='<div style="position:relative;margin-bottom:18px">'+
-    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="display:block'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="EC.desc=this.value" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;} saveCard(EC)">'+esc(c.desc||'')+'</textarea>'+
+    '<textarea id="cm-desc" class="ftextarea" placeholder="Add a description or notes…" style="display:block'+(c.descH?';height:'+c.descH+'px':'')+'" oninput="cmTextInput(\'desc\',this.value)" onmousedown="this.dataset.oh=this.offsetHeight" onmouseup="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){this.dataset.oh=EC.descH=this.offsetHeight;saveCard(EC);}" onblur="if(this.dataset.oh&&this.offsetHeight!=this.dataset.oh){EC.descH=this.offsetHeight;_cmTextDirty=true;} cmFlushText()">'+esc(c.desc||'')+'</textarea>'+
     '<div id="cm-desc-handle" class="desc-resize-handle" title="Drag to resize description"></div>'+
   '</div>';
 
@@ -5427,15 +5667,26 @@ function renderStorageBar(){
     var mode=_backupModeInfo();
     var color=s.pct>=90?'#e11d48':s.pct>=70?'#f59e0b':'#10b981';
     var barPct=Math.max(s.pct,s.used>0?1:0); // keep a sliver visible when usage is tiny vs a huge quota
-    var note=s.source==='estimate'?' (IndexedDB + localStorage)':(s.isEstimate?' — estimated':'');
+    var label=s.source==='estimate'?'IndexedDB (backups)':'Browser local storage';
+    var note=' — '+label+', the fuller of the two';
     var modeLine='<div style="font-size:11px;margin-bottom:6px;color:'+(mode.warn?'#b45309':'var(--txt-d)')+'">'+
       (mode.warn?'⚠ ':'✅ ')+'Backup storage: <strong>'+mode.label+'</strong></div>';
+    // Both stores are listed explicitly. They have separate, independent caps —
+    // a near-empty IndexedDB quota tells you nothing about localStorage being
+    // one edit away from full, which is exactly how the old single-number
+    // gauge managed to read 0% while saves were about to start failing.
+    var breakdown='<div style="font-size:11px;color:var(--txt-d);margin-top:6px;line-height:1.6">'+
+      '<div>Board + settings (localStorage): <strong>'+mb(s.local.used)+'MB</strong> of ~'+fmtCeil(s.local.ceiling)+' ('+s.local.pct+'%)</div>'+
+      (s.idb?'<div>Backups (IndexedDB): <strong>'+mb(s.idb.used)+'MB</strong> of '+fmtCeil(s.idb.ceiling)+' ('+s.idb.pct+'%)</div>'
+            :'<div>Backups: sharing localStorage above — IndexedDB unavailable</div>')+
+      '</div>';
     wrap.innerHTML=modeLine+
       '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)">'+
         '<span>'+mb(s.used)+'MB of '+(s.source==='estimate'?'':'~')+fmtCeil(s.ceiling)+' ('+s.pct+'%)'+note+'</span>'+
         '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_refreshStorageEstimate().then(renderStorageBar)" title="Re-measure storage usage">↻ Recalculate</button>'+
       '</div>'+
       '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div></div>'+
+      breakdown+
       (mode.warn?'<div style="font-size:11px;color:var(--txt-d);margin-top:6px;line-height:1.5">Your backups are still saving — just on the browser\'s older, smaller local storage (~5MB total) instead of the larger IndexedDB store. This can happen in private/incognito mode, some strict privacy settings, or certain ways of opening this file. Export a backup regularly on this device/browser as a precaution.</div>':'');
     _updateBackupsBtnState();
   };
@@ -5478,11 +5729,172 @@ function showReportModal(){
           '<div style="font-size:12px;color:var(--txt-d)">Projects and deliverables packed two-up, with checklist items and room for handwritten notes</div>'+
         '</div>'+
       '</div>'+
+      '<div class="usb-conflict-opt" onclick="closeModal();openReport(\'developer\')" style="background:var(--surf2);border:2px solid var(--bd-i);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .18s,background .18s">'+
+        '<div style="font-size:28px;line-height:1">&#x1F5A5;</div>'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:14px;color:var(--txt-b);margin-bottom:3px">Developer</div>'+
+          '<div style="font-size:12px;color:var(--txt-d)">Every field as structured plain text — built for pasting into an AI, not for printing</div>'+
+        '</div>'+
+      '</div>'+
     '</div>',
   '480px');
 }
 
+/* ── Developer report ──────────────────────────────────────────────────────
+   A machine-first dump of the entire board as structured plain text. Unlike
+   the three print reports, this one is not styled for paper — it exists so the
+   whole board (every field, including the per-item metadata that normally only
+   lives inside the card modal) can be selected and pasted into an AI.
+
+   Format rules, kept deliberately boring so a parser never has to guess:
+     • indentation encodes hierarchy — group > column > card > item
+     • every line is `key: value`; keys are stable snake_case
+     • unset/empty fields are omitted rather than printed blank, so "absent"
+       and "empty string" stay distinguishable
+     • all timestamps are ISO 8601 UTC; due dates stay in the app's YYYY-MM-DD
+       form and carry a derived [overdue]/[due_soon] tag only while still open
+     • archived cards stay inline in their original column, flagged in place
+   ─────────────────────────────────────────────────────────────────────────── */
+function _devIso(ts){
+  if(!ts)return'';
+  try{var d=new Date(ts);return isNaN(d.getTime())?'':d.toISOString();}catch(e){return'';}
+}
+function _devDueTag(due,isDone){
+  if(!due||isDone)return'';
+  var dc=dueClass(due);
+  return dc==='over'?' [overdue]':dc==='soon'?' [due_soon]':'';
+}
+function openDevReport(cardId){
+  var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
+  var L=[];
+  function P(s){L.push(s==null?'':String(s));}
+
+  // Bucket columns under their group in board order. Columns whose gid doesn't
+  // resolve (or is null) collect in a trailing UNGROUPED bucket so a column can
+  // never be silently dropped from the export.
+  var buckets=(S.groups||[]).map(function(g){return{g:g,cols:[]};});
+  var byId={};
+  buckets.forEach(function(b){byId[b.g.id]=b;});
+  var loose={g:null,cols:[]};
+  (S.cols||[]).forEach(function(col){
+    if(cardId&&!(col.cards||[]).some(function(k){return k.id===cardId;}))return;
+    (byId[col.gid]||loose).cols.push(col);
+  });
+  buckets=buckets.filter(function(b){return b.cols.length;});
+  if(loose.cols.length)buckets.push(loose);
+
+  function cardsOf(col){
+    return (col.cards||[]).filter(function(k){return !cardId||k.id===cardId;});
+  }
+
+  var nCols=0,nCards=0,nArch=0,nItems=0,nDoneItems=0;
+  buckets.forEach(function(b){b.cols.forEach(function(col){
+    nCols++;
+    cardsOf(col).forEach(function(k){
+      nCards++;
+      if(k.archived)nArch++;
+      var items=k.items||[],done=k.done||[];
+      nItems+=items.length;
+      nDoneItems+=items.filter(function(it){return done.indexOf(it)>=0;}).length;
+    });
+  });});
+
+  P('FLOWBOARD DEVELOPER EXPORT');
+  P('schema: fb-dev-v1');
+  P('board: '+boardName);
+  P('generated: '+_devIso(Date.now()));
+  if(cardId)P('scope: single card ('+cardId+')');
+  else P('scope: full board');
+  P('groups: '+buckets.filter(function(b){return b.g;}).length);
+  P('columns: '+nCols);
+  P('cards: '+nCards+' (active '+(nCards-nArch)+', archived '+nArch+')');
+  P('items: '+nItems+' ('+nDoneItems+' done, '+(nItems-nDoneItems)+' open)');
+
+  function writeCard(k,pad){
+    if(!Array.isArray(k.done))k.done=[];
+    if(!Array.isArray(k.items))k.items=[];
+    var items=k.items,done=k.done;
+    var allDone=_allItemsDone(k);
+    var isDone=!!(k.completed||allDone);
+    P('');
+    P(pad+'CARD: '+(k.title||'(untitled)'));
+    P(pad+'  id: '+k.id);
+    P(pad+'  status: '+(isDone?'done':'open'));
+    if(k.archived){
+      P(pad+'  archived: true');
+      if(k.archivedAt)P(pad+'  archived_at: '+_devIso(k.archivedAt));
+      if(k.archivedFromCol)P(pad+'  archived_from_col: '+k.archivedFromCol);
+    }
+    if(PRI[k.pri])P(pad+'  priority: '+PRI[k.pri].l+' ('+k.pri+')');
+    if(k.color)P(pad+'  color: '+k.color);
+    if(k.tags&&k.tags.length)P(pad+'  tags: '+k.tags.join(', '));
+    if(k.due)P(pad+'  due: '+k.due+(k.dueAuto?' (derived from items)':'')+_devDueTag(k.due,isDone));
+    else if(k.dueAuto)P(pad+'  due: none (derived from items; all dated items complete)');
+    if(k.createdAt)P(pad+'  created: '+_devIso(k.createdAt));
+    if(k.updatedAt)P(pad+'  updated: '+_devIso(k.updatedAt));
+    if(k.completedAt)P(pad+'  completed_at: '+_devIso(k.completedAt));
+    if(items.length){
+      var dn=items.filter(function(it){return done.indexOf(it)>=0;}).length;
+      P(pad+'  progress: '+dn+'/'+items.length+' ('+Math.round(dn/items.length*100)+'%)');
+    }
+    if(k.desc){
+      P(pad+'  desc:');
+      String(k.desc).split(/\r?\n/).forEach(function(ln){P(pad+'    | '+ln);});
+    }
+    if(!items.length){
+      P(pad+'  items: none');
+      return;
+    }
+    _ensureItemMeta(k);
+    P(pad+'  items:');
+    items.forEach(function(it,i){
+      var itDone=done.indexOf(it)>=0;
+      var m=k.itemMeta[i]||{};
+      P(pad+'    ['+(itDone?'x':' ')+'] '+(i+1)+'. '+it);
+      var sub=pad+'        ';
+      if(m.due)P(sub+'due: '+m.due+_devDueTag(m.due,itDone));
+      if(m.pri!=null&&PRI[m.pri])P(sub+'priority: '+PRI[m.pri].l+' ('+m.pri+')');
+      if(m.createdAt)P(sub+'created: '+_devIso(m.createdAt));
+      if(itDone&&m.completedAt)P(sub+'completed_at: '+_devIso(m.completedAt));
+    });
+  }
+
+  buckets.forEach(function(b){
+    P('');
+    if(b.g)P('== GROUP: '+(b.g.title||'(untitled)')+' | id: '+b.g.id+' | collapsed: '+(!!b.g.col)+' ==');
+    else P('== GROUP: (ungrouped) ==');
+    b.cols.forEach(function(col){
+      var cards=cardsOf(col);
+      var archN=cards.filter(function(k){return k.archived;}).length;
+      P('');
+      P('  -- COLUMN: '+(col.title||'(untitled)')+' | id: '+col.id+
+        ' | wip_limit: '+(col.wip?col.wip:'none')+
+        ' | cards: '+cards.length+(archN?' ('+archN+' archived)':''));
+      if(col.archived)P('     column_archived: true'+(col.archivedAt?' | archived_at: '+_devIso(col.archivedAt):''));
+      if(!cards.length)P('     (no cards)');
+      cards.forEach(function(k){writeCard(k,'    ');});
+    });
+  });
+  P('');
+  P('END OF EXPORT');
+
+  var text=L.join('\n');
+  var esc=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var title=boardName+' — Developer Export';
+  var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
+    '<title>'+title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</title>'+
+    '<style>'+
+      'html,body{margin:0;padding:0;background:#fff;}'+
+      'pre{margin:0;padding:24px 28px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;'+
+        'font-size:12.5px;line-height:1.5;color:#111;white-space:pre-wrap;word-wrap:break-word;}'+
+    '</style></head><body><pre>'+esc+'</pre></body></html>';
+
+  var win=window.open('','_blank');
+  if(win){win.document.write(html);win.document.close();}
+}
+
 function openReport(type, cardId){
+  if(type==='developer')return openDevReport(cardId);
   var boardName=(S.prefs&&S.prefs.boardName)||'My Board';
   var dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
   var cols=(S.cols||[]).filter(function(c){return !c.archived;});
@@ -5758,6 +6170,19 @@ function notify(msg,ms){
   clearTimeout(notify._t);
   notify._t=setTimeout(function(){el.classList.remove('show');},ms||7800);
 }
+// Passive half of the cross-tab guard: the storage event fires in OTHER tabs
+// only, so a tab learns it has gone stale the moment another one writes —
+// before the user has invested more edits in a copy that can't be saved. The
+// save() token check is the actual protection; this is the early warning.
+// (Not all browsers deliver storage events for file:// origins, which is why
+// it isn't relied on alone.)
+window.addEventListener('storage',function(e){
+  if(!e.key||e.key!=='fb4_wtoken')return;
+  if(!e.newValue||e.newValue===_lsToken)return;
+  if(_lsDiskAhead)return; // already warned for this stale period
+  _lsDiskAhead=true;
+  notify('⚠ This board was just changed in another tab or window. Reload to pick up those changes — edits made here will conflict until you do.');
+});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(_pd){if(_pd.ghost)_pd.ghost.remove();_pd.el.style.opacity='';var _i=document.getElementById('drop-ind');if(_i)_i.remove();document.body.style.userSelect='';_pd=null;return;}
@@ -5778,6 +6203,7 @@ document.addEventListener('keydown',function(e){
 });
 
 load();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
+_announceBoardLoadError(); // loud, persistent banner if the saved board was unreadable
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
 // Backups now live in IndexedDB (with a localStorage fallback). Initialise that
