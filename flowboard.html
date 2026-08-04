@@ -1302,17 +1302,39 @@ function _refreshStorageEstimate(){
     return _estimateCache;
   }).catch(function(){return null;});
 }
-function _storageStats(){
-  if(_estimateCache&&_estimateCache.quota>0){
-    var u=_estimateCache.usage,c=_estimateCache.quota;
-    return{used:u,ceiling:c,pct:Math.min(100,Math.round(u/c*100)),isEstimate:false,source:'estimate'};
-  }
-  // Fallback: localStorage-only figure (pre-estimate, or Storage API absent).
+// Reports whichever store is closest to ITS OWN limit — the binding
+// constraint — not just the biggest number available.
+//
+// This used to return the Storage API estimate whenever it existed. That
+// number is the origin-wide DISK quota (often ~1GB) and says nothing about
+// localStorage, which has a separate hard ~5MB cap and is where the LIVE BOARD
+// is saved. Measured on a full store: localStorage at 4.94MB of 5MB — 100%
+// full and one edit away from failing — while the gauge read 0% of 934MB, no
+// warning fired, and the Backups button stayed green. The thresholds could
+// never fire for the limit that actually breaks saving.
+//
+// Both stores are now measured against their own ceiling and the worse one
+// drives the gauge, the 80% save warning and the Backups button color. Callers
+// that want a specific store can read .local / .idb.
+function _lsStats(){
   var used=_lsBytes();
   var cached=_cachedCeiling();
   var ceiling=cached?cached.ceiling:5*1024*1024;
   var pct=ceiling>0?Math.min(100,Math.round(used/ceiling*100)):0;
-  return{used:used,ceiling:ceiling,pct:pct,isEstimate:true,source:'ls'};
+  return{used:used,ceiling:ceiling,pct:pct,isEstimate:!cached,source:'ls'};
+}
+function _storageStats(){
+  var local=_lsStats();
+  var idb=null;
+  if(_estimateCache&&_estimateCache.quota>0){
+    var u=_estimateCache.usage,c=_estimateCache.quota;
+    idb={used:u,ceiling:c,pct:Math.min(100,Math.round(u/c*100)),isEstimate:false,source:'estimate'};
+  }
+  // Binding constraint = the fuller of the two, by percentage of its own cap.
+  var primary=(idb&&idb.pct>local.pct)?idb:local;
+  return{used:primary.used,ceiling:primary.ceiling,pct:primary.pct,
+         isEstimate:primary.isEstimate,source:primary.source,
+         local:local,idb:idb};
 }
 
 // ── CULL LOG (auto-cull visibility) ──
@@ -1362,7 +1384,10 @@ function _updateBackupsBtnState(){
   btn.className='btn '+cls;
   if(dot)dot.style.display=unacked?'block':'none';
   var mb=function(b){return Math.round(b/1024/1024*10)/10;};
-  btn.title='Storage backend: '+mode.label+'\nUsage: '+mb(stats.used)+'MB of '+(stats.isEstimate?'~':'')+mb(stats.ceiling)+'MB used ('+stats.pct+'%)'+(unacked?'\nAuto-cleanup ran recently — click to review':'');
+  btn.title='Storage backend: '+mode.label+
+    '\nBoard + settings (localStorage): '+mb(stats.local.used)+'MB of ~'+mb(stats.local.ceiling)+'MB ('+stats.local.pct+'%)'+
+    (stats.idb?'\nBackups (IndexedDB): '+mb(stats.idb.used)+'MB of '+mb(stats.idb.ceiling)+'MB ('+stats.idb.pct+'%)':'\nBackups: sharing localStorage — IndexedDB unavailable')+
+    (unacked?'\nAuto-cleanup ran recently — click to review':'');
 }
 
 // ── PERSISTENT SAVE-ERROR BANNER (item 1) ──
@@ -1490,7 +1515,9 @@ function save(){
   var stats=_storageStats();
   if(stats.pct>=80&&!save._warned){
     save._warned=true;
-    notify('⚠️ Storage at '+stats.pct+'% ('+Math.round(stats.used/1024/1024*10)/10+'MB of '+(stats.isEstimate?'~':'')+Math.round(stats.ceiling/1024/1024*10)/10+'MB, all boards) — export a backup or clear old snapshots soon.');
+    notify('⚠️ '+(stats.source==='estimate'?'Backup storage (IndexedDB)':'Board storage (browser local storage)')+' at '+stats.pct+'% — '+
+      Math.round(stats.used/1024/1024*10)/10+'MB of '+(stats.isEstimate?'~':'')+Math.round(stats.ceiling/1024/1024*10)/10+'MB across all boards. '+
+      'Export a backup or clear old snapshots soon — saves start failing when this fills.');
   }else if(stats.pct<80){save._warned=false;}
   _updateBackupsBtnState();
   // ── Idle auto-snapshot: fires 20min after the last real user action ──
@@ -2407,8 +2434,55 @@ function handleUSBLost(){
 }
 
 
+// ── CORRUPT-BOARD QUARANTINE ───────────────────────────────────────────────
+// load() used to wrap everything in try{...}catch(e){} and fall through to
+// defaultState() on any failure. A truncated or malformed fb4 therefore came
+// back as the DEMO board — To Do / In Progress / Review / Done with ten sample
+// cards — with no banner, no dialog and no message, and the very next save()
+// overwrote the damaged bytes with that demo data, destroying the only copy.
+// For an offline user with no cloud backstop that is indistinguishable from
+// "my board vanished". The raw bytes are now preserved and the user is told.
+var _boardLoadError=null;   // {kind, detail, quarantineKey|null}
+var _corruptRawBoard=null;  // raw string kept in memory for manual export
+function _quarantineCorruptBoard(raw,err){
+  console.error('[Load] Board data unreadable:',err);
+  _corruptRawBoard=raw;
+  var key='fb4_corrupt_'+Date.now();
+  var saved=null;
+  try{localStorage.setItem(key,raw);saved=key;}catch(e){/* no room to copy it */}
+  _boardLoadError={kind:'corrupt',
+    detail:(err&&err.message)||'unreadable data',
+    quarantineKey:saved,
+    bytes:raw?raw.length:0};
+}
+function downloadCorruptBoard(){
+  if(!_corruptRawBoard){notify('⚠️ No damaged board data is held in memory.');return;}
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([_corruptRawBoard],{type:'application/json'}));
+  a.download='flowboard_damaged_'+Date.now()+'.json';a.click();
+}
+function _announceBoardLoadError(){
+  if(!_boardLoadError)return;
+  var e=_boardLoadError;
+  var where=e.quarantineKey
+    ?'The damaged data was kept in this browser under <code>'+e.quarantineKey+'</code>, and you can download it below.'
+    :'There was no room to copy it aside, so download it now before making changes.';
+  notify('❌ Your saved board could not be read and has NOT been loaded — the board you see is a blank starter board, not your data. Use the banner to restore from a snapshot.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">❌ <strong>Your saved board could not be read'+
+    (e.kind==='read'?' — this browser is blocking local storage.':' ('+esc(e.detail)+').')+'</strong> '+
+    'What you are looking at is a blank starter board, NOT your data. '+where+'</span>'+
+    '<button class="seb-action" onclick="showBackupModal()">💾 Restore a Snapshot</button>'+
+    '<button class="seb-action" onclick="downloadCorruptBoard()">⬇ Download Damaged Data</button>'+
+    '<button class="seb-action" onclick="importBak()">📥 Import a File</button>');
+}
 function load(){
-  try{var r=localStorage.getItem('fb4');if(r){S=JSON.parse(r);
+  var raw=null;
+  try{raw=localStorage.getItem('fb4');}
+  catch(e){_boardLoadError={kind:'read',detail:(e&&e.message)||'storage blocked',quarantineKey:null,bytes:0};}
+  if(raw){
+   try{S=JSON.parse(raw);
+    if(!S||!Array.isArray(S.cols)||!Array.isArray(S.groups))throw new Error('board data is missing its columns');
     // migrate prefs from old localStorage keys if not yet in S
     if(!S.prefs){
       var _lsm={};try{_lsm=JSON.parse(localStorage.getItem('fb4_modal_size')||'{}');}catch(e){}
@@ -2447,11 +2521,18 @@ function load(){
     // reads the same value instead of both starting blind.
     _lsToken=_readLsToken();
     if(_lsToken===null)_stampLsToken();
-    return;}}catch(e){}
+    return;
+   }catch(e){_quarantineCorruptBoard(raw,e);}
+  }
   // No localStorage data — persist the default state but do NOT stamp lastModified=Date.now().
   // Keeping lastModified=0 ensures the Firebase listener sees the cloud as newer on first connect
   // and pulls the real board instead of overwriting it with this empty default.
-  S=defaultState();_skipFbWrite=true;save();_skipFbWrite=false;
+  S=defaultState();
+  // If we couldn't copy the damaged bytes aside, do NOT immediately write the
+  // starter board over them — that would be the last chance to recover, spent
+  // automatically. Leave the original on disk and let the banner drive.
+  if(_boardLoadError&&_boardLoadError.kind==='corrupt'&&!_boardLoadError.quarantineKey)return;
+  _skipFbWrite=true;save();_skipFbWrite=false;
 }
 
 // ── BACKUP STORAGE BACKEND (IndexedDB, with localStorage fallback) ──────────
@@ -2557,8 +2638,12 @@ function _idbCheckUsable(){
 var _backupsUseIdb=false;
 var _baksMirror=null,_baksMirrorKey=null,_hydratingManual=null;
 var _autoMirror=null,_autoMirrorKey=null,_hydratingAuto=null;
-function _hydrateManualMirror(){
+// force=true re-reads even when the mirror looks current — used after a failed
+// write, where the in-memory copy is known to disagree with disk and would
+// otherwise keep showing a snapshot that was never stored.
+function _hydrateManualMirror(force){
   var k=_bakKey();
+  if(force){_baksMirrorKey=null;_hydratingManual=null;}
   if(_baksMirrorKey===k)return Promise.resolve();
   if(_hydratingManual&&_hydratingManual._k===k)return _hydratingManual;
   var p=_idbGet('manual',k).then(function(arr){_baksMirror=arr||[];_baksMirrorKey=k;})
@@ -2566,8 +2651,9 @@ function _hydrateManualMirror(){
     .then(function(){if(_hydratingManual===p)_hydratingManual=null;});
   p._k=k;_hydratingManual=p;return p;
 }
-function _hydrateAutoMirror(){
+function _hydrateAutoMirror(force){
   var k=_autoKey();
+  if(force){_autoMirrorKey=null;_hydratingAuto=null;}
   if(_autoMirrorKey===k)return Promise.resolve();
   if(_hydratingAuto&&_hydratingAuto._k===k)return _hydratingAuto;
   var p=_idbGet('auto',k).then(function(arr){_autoMirror=arr||[];_autoMirrorKey=k;})
@@ -2627,27 +2713,66 @@ function _initBackupStore(){
   }).catch(function(){_backupsUseIdb=false;});
 }
 function _bakKey(){return 'fb4_baks_'+(S.boardId||'default');}
+// ── SNAPSHOT WRITE REPORTING ───────────────────────────────────────────────
+// Snapshot writes used to fail silently in BOTH backends: _lsSetBaks swallowed
+// the quota error, and setBaks fired _idbPut without ever looking at its
+// result (it resolves false on failure). Either way the in-memory mirror was
+// updated, the snapshot appeared in the list, and the user was told
+// "📌 Snapshot saved!" with nothing on disk — the backup they took before
+// something risky would be gone on reload. Every write now reports honestly.
+function _bakWriteFailed(what){
+  notify('❌ '+what+' could NOT be saved — storage is full or unavailable. It is NOT on disk and will be gone when you reload. Export a backup file now.');
+  _showSaveErrorBanner(
+    '<span class="seb-msg">❌ <strong>'+what+' failed to write to storage.</strong> '+
+    'It is not saved and will disappear on reload — export a file instead.</span>'+
+    '<button class="seb-action" onclick="exportBak(null)">⬇ Export Backup File</button>'+
+    '<button class="seb-action" onclick="showBackupModal()">💾 Open Backups</button>'+
+    '<button class="seb-dismiss" onclick="_hideSaveErrorBanner()">✕</button>');
+  _invalidateCapacityProbe(); // cached ceiling was wrong — re-measure next time
+  _updateBackupsBtnState();
+}
 function _lsGetBaks(){try{return JSON.parse(localStorage.getItem(_bakKey())||'[]');}catch(e){return[];}}
-function _lsSetBaks(a){try{localStorage.setItem(_bakKey(),JSON.stringify(a));}catch(e){}}
+function _lsSetBaks(a){
+  try{localStorage.setItem(_bakKey(),JSON.stringify(a));return true;}
+  catch(e){console.warn('[Backups] localStorage write failed:',e);return false;}
+}
 function getBaks(){
   if(!_backupsUseIdb)return _lsGetBaks();
   if(_baksMirrorKey!==_bakKey()){_hydrateManualMirror();return[];} // stale/unhydrated → safe empty until hydrated
   return _baksMirror||[];
 }
+// Always returns a Promise<boolean> so callers can confirm the write landed.
+// A false result has already been reported to the user by the time it resolves.
 function setBaks(a){
-  if(!_backupsUseIdb)return _lsSetBaks(a);
+  if(!_backupsUseIdb){
+    var ok=_lsSetBaks(a);
+    if(!ok)_bakWriteFailed('Snapshot');
+    return Promise.resolve(ok);
+  }
   var k=_bakKey();
   if(_baksMirrorKey!==k){ // mirror not hydrated for this board — never persist, would risk clobbering unloaded data
     console.warn('[Backups] setBaks skipped — mirror not hydrated for '+k);
     notify('⚠️ Snapshot action skipped — storage was still loading for this board. Please try again.');
-    _hydrateManualMirror();return;
+    _hydrateManualMirror();
+    return Promise.resolve(false); // already reported above; not a write failure
   }
-  _baksMirror=a;_idbPut('manual',k,a);
+  _baksMirror=a;
+  return _idbPut('manual',k,a).then(function(ok){
+    if(ok)return true;
+    // Roll the mirror back to what is actually on disk before reporting, so
+    // the list can't keep showing a snapshot that was never stored.
+    return _hydrateManualMirror(true).then(function(){_bakWriteFailed('Snapshot');return false;});
+  });
 }
 function createBak(name){
   var a=getBaks(),tc=S.cols.reduce(function(n,c){return n+c.cards.length;},0);
   a.unshift({id:uid(),name:name||'Snapshot '+new Date().toLocaleString(),ts:Date.now(),cards:tc,data:JSON.stringify(S)});
-  if(a.length>25)a.splice(25);setBaks(a);notify('📌 Snapshot saved!');showBackupModal();
+  if(a.length>25)a.splice(25);
+  // Success is only announced once the write is confirmed on disk.
+  setBaks(a).then(function(ok){
+    if(ok)notify('📌 Snapshot saved!');
+    showBackupModal();
+  });
 }
 function renameBak(id){
   var baks=getBaks();
@@ -2789,21 +2914,43 @@ function _reclaimSpace(){
   return removed;
 }
 function _lsGetAutoBaks(){try{return JSON.parse(localStorage.getItem(_autoKey())||'[]');}catch(e){return[];}}
-function _lsSetAutoBaks(a){try{localStorage.setItem(_autoKey(),JSON.stringify(a));}catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');}}
+function _lsSetAutoBaks(a){
+  try{localStorage.setItem(_autoKey(),JSON.stringify(a));return true;}
+  catch(e){console.warn('[AutoSnap] Storage full — auto-snapshot skipped.');return false;}
+}
 function getAutoBaks(){
   if(!_backupsUseIdb)return _lsGetAutoBaks();
   if(_autoMirrorKey!==_autoKey()){_hydrateAutoMirror();return[];}
   return _autoMirror||[];
 }
+// Auto-snapshots are the safety net that runs without the user asking, so a
+// silent failure is the worst case: the net is gone and nothing says so. These
+// report too, but at most once per session so a full disk can't spam a user
+// mid-work every 20 minutes.
+var _autoSnapFailWarned=false;
+function _autoSnapWriteFailed(){
+  if(_autoSnapFailWarned)return;
+  _autoSnapFailWarned=true;
+  _bakWriteFailed('Automatic snapshot');
+}
 function setAutoBaks(a){
-  if(!_backupsUseIdb)return _lsSetAutoBaks(a);
+  if(!_backupsUseIdb){
+    var ok=_lsSetAutoBaks(a);
+    if(!ok)_autoSnapWriteFailed();
+    return Promise.resolve(ok);
+  }
   var k=_autoKey();
   if(_autoMirrorKey!==k){
     console.warn('[AutoSnap] setAutoBaks skipped — mirror not hydrated for '+k);
     notify('⚠️ Auto-snapshot skipped — storage was still loading. It will retry on the next save.');
-    _hydrateAutoMirror();return;
+    _hydrateAutoMirror();
+    return Promise.resolve(false);
   }
-  _autoMirror=a;_idbPut('auto',k,a);
+  _autoMirror=a;
+  return _idbPut('auto',k,a).then(function(ok){
+    if(ok){_autoSnapFailWarned=false;return true;} // recovered — allow a future warning
+    return _hydrateAutoMirror(true).then(function(){_autoSnapWriteFailed();return false;});
+  });
 }
 
 function _createAutoSnap(name,trigger){
@@ -5520,15 +5667,26 @@ function renderStorageBar(){
     var mode=_backupModeInfo();
     var color=s.pct>=90?'#e11d48':s.pct>=70?'#f59e0b':'#10b981';
     var barPct=Math.max(s.pct,s.used>0?1:0); // keep a sliver visible when usage is tiny vs a huge quota
-    var note=s.source==='estimate'?' (IndexedDB + localStorage)':(s.isEstimate?' — estimated':'');
+    var label=s.source==='estimate'?'IndexedDB (backups)':'Browser local storage';
+    var note=' — '+label+', the fuller of the two';
     var modeLine='<div style="font-size:11px;margin-bottom:6px;color:'+(mode.warn?'#b45309':'var(--txt-d)')+'">'+
       (mode.warn?'⚠ ':'✅ ')+'Backup storage: <strong>'+mode.label+'</strong></div>';
+    // Both stores are listed explicitly. They have separate, independent caps —
+    // a near-empty IndexedDB quota tells you nothing about localStorage being
+    // one edit away from full, which is exactly how the old single-number
+    // gauge managed to read 0% while saves were about to start failing.
+    var breakdown='<div style="font-size:11px;color:var(--txt-d);margin-top:6px;line-height:1.6">'+
+      '<div>Board + settings (localStorage): <strong>'+mb(s.local.used)+'MB</strong> of ~'+fmtCeil(s.local.ceiling)+' ('+s.local.pct+'%)</div>'+
+      (s.idb?'<div>Backups (IndexedDB): <strong>'+mb(s.idb.used)+'MB</strong> of '+fmtCeil(s.idb.ceiling)+' ('+s.idb.pct+'%)</div>'
+            :'<div>Backups: sharing localStorage above — IndexedDB unavailable</div>')+
+      '</div>';
     wrap.innerHTML=modeLine+
       '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--txt-m)">'+
         '<span>'+mb(s.used)+'MB of '+(s.source==='estimate'?'':'~')+fmtCeil(s.ceiling)+' ('+s.pct+'%)'+note+'</span>'+
         '<button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="_refreshStorageEstimate().then(renderStorageBar)" title="Re-measure storage usage">↻ Recalculate</button>'+
       '</div>'+
       '<div class="storage-bar-track"><div class="storage-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div></div>'+
+      breakdown+
       (mode.warn?'<div style="font-size:11px;color:var(--txt-d);margin-top:6px;line-height:1.5">Your backups are still saving — just on the browser\'s older, smaller local storage (~5MB total) instead of the larger IndexedDB store. This can happen in private/incognito mode, some strict privacy settings, or certain ways of opening this file. Export a backup regularly on this device/browser as a precaution.</div>':'');
     _updateBackupsBtnState();
   };
@@ -6045,6 +6203,7 @@ document.addEventListener('keydown',function(e){
 });
 
 load();loadTheme();loadModalSize();initUiScale();render();initPointerDrag();_updateBackupsBtnState();
+_announceBoardLoadError(); // loud, persistent banner if the saved board was unreadable
 _restoreUndoSession(); // restore undo history if this is a crash-recovery / F5 reload
 _usbCheckStoredHandle(); // offer one-click USB reconnect if a handle was saved last session
 // Backups now live in IndexedDB (with a localStorage fallback). Initialise that
